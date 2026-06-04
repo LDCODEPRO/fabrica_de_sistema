@@ -1,0 +1,3 @@
+﻿# DOCUMENTATION_MANAGER - CHECKLIST.md
+
+DocumentaÃ§Ã£o da skill DOCUMENTATION_MANAGER.

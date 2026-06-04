@@ -1,0 +1,3 @@
+﻿# CORE_ADAPTER_MASTER - CHECKLIST.md
+
+DocumentaÃ§Ã£o da skill CORE_ADAPTER_MASTER.
