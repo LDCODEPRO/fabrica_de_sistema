@@ -1,0 +1,15 @@
+{
+  "decision_id": "20260605T113753-6c812b3e",
+  "mission_id": "103",
+  "decision": "ORCHESTRATOR executed mission through LLM Router",
+  "evidence": "Router provider=gemma4 model=gemma3:12b success=True reason=OK. Knowledge ranking: ORCHESTRATOR_AGENT/MASTERS_AND_REFERENCES.md:75 score=0.97; ORCHESTRATOR_AGENT/BOOKS_AND_WORKS.md:9 score=0.94; ORCHESTRATOR_AGENT/FRAMEWORKS_AND_METHODS.md:90 score=0.91; ORCHESTRATOR_AGENT/FRAMEWORKS_AND_METHODS.md:109 score=0.91; ORCHESTRATOR_AGENT/FRAMEWORKS_AND_METHODS.md:5 score=0.91",
+  "source": "Agent Execution Engine / Knowledge Engine",
+  "author": "ORCHESTRATOR",
+  "work": "AGENT_EXECUTION_ENGINE_V1",
+  "confidence": 0.9,
+  "timestamp": "2026-06-05T11:37:53.863731+00:00",
+  "tags": [
+    "agent_execution",
+    "orchestrator"
+  ]
+}

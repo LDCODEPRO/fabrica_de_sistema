@@ -1,0 +1,15 @@
+{
+  "decision_id": "20260605T113341-49b0173d",
+  "mission_id": "9001",
+  "decision": "ORCHESTRATOR executed mission with router exhaustion recorded",
+  "evidence": "Router provider=none model=none success=False reason=ALL_PROVIDERS_FAILED. Knowledge ranking: ORCHESTRATOR_AGENT/MASTERS_AND_REFERENCES.md:75 score=0.97; ORCHESTRATOR_AGENT/BOOKS_AND_WORKS.md:9 score=0.94; ORCHESTRATOR_AGENT/FRAMEWORKS_AND_METHODS.md:90 score=0.91; ORCHESTRATOR_AGENT/FRAMEWORKS_AND_METHODS.md:109 score=0.91; ORCHESTRATOR_AGENT/FRAMEWORKS_AND_METHODS.md:5 score=0.91",
+  "source": "Agent Execution Engine / Knowledge Engine",
+  "author": "ORCHESTRATOR",
+  "work": "AGENT_EXECUTION_ENGINE_V1",
+  "confidence": 0.55,
+  "timestamp": "2026-06-05T11:33:41.037944+00:00",
+  "tags": [
+    "agent_execution",
+    "orchestrator"
+  ]
+}
