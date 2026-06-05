@@ -105,7 +105,7 @@ Steve Krug (Don't Make Me Think), Don Norman (The Design of Everyday Things), Ni
 
 | Acao | Resultado |
 |---|---|
-| git status | Pendente |
-| git add | Pendente |
-| git commit | Pendente |
-| git push | Pendente |
+| git status | OK - 57 novos arquivos |
+| git add . | OK |
+| git commit `2f5c895` | OK - "feat(agents): add knowledge libraries v1" |
+| git push origin main | OK - 8c09768..2f5c895 |
