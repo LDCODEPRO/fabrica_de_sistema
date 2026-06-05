@@ -80,6 +80,34 @@
 
 ---
 
+## Correcao: AUDIT_ENGINE_CLASSIFICATION_FIX_V1 (2026-06-04)
+
+**Problema:** Todos os itens em 15_PROJETOS eram auditados como projetos operacionais, gerando reprovacoes falsas.
+
+**Solucao:** Funcao `Get-ProjectClassification` adicionada ao `project_auditor.ps1`.
+
+| Classificacao | Criterio | Veredicto |
+|---|---|---|
+| OPERATIONAL_PROJECT | PROJETO_* com MISSION_BOARD | APROVADO / ALERTA / REPROVADO |
+| LEGACY_PROJECT | PROJETO_* sem MISSION_BOARD | NEEDS_ORCHESTRATION |
+| INTERNAL_FACTORY_SYSTEM | PROJECT_FACTORY e similares | EXCLUDED_INTERNAL_SYSTEM |
+| TEMPLATE_OR_REFERENCE | Nomes com TEMPLATE / MODELO | EXCLUDED_TEMPLATE |
+
+**Resultado apos correcao:**
+
+| Projeto | Antes | Depois |
+|---|---|---|
+| PROJECT_FACTORY | REPROVADO (75) | EXCLUDED_INTERNAL_SYSTEM |
+| PROJETO_001_REFACTOR | REPROVADO (75) | NEEDS_ORCHESTRATION |
+| PROJETO_002_TESTE_SAAS | APROVADO (100) | APROVADO (100) |
+
+**Score operacional:** 83 -> 100 (calculado apenas sobre projetos operacionais)
+
+**Commit:** `03f8355` — fix(audit): classify projects before audit to avoid false negatives
+**Push:** OK -> https://github.com/cipolaricreator/fabricadesistema
+
+---
+
 ## Limitacoes Atuais
 
 | Limitacao | Observacao |
