@@ -1,0 +1,43 @@
+knowledge_engine:
+  version: "1.0.0"
+  fabrica_root: ".."
+  agents_dir: "../05_AGENTS"
+  manifests_dir: "./manifests"
+  source_of_truth_dir: "../08_SOURCE_OF_TRUTH"
+  cache:
+    enabled: true
+    ttl_seconds: 300
+    cache_dir: "./.knowledge_cache"
+  search:
+    max_hits: 50
+    case_sensitive: false
+    searchable_files:
+      - BEST_PRACTICES.md
+      - MASTERS_AND_REFERENCES.md
+      - BOOKS_AND_WORKS.md
+      - FRAMEWORKS_AND_METHODS.md
+      - TOOLS_AND_STANDARDS.md
+      - APPLIED_PATTERNS.md
+      - LEARNING_NOTES.md
+      - SOURCE_INDEX.md
+  validation:
+    min_file_bytes: 100
+    required_files:
+      - BEST_PRACTICES.md
+      - MASTERS_AND_REFERENCES.md
+      - BOOKS_AND_WORKS.md
+      - FRAMEWORKS_AND_METHODS.md
+      - TOOLS_AND_STANDARDS.md
+      - APPLIED_PATTERNS.md
+      - LEARNING_NOTES.md
+      - SOURCE_INDEX.md
+  ranking:
+    file_authority_weights:
+      SOURCE_INDEX.md: 1.0
+      MASTERS_AND_REFERENCES.md: 0.95
+      BOOKS_AND_WORKS.md: 0.90
+      FRAMEWORKS_AND_METHODS.md: 0.85
+      APPLIED_PATTERNS.md: 0.80
+      TOOLS_AND_STANDARDS.md: 0.75
+      BEST_PRACTICES.md: 0.70
+      LEARNING_NOTES.md: 0.60

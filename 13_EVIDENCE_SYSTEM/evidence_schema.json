@@ -1,0 +1,82 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "fabrica-de-sistemas/evidence-record",
+  "title": "EvidenceRecord",
+  "description": "Schema for a decision evidence record in the Fabrica de Sistemas knowledge engine.",
+  "type": "object",
+  "required": [
+    "decision_id",
+    "mission_id",
+    "decision",
+    "evidence",
+    "source",
+    "author",
+    "work",
+    "confidence",
+    "timestamp"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "decision_id": {
+      "type": "string",
+      "description": "Unique identifier for the decision: timestamp-based hash (e.g. 20260605T142300-a3f9b1c2).",
+      "pattern": "^[0-9]{8}T[0-9]{6}-[a-f0-9]{8}$"
+    },
+    "mission_id": {
+      "type": "string",
+      "description": "Identifier of the mission this decision belongs to (e.g. MISSION-001).",
+      "minLength": 1
+    },
+    "decision": {
+      "type": "string",
+      "description": "A concise statement of the decision that was made.",
+      "minLength": 5
+    },
+    "evidence": {
+      "type": "string",
+      "description": "The reasoning or evidence that supports the decision.",
+      "minLength": 10
+    },
+    "source": {
+      "type": "string",
+      "description": "The source consulted (book title, article name, framework name, or 'internal').",
+      "minLength": 1
+    },
+    "author": {
+      "type": "string",
+      "description": "Name of the agent or human that recorded this decision.",
+      "minLength": 1
+    },
+    "work": {
+      "type": "string",
+      "description": "The specific work item, module, or task context for this decision.",
+      "minLength": 1
+    },
+    "confidence": {
+      "type": "number",
+      "description": "Confidence score for the decision, from 0.0 (no confidence) to 1.0 (fully certain).",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO-8601 datetime string when the decision was recorded.",
+      "format": "date-time"
+    },
+    "tags": {
+      "type": "array",
+      "description": "Optional list of tags for categorisation (e.g. architecture, security, performance).",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "related_decisions": {
+      "type": "array",
+      "description": "Optional list of decision_ids that are related to or supersede this record.",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
