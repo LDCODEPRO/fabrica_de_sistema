@@ -194,8 +194,10 @@ class LLMRouter:
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 1024,
         }).encode("utf-8")
+        base_url = provider['base_url']
+        endpoint = f"{base_url}/chat/completions" if base_url.endswith("/v1") else f"{base_url}/v1/chat/completions"
         req = urllib.request.Request(
-            f"{provider['base_url']}/v1/chat/completions",
+            endpoint,
             data=payload,
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             method="POST",
