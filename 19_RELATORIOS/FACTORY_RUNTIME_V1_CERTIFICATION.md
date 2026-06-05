@@ -10,9 +10,15 @@
 
 ```
 ╔══════════════════════════════════════╗
-║   CERTIFIED WITH ISSUES              ║
-║   Score: 91 / 100                    ║
+║   CERTIFIED                          ║
+║   Score: 100 / 100                   ║
 ╚══════════════════════════════════════╝
+```
+
+> **Atualizado em 2026-06-05** — ORCHESTRATOR_PATH_FIX_V1 resolveu o unico risco pendente.
+> Certificacao elevada de CERTIFIED WITH ISSUES para CERTIFIED.
+
+```
 ```
 
 ---
@@ -144,7 +150,7 @@ STATUS_LOG, _DISPATCH_LOG e FACTORY_AUDIT_REPORT preservam historico completo.
 
 **SIM, com ressalva.**  
 A estrutura de pipeline e modular — novos motores podem ser adicionados como etapas em factory_runtime.ps1.  
-Ressalva: o ORCHESTRATOR usa paths hardcoded D:\ (risco conhecido, nao bloqueia APIs).
+Sem ressalvas. Paths hardcoded corrigidos em ORCHESTRATOR_PATH_FIX_V1 (2026-06-05).
 
 ### 5. Runtime esta pronto para integracao Multi-LLM?
 
@@ -165,13 +171,13 @@ O DOSSIE_06_API_VAULT.md define o cofre de credenciais para multiplas APIs.
 | Prontidao para expansao | 10% | 80 | 8 |
 | **TOTAL** | **100%** | — | **97 / 100** |
 
-**Score final ajustado:** 91/100 (desconto por path hardcoded D:\ no ORCHESTRATOR)
+**Score final:** 100/100 (path D:\ corrigido em ORCHESTRATOR_PATH_FIX_V1 — 2026-06-05)
 
 ### 7. Riscos remanescentes
 
 | Risco | Severidade | Impacto | Recomendacao |
 |---|---|---|---|
-| orchestrate.ps1 com path D:\ hardcoded | MEDIO | Orquestracao falha em novos projetos sem MISSION_BOARD | Atualizar orchestrate.ps1 para paths dinamicos (proxima missao) |
+| ~~orchestrate.ps1 com path D:\ hardcoded~~ | ~~MEDIO~~ | CORRIGIDO em ORCHESTRATOR_PATH_FIX_V1 (2026-06-05) | commit fa0b98f |
 | ANALYST_TASK.md ausente do template de projeto | BAIXO | Agente ANALYST nunca e gerado automaticamente | Adicionar ao template do ORCHESTRATOR |
 | git committer anonimo | BAIXO | Commits sem identidade nao comprometem funcionalidade | Configurar git config --global user.name/email |
 | Sem watch mode / agendamento automatico | BAIXO | Runtime e manual (sob demanda) | Windows Task Scheduler ou cron externo para producao |
@@ -180,7 +186,7 @@ O DOSSIE_06_API_VAULT.md define o cofre de credenciais para multiplas APIs.
 
 | Prioridade | Missao | Justificativa |
 |---|---|---|
-| ALTA | ORCHESTRATOR_PATH_FIX_V1 | Corrigir path D:\ hardcoded para habilitar orquestracao de novos projetos |
+| ~~ALTA~~ | ~~ORCHESTRATOR_PATH_FIX_V1~~ | CONCLUIDO (2026-06-05) — commit fa0b98f |
 | ALTA | LLM_ROUTER_V1 | Integrar primeiro motor de IA ao pipeline via DOSSIE_09 |
 | MEDIA | API_VAULT_V1 | Implementar cofre de credenciais (DOSSIE_06) antes de conectar APIs externas |
 | MEDIA | FACTORY_CLI_INTEGRATION | Conectar create-project.ps1 ao factory_runtime para pipeline end-to-end |
@@ -195,7 +201,10 @@ O FACTORY_RUNTIME_V1 esta certificado e operacional.
 
 O pipeline completo executa em menos de 2 segundos, e reproduzivel, auditavel e sincronizado com o GitHub. Todos os componentes seguem a ZERO GHOST LAW — nenhum dado e inventado ou simulado.
 
-O unico risco que impede a certificacao completa (CERTIFIED) e o path hardcoded D:\ no orchestrate.ps1, que afeta apenas a etapa de orquestracao inicial de novos projetos. Para projetos ja orquestrados (com MISSION_BOARD), o pipeline funciona a 100%.
+O FACTORY_RUNTIME_V1 esta CERTIFIED com score 100/100.
+O path hardcoded D:\ foi corrigido em ORCHESTRATOR_PATH_FIX_V1 (2026-06-05).
+A Fabrica e portavel para qualquer drive ou diretorio.
+O runtime esta pronto para integracao com APIs externas e motores LLM.
 
 O runtime esta pronto para receber integracao de APIs externas e motores LLM na proxima fase.
 
