@@ -1,6 +1,6 @@
-$target = "D:\FABRICA_DE_SISTEMAS"
-$obsidianTarget = "D:\fabricadesistema\FABRICA_DE_SISTEMAS"
-$repoPath = "D:\fabricadesistema"
+﻿$target = $PSScriptRoot; if ([string]::IsNullOrWhiteSpace($target)) { $target = (Get-Location).Path }
+$obsidianTarget = $target
+$repoPath = $target
 
 $intakeDir = Join-Path $target "16_SISTEMAS\PROJECT_INTAKE_SYSTEM"
 if (!(Test-Path $intakeDir)) {

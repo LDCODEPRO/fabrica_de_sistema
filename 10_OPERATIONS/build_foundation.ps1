@@ -1,4 +1,4 @@
-$target = "D:\FABRICA_DE_SISTEMAS"
+﻿$target = $PSScriptRoot; if ([string]::IsNullOrWhiteSpace($target)) { $target = (Get-Location).Path }
 
 function Create-Md {
     param([string]$Path, [string]$Title, [string]$Content)

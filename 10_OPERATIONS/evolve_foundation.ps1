@@ -1,6 +1,6 @@
-$target = "D:\FABRICA_DE_SISTEMAS"
-$obsidianTarget = "D:\fabricadesistema\FABRICA_DE_SISTEMAS"
-$repoPath = "D:\fabricadesistema"
+﻿$target = $PSScriptRoot; if ([string]::IsNullOrWhiteSpace($target)) { $target = (Get-Location).Path }
+$obsidianTarget = $target
+$repoPath = $target
 
 $global:issuesFound = 0
 $global:issuesFixed = 0
