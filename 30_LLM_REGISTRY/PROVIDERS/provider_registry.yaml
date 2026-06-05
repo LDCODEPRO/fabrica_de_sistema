@@ -1,0 +1,156 @@
+# LLM Provider Registry
+# Versão: 1.0.0
+# Data: 2026-06-05
+# IMPORTANTE: Este arquivo referencia variáveis de ambiente por NOME.
+#             NUNCA inclua valores de API keys aqui.
+
+providers:
+
+  anthropic:
+    name: "Anthropic (Claude)"
+    env_var: ANTHROPIC_API_KEY
+    base_url: "https://api.anthropic.com"
+    sdk: "anthropic==0.97.0"
+    sdk_extras: ["bedrock", "vertex"]
+    models:
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5-20251001
+      - claude-opus
+      - claude-sonnet
+      - claude-haiku
+    tier: paid
+    status: active
+    priority: 3
+    evidence: "E:\\Agente X\\01_CORE\\orchestrator\\llm_router.py"
+
+  openai:
+    name: "OpenAI"
+    env_var: OPENAI_API_KEY
+    base_url: "https://api.openai.com/v1"
+    models:
+      - gpt-4o
+      - gpt-4o-mini
+    tier: paid
+    status: active
+    priority: 4
+    evidence: "E:\\NIVEL 1\\DATASTORE\\Complexo_Nexus\\Core\\nexus_router_economia.py"
+
+  google:
+    name: "Google (Gemini)"
+    env_var: GOOGLE_API_KEY
+    base_url: "https://generativelanguage.googleapis.com"
+    models:
+      - gemini-pro
+      - gemini-flash
+      - gemini-1.5-pro
+      - gemini-1.5-flash
+    tier: freemium
+    status: active
+    priority: 3
+    evidence: "E:\\NIVEL 1\\DATASTORE\\Complexo_Nexus\\Core\\nexus_router_economia.py"
+
+  deepseek:
+    name: "DeepSeek"
+    env_var: DEEPSEEK_API_KEY
+    base_url: "https://api.deepseek.com"
+    models:
+      - deepseek-v4-pro
+      - deepseek-chat
+    tier: low_cost
+    status: active
+    priority: 2
+    evidence: "E:\\Agente X\\01_CORE\\orchestrator\\llm_router.py"
+
+  groq:
+    name: "Groq"
+    env_var: GROQ_API_KEY
+    base_url: "https://api.groq.com/openai/v1"
+    models:
+      - llama3-70b-8192
+      - llama3-8b-8192
+      - mixtral-8x7b-32768
+    tier: freemium
+    status: active
+    priority: 1
+    evidence: "E:\\NIVEL 1\\DATASTORE\\Complexo_Nexus\\Core\\sinfonia_nexus.py"
+
+  ollama:
+    name: "Ollama (Local)"
+    env_var: null
+    base_url: "http://localhost:11434"
+    models:
+      - llama3
+      - ollama-local
+      - nomic-embed-text
+    tier: free
+    cost: 0
+    status: active
+    priority: 0
+    evidence: "E:\\Agente X\\01_CORE\\orchestrator\\llm_router.py"
+    notes: "Prioridade máxima — zero custo, máxima privacidade"
+
+  openrouter:
+    name: "OpenRouter"
+    env_var: OPENROUTER_API_KEY
+    base_url: "https://openrouter.ai/api/v1"
+    models: ["*"]
+    tier: variable
+    status: active
+    priority: 5
+    evidence: "E:\\PHANDORA\\01_CORE\\providers\\provider_router.py"
+    notes: "Gateway para múltiplos modelos"
+
+  xai:
+    name: "xAI (Grok)"
+    env_var: XAI_API_KEY
+    base_url: "https://api.x.ai/v1"
+    models:
+      - grok-beta
+      - grok-2
+    tier: paid
+    status: configured
+    priority: 4
+    evidence: "E:\\Antigravity\\.env (SECRET_DETECTED)"
+
+  together:
+    name: "Together AI"
+    env_var: TOGETHER_API_KEY
+    base_url: "https://api.together.xyz/v1"
+    models: ["*open-source*"]
+    tier: paid
+    status: configured
+    priority: 5
+    evidence: "E:\\Antigravity\\.env (SECRET_DETECTED)"
+
+  voyage:
+    name: "Voyage AI (Embeddings)"
+    env_var: VOYAGE_API_KEY
+    base_url: "https://api.voyageai.com/v1"
+    models:
+      - voyage-2
+      - voyage-code-2
+    tier: paid
+    purpose: embeddings
+    status: configured
+    evidence: "E:\\Antigravity\\.env (SECRET_DETECTED)"
+
+  bedrock:
+    name: "AWS Bedrock"
+    env_var: AWS_ACCESS_KEY_ID
+    base_url: "via boto3"
+    sdk: "anthropic[bedrock]"
+    models: ["via-anthropic-sdk"]
+    tier: enterprise
+    status: available
+    evidence: "E:\\NIVEL 1\\DATASTORE\\MultiAgent_App\\venv (SDK metadata)"
+
+  vertex:
+    name: "Google Vertex AI"
+    env_var: GOOGLE_APPLICATION_CREDENTIALS
+    base_url: "via google-cloud"
+    sdk: "anthropic[vertex]"
+    models: ["via-anthropic-sdk"]
+    tier: enterprise
+    status: available
+    evidence: "E:\\NIVEL 1\\DATASTORE\\MultiAgent_App\\venv (SDK metadata)"

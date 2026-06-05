@@ -1,0 +1,170 @@
+# LLM Model Catalog
+# Versão: 1.0.0
+# Data: 2026-06-05
+# Classificação por categoria de uso
+
+models:
+
+  # ── CODING ────────────────────────────────────────────────────────────────
+  coding:
+    - id: deepseek-v4-pro
+      provider: deepseek
+      tier: low_cost
+      status: active
+      evidence: "E:\\Agente X\\01_CORE\\orchestrator\\llm_router.py"
+
+    - id: claude-sonnet-4-6
+      provider: anthropic
+      tier: paid
+      status: active
+      evidence: "Fábrica de Sistemas (este ambiente)"
+
+    - id: gpt-4o
+      provider: openai
+      tier: paid
+      status: active
+      evidence: "E:\\NIVEL 1\\DATASTORE\\Complexo_Nexus\\Core\\nexus_router_economia.py"
+
+  # ── REASONING ─────────────────────────────────────────────────────────────
+  reasoning:
+    - id: claude-opus-4-8
+      provider: anthropic
+      tier: paid
+      status: active
+      evidence: "nexus_router_economia.py"
+
+    - id: claude-opus
+      provider: anthropic
+      tier: paid
+      status: active
+      evidence: "nexus_router_economia.py"
+
+    - id: deepseek-v4-pro
+      provider: deepseek
+      tier: low_cost
+      status: active
+
+  # ── ARCHITECTURE ──────────────────────────────────────────────────────────
+  architecture:
+    - id: claude-opus
+      provider: anthropic
+      tier: paid
+      status: active
+
+    - id: gpt-4o
+      provider: openai
+      tier: paid
+      status: active
+
+  # ── RESEARCH ──────────────────────────────────────────────────────────────
+  research:
+    - id: claude-sonnet
+      provider: anthropic
+      tier: paid
+      status: active
+
+    - id: gemini-pro
+      provider: google
+      tier: freemium
+      status: active
+      evidence: "nexus_router_economia.py"
+
+    - id: grok
+      provider: xai
+      tier: paid
+      status: configured
+      evidence: "E:\\Antigravity\\.env"
+
+  # ── WRITING ───────────────────────────────────────────────────────────────
+  writing:
+    - id: claude-haiku
+      provider: anthropic
+      tier: paid
+      status: active
+
+    - id: gemini-flash
+      provider: google
+      tier: freemium
+      status: active
+
+  # ── VISION ────────────────────────────────────────────────────────────────
+  vision:
+    - id: gpt-4o
+      provider: openai
+      tier: paid
+      status: active
+      notes: "GPT-4o tem capacidade multimodal"
+
+    - id: gemini-pro
+      provider: google
+      tier: freemium
+      status: active
+      notes: "Gemini Pro Vision"
+
+  # ── EMBEDDINGS ────────────────────────────────────────────────────────────
+  embeddings:
+    - id: voyage-2
+      provider: voyage
+      tier: paid
+      status: configured
+      dimensions: 1024
+      evidence: "E:\\Antigravity\\.env, E:\\NIVEL 1\\DATASTORE\\Complexo_Nexus\\.env"
+
+    - id: nomic-embed-text
+      provider: ollama
+      tier: free
+      status: available
+      dimensions: 768
+      notes: "Embedding local, zero custo"
+
+    - id: text-embedding-3-small
+      provider: openai
+      tier: paid
+      status: available
+      dimensions: 1536
+
+  # ── LOCAL MODELS ──────────────────────────────────────────────────────────
+  local_models:
+    - id: llama3
+      provider: ollama
+      tier: free
+      cost: "$0.00"
+      status: active
+      evidence: "E:\\Agente X\\01_CORE\\orchestrator\\llm_router.py"
+
+    - id: ollama-local
+      provider: ollama
+      tier: free
+      cost: "$0.00"
+      status: active
+      evidence: "E:\\PHANDORA\\01_CORE\\providers\\provider_router.py"
+
+  # ── PRODUCTION MODELS ─────────────────────────────────────────────────────
+  production_models:
+    - id: claude-haiku-4-5-20251001
+      provider: anthropic
+      tier: paid
+      status: active
+      notes: "Modelo de produção explícito no Agente X"
+      evidence: "E:\\Agente X\\01_CORE\\orchestrator\\llm_router.py"
+
+    - id: gpt-4o-mini
+      provider: openai
+      tier: paid
+      status: active
+      evidence: "llm_router.py"
+
+  # ── FALLBACK MODELS ───────────────────────────────────────────────────────
+  fallback_models:
+    - id: groq-llama3
+      provider: groq
+      tier: freemium
+      status: active
+      notes: "Primeiro fallback econômico no Complexo Nexus"
+      evidence: "nexus_router_economia.py"
+
+    - id: gemini-flash
+      provider: google
+      tier: freemium
+      status: active
+      notes: "Fallback econômico Google"
