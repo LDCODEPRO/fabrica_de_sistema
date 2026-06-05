@@ -40,3 +40,14 @@ class BillingRepository(BaseRepository):
 class HealthRepository(BaseRepository):
     def __init__(self, db_manager):
         super().__init__(db_manager, "system_health")
+class TaskRepository(BaseRepository):
+    def __init__(self, db_manager):
+        super().__init__(db_manager, "tasks")
+
+class ArtifactRepository(BaseRepository):
+    def __init__(self, db_manager):
+        super().__init__(db_manager, "artifacts")
+
+class DeploymentRepository(BaseRepository):
+    def __init__(self, db_manager):
+        super().__init__(db_manager, "deployments")
