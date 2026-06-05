@@ -47,7 +47,7 @@ class AuditLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     event_type = Column(String, index=True, nullable=True)
-    description = Column(Text, nullable=True)
+    details = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 

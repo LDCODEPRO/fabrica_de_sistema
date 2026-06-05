@@ -239,25 +239,21 @@ def llm_health_check():
 
 @app.get("/api/audit")
 def list_audit(limit: int = 50, db: Session = Depends(get_db)):
-    """Lista entradas de auditoria reais."""
-    try:
-        logs = db.query(m.AuditLog).order_by(m.AuditLog.id.desc()).limit(limit).all()
-        return {
-            "total": len(logs),
-            "items": [
-                {
-                    "id": log.id,
-                    "event_type": log.event_type,
-                    "description": getattr(log, "description", ""),
-                    "created_at": log.created_at.isoformat() if log.created_at else None,
-                }
-                for log in logs
-            ],
-            "source": "real_database",
-        }
-    except Exception as e:
-        logger.warning("Audit query error: %s", e)
-        return {"total": 0, "items": [], "source": "real_database", "note": "Sem registros ainda"}
+    """Lista entradas de auditoria reais. Coluna real do schema: audit_logs.details."""
+    logs = db.query(m.AuditLog).order_by(m.AuditLog.id.desc()).limit(limit).all()
+    return {
+        "total": len(logs),
+        "items": [
+            {
+                "id": log.id,
+                "event_type": log.event_type,
+                "details": log.details,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+            }
+            for log in logs
+        ],
+        "source": "real_database",
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
