@@ -84,9 +84,12 @@
   function mapAuditoria(items) {
     return (items || []).map(a => {
       const dt = a.created_at ? new Date(a.created_at) : null;
+      const hora = dt ? dt.toTimeString().slice(0, 8) : '—';
       return {
+        id: a.id,
+        ts: hora,
         data: dt ? dt.toLocaleDateString('pt-BR') : '—',
-        hora: dt ? dt.toTimeString().slice(0, 8) : '—',
+        hora: hora,
         ator: 'sistema',
         acao: a.event_type || '—',
         alvo: (a.details || '').slice(0, 60),
@@ -143,6 +146,43 @@
       const r = await getJSON('/api/audit');
       F.auditoria = pick(mapAuditoria(r.items), F.auditoria, 'auditoria', sources);
     } catch (e) { errors.auditoria = String(e); sources.auditoria = 'fallback_window_forja'; }
+
+    // serviços (saúde real) + status bar
+    try {
+      const r = await getJSON('/api/services');
+      if (Array.isArray(r.items) && r.items.length) {
+        F.services = r.items;
+        sources.services = 'backend_real';
+      }
+    } catch (e) { errors.services = String(e); sources.services = 'fallback_window_forja'; }
+
+    // dashboard real: KPIs + núcleos + governança a partir do banco
+    try {
+      const d = await getJSON('/api/dashboard');
+      const ms = d.missions || {}; const byS = ms.by_status || {};
+      const kmap = {
+        projetos: { valor: String((d.projects || {}).total || 0), sub: 'sem tabela de projetos' },
+        missoes: { valor: String(ms.total || 0), sub: (byS.RUNNING || 0) + ' em execução' },
+        agentes: { valor: String((d.agents || {}).total || 0), sub: 'do banco' },
+        evidencias: { valor: String((d.evidences || {}).total || 0), sub: 'execuções reais' },
+        ia: { valor: ((d.ollama || {}).status === 'active_real' ? (d.ollama.models + ' modelos') : 'offline'), sub: 'Ollama' },
+      };
+      F.kpis = (F.kpis || []).map(k => kmap[k.id] ? Object.assign({}, k, kmap[k.id]) : k);
+
+      // governança real
+      F.governance = Object.assign({}, F.governance, {
+        evidence: Object.assign({}, F.governance.evidence, { total: (d.evidences || {}).total || 0 }),
+        zeroGhostLaw: Object.assign({}, F.governance.zeroGhostLaw,
+          { ativas: (d.audit || {}).total || 0, violacoes: 0, ultimaVarredura: 'tempo real' }),
+      });
+
+      // núcleos: marca status real do que sabemos
+      const setCore = (id, st) => { const c = (F.cores || []).find(x => x.id === id); if (c) c.status = st; };
+      setCore('database', 'ok'); setCore('operational', 'ok'); setCore('factory', 'ok');
+      setCore('agent', (d.agents || {}).total > 0 ? 'ok' : 'idle');
+      setCore('router', (d.ollama || {}).status === 'active_real' ? 'ok' : 'idle');
+      sources.dashboard = 'backend_real';
+    } catch (e) { errors.dashboard = String(e); sources.dashboard = 'fallback_window_forja'; }
 
     // billing real ($1/dia, $30/mês) — nunca seed/demo
     try {

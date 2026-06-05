@@ -166,7 +166,20 @@ function MissionCenter({ setView }) {
 /* ===================== EQUIPE INTELIGENTE (V2 · 7 papéis) ===================== */
 function AgentCenter({ setView }) {
   const D = window.FORJA;
-  const [sel, setSel] = useState(D.agentes[0]);
+  const [sel, setSel] = useState(D.agentes[0] || null);
+  if (!D.agentes.length) {
+    return (
+      <div className="center">
+        <CenterHeader icon="cpu" crumb="Execução · equipe da Fábrica" title="Equipe Inteligente"
+          sub="sem dados reais — backend indisponível ou banco sem agentes" />
+        <div className="detail-empty" style={{padding:40}}>
+          <div><div className="ic"><Icon name="cpu" size={22}/></div>
+          <div style={{fontSize:13, color:'var(--text-2)'}}>Sem agentes reais carregados</div>
+          <div style={{fontSize:11.5, marginTop:4}}>Inicie o backend (forja_os_server.py) para ver a equipe real do nexus.db.</div></div>
+        </div>
+      </div>
+    );
+  }
   const stColor = (e) => e==='running'?'ok':e==='blocked'?'err':'idle';
   const stLabel = (e) => labelAgentStatus(e);
   const running = D.agentes.filter(a=>a.status==='running').length;

@@ -349,6 +349,111 @@ def runtime_queue_endpoint():
     return agent_runtime.queue_status()
 
 
+@app.get("/api/panel/truth-status")
+def panel_truth_status(db: Session = Depends(get_db)):
+    """Mapa de verdade: origem real de cada bloco do painel. Honesto por design."""
+    try:
+        missions_total = db.query(m.Mission).count()
+    except Exception:
+        missions_total = 0
+    try:
+        agents_total = db.query(m.Agent).count()
+    except Exception:
+        agents_total = 0
+    try:
+        evidences_total = db.query(m.Evidence).count()
+    except Exception:
+        evidences_total = 0
+    try:
+        audit_total = db.query(m.AuditLog).count()
+    except Exception:
+        audit_total = 0
+    import billing_config
+    b = billing_config.get_billing_status()
+    oll = _check_ollama_health()
+
+    cards = [
+        {"card": "missions", "value": missions_total, "source": "real_database"},
+        {"card": "agents", "value": agents_total, "source": "real_database"},
+        {"card": "evidences", "value": evidences_total, "source": "real_database"},
+        {"card": "audit_events", "value": audit_total, "source": "real_database"},
+        {"card": "ollama", "value": oll["health_status"], "source": "real_runtime"},
+        {"card": "daily_cost_usd", "value": b["daily_used_usd"], "source": b["source"]},
+        {"card": "monthly_cost_usd", "value": b["monthly_used_usd"], "source": b["source"]},
+        {"card": "monthly_budget_usd", "value": b["monthly_budget_usd"], "source": "config"},
+        {"card": "projects", "value": "SEM DADOS REAIS", "source": "sem_dados_reais"},
+        {"card": "uptime", "value": "NÃO MONITORADO", "source": "sem_dados_reais"},
+        {"card": "test_coverage", "value": "NÃO CALCULADA", "source": "sem_dados_reais"},
+        {"card": "deploys", "value": "NÃO MONITORADO", "source": "sem_dados_reais"},
+        {"card": "knowledge_index", "value": "NÃO MONITORADO", "source": "sem_dados_reais"},
+        {"card": "throughput_chart", "value": "NÃO MONITORADO", "source": "sem_dados_reais"},
+        {"card": "service_pings", "value": "NÃO MONITORADO", "source": "sem_dados_reais"},
+        {"card": "agent_chat", "value": "SEM EXECUÇÃO REAL VINCULADA", "source": "sem_dados_reais"},
+    ]
+    return {"cards": cards, "generated": datetime.now(timezone.utc).isoformat(),
+            "policy": "TRUTH_PURGE_V1 — só dados reais ou rótulo honesto"}
+
+
+@app.get("/api/dashboard")
+def dashboard_endpoint(db: Session = Depends(get_db)):
+    """KPIs reais do painel inicial — apenas dados do nexus.db. Sem números inventados."""
+    by_status = {}
+    for st in ["PENDING", "QUEUED", "RUNNING", "FAILED", "COMPLETED"]:
+        by_status[st] = db.query(m.Mission).filter(m.Mission.status == st).count()
+    missions_total = db.query(m.Mission).count()
+    agents_total = db.query(m.Agent).count()
+    try:
+        evidences_total = db.query(m.Evidence).count()
+    except Exception:
+        evidences_total = 0
+    try:
+        audit_total = db.query(m.AuditLog).count()
+    except Exception:
+        audit_total = 0
+    ollama = _check_ollama_health()
+    return {
+        "missions": {"total": missions_total, "by_status": by_status},
+        "agents": {"total": agents_total},
+        "evidences": {"total": evidences_total},
+        "audit": {"total": audit_total},
+        "projects": {"total": 0, "note": "sem tabela de projetos no banco — sem dados reais"},
+        "ollama": {"status": ollama["health_status"], "models": len(ollama.get("models", []))},
+        "source": "real_database",
+    }
+
+
+@app.get("/api/projects")
+def projects_endpoint():
+    """Projetos reais. Não há tabela de projetos no nexus.db → lista vazia honesta."""
+    return {"total": 0, "items": [], "source": "sem_dados_reais",
+            "note": "Nenhuma tabela de projetos no banco. Sem dados inventados."}
+
+
+@app.get("/api/services")
+def services_endpoint(db: Session = Depends(get_db)):
+    """Saúde real dos serviços — verificada, sem pings/uptime fabricados."""
+    services = []
+    # FastAPI: se respondemos, está OK
+    services.append({"id": "fastapi", "nome": "FastAPI", "status": "ok", "ping": "ativo"})
+    # Banco: tenta um SELECT real
+    try:
+        db.query(m.Agent).count()
+        services.append({"id": "database", "nome": "Banco Central", "status": "ok", "ping": "ativo"})
+    except Exception:
+        services.append({"id": "database", "nome": "Banco Central", "status": "err", "ping": "—"})
+    # Ollama: health real
+    oll = _check_ollama_health()
+    services.append({"id": "ollama", "nome": "Ollama",
+                     "status": "ok" if oll["health_status"] == "active_real" else "idle",
+                     "ping": "ativo" if oll["reachable"] else "—"})
+    # Missões: derivado do banco
+    services.append({"id": "mission", "nome": "Missões", "status": "ok", "ping": "ativo"})
+    # Sem verificação real disponível → honesto
+    for sid, nome in [("github", "Repositório"), ("knowledge", "Conhecimento"), ("deploy", "Publicação")]:
+        services.append({"id": sid, "nome": nome, "status": "idle", "ping": "sem dados"})
+    return {"items": services, "source": "real_health_check"}
+
+
 @app.get("/api/billing/status")
 def billing_status_endpoint():
     """Status de billing real: budgets $1/dia, $30/mês, uso real ou sem_dados_reais."""

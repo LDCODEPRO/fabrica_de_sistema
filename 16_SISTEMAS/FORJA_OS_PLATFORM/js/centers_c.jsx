@@ -5,119 +5,17 @@
 /* ===================== CENTRAL DE PUBLICAÇÃO ===================== */
 function DeployCenter({ setView }) {
   const D = window.FORJA;
-  const [sel, setSel] = useState(D.deploys[0]);
-  const [log, setLog] = useState([
-    { t:'14:32:09', lv:'acc', m:'▶ publicação DPL-2207 iniciada · homologação' },
-    { t:'14:32:10', lv:'info', m:'origem: PRJ-001 @ a3f91c2' },
-    { t:'14:32:12', lv:'ok', m:'✓ código recebido (1.8s)' },
-    { t:'14:32:14', lv:'info', m:'instalando dependências… (npm ci)' },
-    { t:'14:32:31', lv:'ok', m:'✓ 1284 pacotes em 17s' },
-    { t:'14:32:33', lv:'acc', m:'⚙ construção em andamento' },
-  ]);
-  const seq = [
-    { lv:'info', m:'transformando 842 módulos…' },
-    { lv:'ok', m:'✓ pacote gerado · 412 KB gzip' },
-    { lv:'acc', m:'⚙ executando suíte de testes' },
-    { lv:'ok', m:'✓ 218 testes · 0 falhas · 94% cobertura' },
-    { lv:'acc', m:'⚙ verificação de segurança' },
-    { lv:'warn', m:'⚠ 2 vulnerabilidades baixas ignoradas' },
-    { lv:'acc', m:'⚙ publicando imagem no registro' },
-    { lv:'ok', m:'✓ publicação concluída · homologação atualizada' },
-  ];
-  const i = useRef(0);
-  useEffect(() => {
-    const id = setInterval(() => {
-      const s = seq[i.current % seq.length]; i.current++;
-      const d = new Date(); const t = d.toTimeString().slice(0,8);
-      setLog(l => [...l.slice(-40), { t, ...s }]);
-    }, 2200);
-    return () => clearInterval(id);
-  }, []);
-  const logRef = useRef(null);
-  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
-  const stepIndex = (dpl) => dpl.status==='ok'?6:dpl.status==='fail'?2:Math.round(dpl.prog*5);
-
   return (
     <div className="center">
       <CenterHeader icon="rocket" crumb="Publicações" title="Central de Publicação"
-        sub="3 ambientes · 1 publicação em andamento · fluxo de 6 etapas">
-        <button className="btn"><Icon name="clock" size={13} /> Histórico</button>
-        <button className="btn primary"><Icon name="rocket" size={13} /> Nova publicação</button>
-      </CenterHeader>
+        sub="NÃO MONITORADO — sem pipeline de publicação real conectado" />
       <div className="center-body section-gap">
-        <div className="grid-3">
-          {D.ambientes.map(a => (
-            <div className="panel" key={a.id}>
-              <div className="panel-head">
-                <span className={'dot ' + (a.status==='ok'?'ok':'warn')} />
-                <h3>{a.nome}</h3>
-                <div className="right"><span className={'pill ' + (a.status==='ok'?'ok':'warn')}>{a.status==='ok'?'saudável':'degradado'}</span></div>
-              </div>
-              <div className="panel-body">
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
-                  <div><div className="eyebrow">versão</div><div className="mono" style={{fontSize:14, marginTop:3}}>{a.ver}</div></div>
-                  <Donut value={a.saude} size={50} stroke={6} color={a.saude>0.96?'var(--ok)':'var(--warn)'} label={Math.round(a.saude*100)+''} />
-                </div>
-                <dl className="kv" style={{fontSize:11.5}}>
-                  <dt>Última publicação</dt><dd>há {a.deploy}</dd>
-                  <dt>Disponibilidade</dt><dd className="mono">{(a.saude*100).toFixed(1)}%</dd>
-                </dl>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid-2" style={{gridTemplateColumns:'1fr 1fr', alignItems:'start'}}>
-          <div className="panel">
-            <div className="panel-head"><Icon name="box" size={14} style={{color:'var(--text-2)'}}/><h3>Publicações recentes</h3></div>
-            <div className="panel-body flush tbl-wrap">
-              <table className="tbl"><thead><tr><th>ID</th><th>Projeto</th><th>Ambiente</th><th>Etapa</th><th>Situação</th><th>Por</th></tr></thead>
-              <tbody>
-                {D.deploys.map(d => (
-                  <tr key={d.id} className={sel.id===d.id?'on':''} onClick={()=>setSel(d)}>
-                    <td className="id-cell">{d.id}</td>
-                    <td className="cell-strong">{d.proj}</td>
-                    <td className="muted">{d.amb}</td>
-                    <td><span className="mono" style={{fontSize:11}}>{d.etapa}</span></td>
-                    <td><span className={'pill ' + (STATUS_CLASS[d.status]||'')}>{d.status==='running'?'em curso':d.status==='fail'?'falhou':'ok'}</span></td>
-                    <td className="mono muted" style={{fontSize:11}}>{d.gatilho}</td>
-                  </tr>
-                ))}
-              </tbody></table>
-            </div>
-          </div>
-          <div className="col">
-            <div className="panel">
-              <div className="panel-head"><span className={'dot ' + (sel.status==='fail'?'err':'acc')} style={sel.status!=='fail'?{background:'var(--accent)'}:{}} /><h3>Fluxo · {sel.id}</h3>
-                <div className="right mono muted" style={{fontSize:11}}>{sel.commit}</div></div>
-              <div className="panel-body">
-                <div className="pipe">
-                  {D.pipeline.map((s, idx) => {
-                    const si = stepIndex(sel);
-                    const cls = sel.status==='fail' && idx===si ? 'fail' : idx<si ? 'done' : idx===si ? 'active' : '';
-                    return (
-                      <div key={s} className={'pipe-step ' + cls} style={{flex: idx===D.pipeline.length-1?'none':1}}>
-                        <div className="pipe-node">{cls==='done'?'✓':cls==='fail'?'✕':idx+1}</div>
-                        {idx<D.pipeline.length-1 && <div className="pipe-line" />}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={{display:'flex', justifyContent:'space-between', marginTop:8}}>
-                  {D.pipeline.map(s => <span key={s} className="pipe-label" style={{flex:1, textAlign:'center', fontSize:10}}>{s}</span>)}
-                </div>
-              </div>
-            </div>
-            <div className="panel">
-              <div className="panel-head"><Icon name="terminal" size={14} style={{color:'var(--text-2)'}}/><h3>Registros da publicação</h3>
-                <div className="right"><span className="pill acc"><span className="dot ok blink"/> ao vivo</span></div></div>
-              <div className="panel-body flush">
-                <div className="term" ref={logRef} style={{border:'none', borderRadius:0, height:220}}>
-                  {log.map((l, k) => (<div className="ln" key={k}><span className="t">{l.t}</span><span className={'lv-'+l.lv}>{l.m}</span></div>))}
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="detail-empty" style={{padding:40}}>
+          <div><div className="ic"><Icon name="rocket" size={22}/></div>
+          <div style={{fontSize:13, color:'var(--text-2)'}}>SEM DADOS REAIS</div>
+          <div style={{fontSize:11.5, marginTop:4}}>
+            Nenhum ambiente ou publicação real monitorada. Nada de cobertura, versões
+            ou logs inventados é exibido. Aguardando primeira publicação real.</div></div>
         </div>
       </div>
     </div>
@@ -261,14 +159,14 @@ function AuditCenter({ setView }) {
             <div className="muted" style={{fontSize:11.5, marginTop:3}}>{G.zeroGhostLaw.ativas} políticas ativas · {G.zeroGhostLaw.violacoes} violações · última varredura há {G.zeroGhostLaw.ultimaVarredura}</div>
           </div>
           <div style={{display:'flex', gap:18, alignItems:'center'}}>
-            <div style={{textAlign:'center'}}><div className="kpi-val" style={{fontSize:22, color:'var(--ok)'}}>100%</div><div className="kpi-sub">integridade</div></div>
-            <div style={{textAlign:'center'}}><div className="kpi-val" style={{fontSize:22, color:'var(--accent-bright)'}}>{G.evidence.total.toLocaleString('pt-BR')}</div><div className="kpi-sub">evidências</div></div>
+            <div style={{textAlign:'center'}}><div className="kpi-val" style={{fontSize:16, color:'var(--text-2)'}}>NÃO CALCULADA</div><div className="kpi-sub">integridade</div></div>
+            <div style={{textAlign:'center'}}><div className="kpi-val" style={{fontSize:22, color:'var(--accent-bright)'}}>{(G.evidence.total||0).toLocaleString('pt-BR')}</div><div className="kpi-sub">evidências reais</div></div>
           </div>
         </div>
 
         {/* KPIs */}
         <div className="kpi-grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))'}}>
-          <div className="kpi"><div className="kpi-label">Eventos (24h)</div><div className="kpi-val">1.284</div><div className="kpi-sub">12 exibidos</div></div>
+          <div className="kpi"><div className="kpi-label">Eventos (auditoria)</div><div className="kpi-val">{G.zeroGhostLaw.ativas||0}</div><div className="kpi-sub">{rows.length} exibidos</div></div>
           <div className="kpi"><div className="kpi-label"><span className="dot info"/> Info</div><div className="kpi-val" style={{color:'var(--info)'}}>{count('info')}</div></div>
           <div className="kpi"><div className="kpi-label"><span className="dot warn"/> Avisos</div><div className="kpi-val" style={{color:'var(--warn)'}}>{count('aviso')}</div></div>
           <div className="kpi"><div className="kpi-label"><span className="dot err"/> Críticos</div><div className="kpi-val" style={{color:'var(--err)'}}>{count('crítico')}</div></div>
@@ -367,8 +265,21 @@ function AuditCenter({ setView }) {
 /* ===================== KNOWLEDGE CENTER ===================== */
 function KnowledgeCenter({ setView }) {
   const D = window.FORJA;
-  const [sel, setSel] = useState(D.fontes[0]);
+  const [sel, setSel] = useState(D.fontes[0] || null);
   const [q, setQ] = useState('');
+  if (!D.fontes.length) {
+    return (
+      <div className="center">
+        <CenterHeader icon="book" crumb="Central de Conhecimento" title="Central de Conhecimento"
+          sub="NÃO MONITORADO — nenhuma indexação real medida" />
+        <div className="detail-empty" style={{padding:40}}>
+          <div><div className="ic"><Icon name="book" size={22}/></div>
+          <div style={{fontSize:13, color:'var(--text-2)'}}>SEM DADOS REAIS</div>
+          <div style={{fontSize:11.5, marginTop:4}}>Nenhuma fonte indexada real. Contagens de docs/trechos não são inventadas.</div></div>
+        </div>
+      </div>
+    );
+  }
   const totalDocs = D.fontes.reduce((s,f)=>s+f.docs,0);
   const totalChunks = D.fontes.reduce((s,f)=>s+f.chunks,0);
   return (
