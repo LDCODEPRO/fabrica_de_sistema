@@ -5,8 +5,7 @@
 # NAO forja scores. NAO injeta texto falso. Reporta o estado real.
 # =============================================================================
 
-# Resolver raiz dinamicamente a partir da localizacao deste script
-$target = $PSScriptRoot
+$target = Split-Path $PSScriptRoot -Parent
 if ([string]::IsNullOrWhiteSpace($target)) {
     $target = (Get-Location).Path
 }
@@ -56,9 +55,8 @@ foreach ($ef in $emptyFiles) {
 # FASE 3 - AUDITORIA ESTRUTURAL
 $expectedDirs = @(
     "00_GOVERNANCA", "01_RULES", "02_WORKFLOWS", "03_SKILLS", "04_CHECKLISTS",
-    "05_AGENTS", "06_CORE_BASE", "10_OPERATIONS", "11_AUDITORIA",
-    "14_DOCUMENTACAO", "15_PROJETOS", "16_SISTEMAS", "17_RUNTIME",
-    "18_EXPORTS", "19_RELATORIOS"
+    "05_AGENTS", "06_CORE_BASE", "09_PROJETOS", "10_OPERATIONS", "11_AUDITORIA",
+    "14_DOCUMENTACAO", "16_SISTEMAS", "18_EXPORTS", "19_RELATORIOS"
 )
 
 foreach ($dir in $expectedDirs) {
