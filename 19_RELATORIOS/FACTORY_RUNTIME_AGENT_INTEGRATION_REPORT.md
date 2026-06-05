@@ -123,7 +123,7 @@ Comportamento correto: evidencias so sao geradas quando o operador fornece respo
 
 | Acao | Resultado |
 |---|---|
-| git status | OK |
-| git add | OK |
-| git commit | Pendente |
-| git push | Pendente |
+| git status | OK - 27 arquivos modificados/criados |
+| git add . | OK |
+| git commit `5ee0fb9` | OK - "feat(runtime): integrate agent runtime human assisted mode" |
+| git push origin main | OK - defa29a..5ee0fb9 |
