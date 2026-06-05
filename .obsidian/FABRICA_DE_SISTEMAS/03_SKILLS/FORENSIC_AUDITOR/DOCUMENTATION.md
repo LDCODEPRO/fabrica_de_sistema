@@ -1,0 +1,3 @@
+﻿# FORENSIC_AUDITOR - DOCUMENTATION.md
+
+DocumentaÃ§Ã£o da skill FORENSIC_AUDITOR.

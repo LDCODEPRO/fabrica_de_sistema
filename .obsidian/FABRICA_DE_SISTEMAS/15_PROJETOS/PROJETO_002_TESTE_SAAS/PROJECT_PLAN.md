@@ -1,0 +1,3 @@
+﻿# PROJECT PLAN
+- IntegraÃ§Ã£o com PROJECT_INTAKE_SYSTEM.
+- Workflow Base: UNIVERSAL_PROJECT_PIPELINE.
