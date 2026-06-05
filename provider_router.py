@@ -11,18 +11,35 @@ REGRAS:
 - Ordem preferencial: DeepSeek -> Gemini -> OpenAI -> Claude -> Ollama local.
 """
 import os
+import re
 import json
+import shutil
+import subprocess
 import urllib.request
 import urllib.error
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 
-# Ordem oficial da Diretoria (assinaturas primeiro, DeepSeek depois, Ollama por último):
-# 1. Claude assinatura  2. OpenAI assinatura  3. Gemini assinatura
-# 4. DeepSeek V4 Pro     5. Ollama local (último fallback)
-PREFERRED_ORDER = ["claude", "openai", "gemini", "deepseek", "ollama"]
+# ORDEM OFICIAL: SÓ ASSINATURAS (CLIs oficiais que autenticam pelo login da
+# assinatura, como o Claude Code/Codex fazem — sem API key, sem navegador).
+# 1. Claude (assinatura, CLI `claude`)
+# 2. ChatGPT/Codex (assinatura, CLI `codex`)
+# 3. Ollama local (último recurso grátis)
+PREFERRED_ORDER = ["claude_sub", "codex_sub", "ollama"]
+
+# Providers de ASSINATURA via CLI oficial (custo incremental R$ 0, sem API key)
+SUBSCRIPTION_CLIS = {
+    "claude_sub": {"bin": "claude", "label": "Claude (assinatura)"},
+    "codex_sub":  {"bin": "codex",  "label": "ChatGPT/Codex (assinatura)"},
+}
 
 PROVIDER_CONFIG = {
+    # Assinaturas via CLI (sem env/url — usam o login da própria CLI)
+    "claude_sub": {"env": None, "model": "claude-subscription", "cli": "claude"},
+    "codex_sub":  {"env": None, "model": "chatgpt-subscription", "cli": "codex"},
+    # Local grátis
+    "ollama":   {"env": None, "model": os.getenv("OLLAMA_MODEL", "llama3.2:latest")},
+    # APIs pagas (NÃO usadas por padrão — só referência, bloqueadas)
     "deepseek": {"env": "DEEPSEEK_API_KEY", "model": "deepseek-chat",
                  "url": "https://api.deepseek.com/v1/chat/completions"},
     "gemini":   {"env": "GOOGLE_API_KEY", "model": "gemini-2.5-flash"},
@@ -30,8 +47,73 @@ PROVIDER_CONFIG = {
                  "url": "https://api.openai.com/v1/chat/completions"},
     "claude":   {"env": "ANTHROPIC_API_KEY", "model": "claude-haiku-4-5-20251001",
                  "url": "https://api.anthropic.com/v1/messages"},
-    "ollama":   {"env": None, "model": os.getenv("OLLAMA_MODEL", "llama3.2:latest")},
 }
+
+
+def _resolve_bin(bin_name):
+    """Resolve caminho do executável (Windows: .cmd/.exe via PATHEXT)."""
+    return (shutil.which(bin_name)
+            or shutil.which(bin_name + ".cmd")
+            or shutil.which(bin_name + ".exe")
+            or bin_name)
+
+
+def _cli_available(bin_name):
+    return (shutil.which(bin_name) or shutil.which(bin_name + ".cmd")
+            or shutil.which(bin_name + ".exe")) is not None
+
+
+def _claude_cli(cfg, prompt, system, max_tokens):
+    """Claude via assinatura (CLI oficial). Sem API key."""
+    full = (system + "\n\n" + prompt) if system else prompt
+    proc = subprocess.run(
+        [_resolve_bin("claude"), "-p", full, "--output-format", "text"],
+        capture_output=True, text=True, timeout=120,
+    )
+    out = (proc.stdout or "").strip()
+    err = (proc.stderr or "").strip()
+    if proc.returncode != 0 or not out:
+        # Mensagem real (ex.: org desabilitou assinatura headless)
+        raise RuntimeError((err or out or "claude CLI sem saída")[:160])
+    if "disabled Claude subscription" in out or "disabled Claude subscription" in err:
+        raise RuntimeError("assinatura Claude headless desabilitada pela organização")
+    return out
+
+
+def _codex_cli(cfg, prompt, system, max_tokens):
+    """ChatGPT via assinatura (Codex CLI). Sem API key."""
+    full = (system + "\n\n" + prompt) if system else prompt
+    proc = subprocess.run(
+        [_resolve_bin("codex"), "exec", full],
+        capture_output=True, text=True, timeout=180,
+    )
+    raw = (proc.stdout or "")
+    if proc.returncode != 0 and not raw.strip():
+        raise RuntimeError(((proc.stderr or "").strip() or "codex CLI falhou")[:160])
+    return _parse_codex_output(raw)
+
+
+def _parse_codex_output(raw):
+    """Extrai a resposta do agente do output do `codex exec`."""
+    lines = raw.splitlines()
+    # A resposta fica após a linha marcador 'codex' e antes de 'tokens used'
+    resp = []
+    capture = False
+    for ln in lines:
+        s = ln.strip()
+        if s == "codex":
+            capture = True
+            continue
+        if s.startswith("tokens used"):
+            break
+        if capture:
+            resp.append(ln)
+    text = "\n".join(resp).strip()
+    if text:
+        return text
+    # fallback: remove linhas de metadados e devolve o resto
+    cleaned = [l for l in lines if l.strip() and not l.strip().startswith(("---", "user", "tokens used"))]
+    return "\n".join(cleaned).strip()
 
 
 def _post(url, payload, headers, timeout=60):
@@ -46,6 +128,9 @@ def provider_status(provider):
     cfg = PROVIDER_CONFIG.get(provider)
     if not cfg:
         return "DESCONHECIDO"
+    # Assinatura via CLI: CONFIGURADO se a CLI estiver instalada
+    if cfg.get("cli"):
+        return "CONFIGURADO" if _cli_available(cfg["cli"]) else "AUSENTE"
     if cfg["env"] is None:  # local
         return "CONFIGURADO"
     v = os.environ.get(cfg["env"], "")
@@ -118,11 +203,14 @@ def _ollama(cfg, prompt, system, max_tokens):
 
 
 _DISPATCH = {
+    "claude_sub": _claude_cli,   # assinatura Claude (CLI)
+    "codex_sub": _codex_cli,     # assinatura ChatGPT (Codex CLI)
+    "ollama": _ollama,
+    # APIs pagas (não usadas por padrão)
     "deepseek": _openai_compatible,
     "openai": _openai_compatible,
     "gemini": _gemini,
     "claude": _claude,
-    "ollama": _ollama,
 }
 
 

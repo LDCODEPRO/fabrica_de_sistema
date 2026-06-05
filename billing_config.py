@@ -22,8 +22,9 @@ DAILY_BUDGET_USD = 1.00
 MONTHLY_BUDGET_USD = 30.00
 
 # ── Providers oficiais ──────────────────────────────────────────────────────
-PRIMARY_PROVIDER = "deepseek_v4_pro"
-FALLBACK_PROVIDER = "ollama"
+# Execução real por ASSINATURA (CLIs oficiais), não API paga.
+PRIMARY_PROVIDER = "codex_sub"   # ChatGPT/Codex via assinatura (custo incremental R$ 0)
+FALLBACK_PROVIDER = "ollama"     # local grátis
 
 # ── Ledger real de uso ──────────────────────────────────────────────────────
 BILLING_STATE = ROOT / "17_AUTOMACOES" / "LLM_ROUTER" / "reports" / "billing_state.json"

@@ -89,9 +89,9 @@ def run_tests():
     check("truth_projects_honest", cards.get("projects", {}).get("source") == "sem_dados_reais",
           f"{cards.get('projects')}")
 
-    # 12. ordem do provider router
+    # 12. ordem do provider router: só assinaturas via CLI + ollama
     import provider_router as pr
-    check("router_order", pr.PREFERRED_ORDER == ["claude", "openai", "gemini", "deepseek", "ollama"],
+    check("router_order", pr.PREFERRED_ORDER == ["claude_sub", "codex_sub", "ollama"],
           f"={pr.PREFERRED_ORDER}")
 
     return results

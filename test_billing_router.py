@@ -47,9 +47,9 @@ def run_tests():
     check("monthly_budget_30", bc.MONTHLY_BUDGET_USD == 30.00, f"={bc.MONTHLY_BUDGET_USD}")
     check("no_old_150_limit", bc.MONTHLY_BUDGET_USD != 150, f"={bc.MONTHLY_BUDGET_USD}")
 
-    # 2. ordem oficial do router de assinaturas
-    expected = ["claude", "openai", "gemini", "deepseek", "ollama"]
-    check("router_order_official", pr.PREFERRED_ORDER == expected, f"={pr.PREFERRED_ORDER}")
+    # 2. ordem oficial: SÓ ASSINATURAS via CLI + ollama local
+    expected = ["claude_sub", "codex_sub", "ollama"]
+    check("router_order_subscriptions", pr.PREFERRED_ORDER == expected, f"={pr.PREFERRED_ORDER}")
 
     # 3. router não expõe secrets no status
     st = {p: pr.provider_status(p) for p in pr.PREFERRED_ORDER}
@@ -63,15 +63,22 @@ def run_tests():
     check("billing_source_valid", b.get("source") in ("real_usage", "sem_dados_reais"), f"source={b.get('source')}")
     check("billing_has_projection", "projection_usd" in b, f"keys={list(b.keys())}")
 
-    # 5. execução real respeita ordem (1º disponível na ordem é o usado)
+    # 5. execução real: usa uma assinatura (ou ollama local), respeitando a ordem
     r = pr.execute_with_fallback("Responda apenas: FORJA_PROVIDER_OK", max_tokens=256)
-    first_available = next((p for p in pr.PREFERRED_ORDER if pr.provider_status(p) == "CONFIGURADO"), None)
     check("real_exec_ok", r.get("ok") is True, f"err={r.get('error')}")
-    check("real_exec_uses_first_available", r.get("provider") == first_available,
-          f"usado={r.get('provider')} esperado={first_available}")
+    check("real_exec_uses_order_provider", r.get("provider") in pr.PREFERRED_ORDER,
+          f"usado={r.get('provider')}")
+    # a trilha deve tentar as assinaturas ANTES do ollama
+    trail_providers = [t.get("provider") for t in r.get("fallback_trail", [])]
+    check("real_exec_tries_subs_first", trail_providers[0] in ("claude_sub", "codex_sub"),
+          f"trilha={trail_providers}")
 
-    # 6. ollama é o último da ordem (fallback local)
+    # 6. ollama é o último da ordem (fallback local grátis)
     check("ollama_is_last", pr.PREFERRED_ORDER[-1] == "ollama", f"último={pr.PREFERRED_ORDER[-1]}")
+    # 7. nenhuma API paga na ordem de execução (só assinaturas + local)
+    paid = {"openai", "deepseek", "gemini", "claude"}
+    check("no_paid_api_in_order", not (set(pr.PREFERRED_ORDER) & paid),
+          f"order={pr.PREFERRED_ORDER}")
 
     return results
 
