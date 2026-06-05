@@ -1,0 +1,16 @@
+database:
+  engine: "sqlite"
+  filename: "fabricadb.sqlite"
+  path: "D:\\fabricadesistema\\FABRICA_DE_SISTEMAS\\22_DATABASE_CORE\\fabricadb.sqlite"
+  test_path: ":memory:"
+  backup_dir: "D:\\fabricadesistema\\FABRICA_DE_SISTEMAS\\22_DATABASE_CORE\\backups"
+
+future_compatibility:
+  postgresql: true
+  supabase: true
+  cloud_sql: true
+
+settings:
+  enforce_foreign_keys: true
+  log_queries: false
+  timeout_ms: 15000

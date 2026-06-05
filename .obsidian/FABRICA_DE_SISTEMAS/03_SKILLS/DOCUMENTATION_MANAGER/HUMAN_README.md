@@ -1,0 +1,3 @@
+﻿# DOCUMENTATION_MANAGER - HUMAN_README.md
+
+DocumentaÃ§Ã£o da skill DOCUMENTATION_MANAGER.
