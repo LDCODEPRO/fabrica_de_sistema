@@ -102,7 +102,7 @@ foreach ($row in $agentRows) {
     $taskStatus = $parts[2]
 
     # Pular agentes sem arquivo de tarefa (coordenacao, tracos, vazio)
-    if (($taskFile -eq "-") -or ($taskFile -eq "") -or ($taskFile -match '^\(') -or ($taskFile -match '^[-\x{2014}\x{2013}]')) {
+    if (($taskFile -eq "-") -or ($taskFile -eq "") -or ($taskFile -match '^\(') -or ($taskFile -match '^[-—–]')) {
         Write-Log "SKIP $agentName - sem arquivo de tarefa"
         $skipped++
         continue

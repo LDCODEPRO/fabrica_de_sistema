@@ -1,6 +1,6 @@
 ﻿# FACTORY STATUS DASHBOARD
 
-**Gerado em:** 2026-06-04 21:10
+**Gerado em:** 2026-06-04 23:35
 **Motor:** STATUS_ENGINE_V1
 
 ---
@@ -9,9 +9,9 @@
 
 | Metrica | Valor |
 |---|---|
-| Total de projetos | 3 |
+| Total de projetos | 1 |
 | Com MISSION_BOARD | 1 |
-| Sem MISSION_BOARD | 2 |
+| Sem MISSION_BOARD | 0 |
 | Projetos com bloqueios | 0 |
 | Agentes ativos (EM EXECUCAO) | 4 |
 | Subtarefas pendentes | 24 |
@@ -22,17 +22,8 @@
 | Status | Quantidade |
 |---|---|
 | EM ORQUESTRACAO | 1 |
-| SEM_MISSION_BOARD | 2 |
 
 ## Detalhe dos Projetos
-
-### PROJECT_FACTORY
-
-_Sem MISSION_BOARD. Projeto nao estruturado._
-
-### PROJETO_001_REFACTOR
-
-_Sem MISSION_BOARD. Projeto nao estruturado._
 
 ### PROJETO_002_TESTE_SAAS
 
@@ -101,5 +92,5 @@ _Nenhum bloqueio registrado._
 4 agente(s) EM EXECUCAO. Monitorar conclusao e atualizar status para CONCLUIDO.
 
 ---
-_Dashboard gerado por STATUS_ENGINE_V1 em 2026-06-04 21:10_
+_Dashboard gerado por STATUS_ENGINE_V1 em 2026-06-04 23:35_
 

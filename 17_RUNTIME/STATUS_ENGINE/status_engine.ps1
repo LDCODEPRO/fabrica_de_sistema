@@ -75,9 +75,9 @@ function Write-Log {
 Write-Log "Escaneando projetos em: $ProjectsRoot"
 
 if ($ProjectName) {
-    $projectDirs = Get-ChildItem -Path $ProjectsRoot -Directory | Where-Object { $_.Name -eq $ProjectName }
+    $projectDirs = @(Get-ChildItem -Path $ProjectsRoot -Directory | Where-Object { $_.Name -eq $ProjectName })
 } else {
-    $projectDirs = Get-ChildItem -Path $ProjectsRoot -Directory
+    $projectDirs = @(Get-ChildItem -Path $ProjectsRoot -Directory)
 }
 
 if ($projectDirs.Count -eq 0) {

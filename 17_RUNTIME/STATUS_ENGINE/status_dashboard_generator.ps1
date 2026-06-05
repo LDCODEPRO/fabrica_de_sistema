@@ -21,7 +21,7 @@ $ErrorActionPreference = "Stop"
 # ---------------------------------------------------------------------------
 # Parse
 # ---------------------------------------------------------------------------
-$projects = $ProjectsJson | ConvertFrom-Json
+$projects = @($ProjectsJson | ConvertFrom-Json)
 
 $now = Get-Date -Format "yyyy-MM-dd HH:mm"
 
