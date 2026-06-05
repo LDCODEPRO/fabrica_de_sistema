@@ -335,6 +335,20 @@ def runtime_status_endpoint():
     return agent_runtime.runtime_status()
 
 
+@app.post("/api/runtime/tick")
+def runtime_tick_endpoint():
+    """Pega a próxima missão QUEUED e executa (fila operacional)."""
+    import agent_runtime
+    return agent_runtime.tick()
+
+
+@app.get("/api/runtime/queue")
+def runtime_queue_endpoint():
+    """Estado da fila operacional por status."""
+    import agent_runtime
+    return agent_runtime.queue_status()
+
+
 @app.get("/api/providers/test")
 def providers_test():
     """Status de configuração dos providers (NUNCA expõe chaves)."""

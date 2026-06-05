@@ -13,10 +13,15 @@ REGRAS: sem simulação, sem mascarar erro, sem expor secrets.
 import os
 import json
 import sqlite3
+import threading
 from datetime import datetime
 from pathlib import Path
 
 import provider_router as pr
+
+# Trava de concorrência: impede duas execuções simultâneas da MESMA missão.
+_LOCK = threading.Lock()
+_RUNNING_IDS = set()
 
 ROOT = Path(__file__).parent
 DB_PATH = ROOT / "nexus.db"
@@ -97,6 +102,14 @@ def run_mission(mission_id):
         mid = int(mission_id.split("-")[1])
     else:
         mid = int(mission_id)
+
+    # Trava: impede execução concorrente da mesma missão
+    with _LOCK:
+        if mid in _RUNNING_IDS:
+            result["error"] = "missão já em execução (lock ativo)"
+            result["status"] = "RUNNING"
+            return result
+        _RUNNING_IDS.add(mid)
 
     conn = _conn()
     try:
@@ -180,6 +193,8 @@ def run_mission(mission_id):
         return result
     finally:
         conn.close()
+        with _LOCK:
+            _RUNNING_IDS.discard(mid)
 
 
 def runtime_status():
@@ -201,7 +216,62 @@ def runtime_status():
         conn.close()
 
 
+def queue_status():
+    """Contagem por estado da fila operacional."""
+    conn = _conn()
+    try:
+        states = ["QUEUED", "RUNNING", "COMPLETED", "FAILED", "PENDING", "CANCELLED"]
+        counts = {}
+        for st in states:
+            counts[st] = conn.execute(
+                "SELECT COUNT(*) c FROM missions WHERE status=?", (st,)).fetchone()["c"]
+        nxt = conn.execute(
+            "SELECT id, title FROM missions WHERE status='QUEUED' ORDER BY id ASC LIMIT 1"
+        ).fetchone()
+        return {
+            "counts": counts,
+            "next_queued": (f"MIS-{nxt['id']:03d}" if nxt else None),
+            "running_locked": sorted(f"MIS-{i:03d}" for i in _RUNNING_IDS),
+        }
+    finally:
+        conn.close()
+
+
+def tick():
+    """Pega a próxima missão QUEUED (FIFO por id) e executa. Idempotente/seguro."""
+    conn = _conn()
+    try:
+        nxt = conn.execute(
+            "SELECT id FROM missions WHERE status='QUEUED' ORDER BY id ASC LIMIT 1"
+        ).fetchone()
+        if not nxt:
+            return {"ok": True, "executed": False, "reason": "fila vazia (nenhuma QUEUED)",
+                    "queue": queue_status()}
+        mid = nxt["id"]
+        # Claim atômico: só prossegue se ninguém pegou antes
+        cur = conn.execute(
+            "UPDATE missions SET status='RUNNING', updated_at=? "
+            "WHERE id=? AND status='QUEUED'", (datetime.utcnow().isoformat(), mid))
+        conn.commit()
+        if cur.rowcount == 0:
+            return {"ok": True, "executed": False,
+                    "reason": "missão já reivindicada por outro tick", "queue": queue_status()}
+        _audit(conn, "QUEUE_TICK_CLAIM", f"MIS-{mid:03d} reivindicada da fila")
+    finally:
+        conn.close()
+
+    result = run_mission(mid)
+    result["executed"] = True
+    result["queue"] = queue_status()
+    return result
+
+
 if __name__ == "__main__":
     import sys
-    mid = sys.argv[1] if len(sys.argv) > 1 else "MIS-001"
-    print(json.dumps(run_mission(mid), ensure_ascii=False, indent=2))
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "MIS-001"
+    if cmd == "tick":
+        print(json.dumps(tick(), ensure_ascii=False, indent=2))
+    elif cmd == "queue":
+        print(json.dumps(queue_status(), ensure_ascii=False, indent=2))
+    else:
+        print(json.dumps(run_mission(cmd), ensure_ascii=False, indent=2))
