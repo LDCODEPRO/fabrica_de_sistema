@@ -1,0 +1,3 @@
+﻿# DOCUMENTATION_MANAGER_AGENT - AGENT_IDENTITY.md
+
+DefiniÃ§Ãµes oficiais para o agente DOCUMENTATION_MANAGER_AGENT.

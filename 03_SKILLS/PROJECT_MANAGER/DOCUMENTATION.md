@@ -1,0 +1,3 @@
+﻿# PROJECT_MANAGER - DOCUMENTATION.md
+
+DocumentaÃ§Ã£o da skill PROJECT_MANAGER.

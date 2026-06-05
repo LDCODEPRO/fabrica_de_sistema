@@ -1,0 +1,7 @@
+# Claude Code local settings (não versionado — específico por máquina)
+.claude/
+
+# Sistema operacional
+Thumbs.db
+.DS_Store
+desktop.ini

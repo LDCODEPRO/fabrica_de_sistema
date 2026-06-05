@@ -1,0 +1,3 @@
+﻿# ARCHITECT_MASTER - DOCUMENTATION.md
+
+DocumentaÃ§Ã£o da skill ARCHITECT_MASTER.

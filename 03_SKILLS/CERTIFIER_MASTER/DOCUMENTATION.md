@@ -1,0 +1,3 @@
+﻿# CERTIFIER_MASTER - DOCUMENTATION.md
+
+DocumentaÃ§Ã£o da skill CERTIFIER_MASTER.
