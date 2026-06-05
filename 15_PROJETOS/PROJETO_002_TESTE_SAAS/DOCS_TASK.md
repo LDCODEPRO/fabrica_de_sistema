@@ -33,4 +33,4 @@ Produzir documentação técnica e de usuário para o projeto.
 
 ## Status
 
-EM EXECUCAO
+PROMPT_GERADO

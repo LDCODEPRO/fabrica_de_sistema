@@ -21,10 +21,10 @@
 | Agente              | Missao                  | Status     |
 |---------------------|-------------------------|------------|
 | ORCHESTRATOR_AGENT | -- (Coordenacao) | AGUARDANDO |
-| QA_AGENT | QA_TASK.md | EM EXECUCAO |
-| DOCS_AGENT | DOCS_TASK.md | EM EXECUCAO |
-| ARCHITECT_AGENT | ARCHITECT_TASK.md | AGENT_RESPONSE_RECEIVED |
-| DEVELOPER_AGENT | DEVELOPER_TASK.md | EM EXECUCAO |
+| QA_AGENT | QA_TASK.md | PROMPT_GERADO |
+| DOCS_AGENT | DOCS_TASK.md | PROMPT_GERADO |
+| ARCHITECT_AGENT | ARCHITECT_TASK.md | PROMPT_GERADO |
+| DEVELOPER_AGENT | DEVELOPER_TASK.md | PROMPT_GERADO |
 
 ---
 

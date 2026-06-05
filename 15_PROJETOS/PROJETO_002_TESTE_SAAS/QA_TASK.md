@@ -34,4 +34,4 @@ Garantir a qualidade do projeto através de testes e auditorias.
 
 ## Status
 
-EM EXECUCAO
+PROMPT_GERADO

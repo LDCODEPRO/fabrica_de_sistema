@@ -23,10 +23,11 @@ $Script:SISTEMAS_DIR    = Join-Path $FABRICA_ROOT "16_SISTEMAS"
 # ---------------------------------------------------------------------------
 # Motores do runtime
 # ---------------------------------------------------------------------------
-$Script:ORCHESTRATOR_SCRIPT = Join-Path $SISTEMAS_DIR "PROJECT_ORCHESTRATOR\orchestrate.ps1"
-$Script:EXECUTOR_SCRIPT     = Join-Path $RUNTIME_DIR  "MISSION_EXECUTOR\mission_executor.ps1"
-$Script:STATUS_SCRIPT       = Join-Path $RUNTIME_DIR  "STATUS_ENGINE\status_engine.ps1"
-$Script:AUDIT_SCRIPT        = Join-Path $RUNTIME_DIR  "AUDIT_ENGINE\audit_engine.ps1"
+$Script:ORCHESTRATOR_SCRIPT  = Join-Path $SISTEMAS_DIR "PROJECT_ORCHESTRATOR\orchestrate.ps1"
+$Script:EXECUTOR_SCRIPT      = Join-Path $RUNTIME_DIR  "MISSION_EXECUTOR\mission_executor.ps1"
+$Script:AGENT_RUNTIME_SCRIPT = Join-Path $RUNTIME_DIR  "AGENT_RUNTIME\agent_runtime.ps1"
+$Script:STATUS_SCRIPT        = Join-Path $RUNTIME_DIR  "STATUS_ENGINE\status_engine.ps1"
+$Script:AUDIT_SCRIPT         = Join-Path $RUNTIME_DIR  "AUDIT_ENGINE\audit_engine.ps1"
 
 # ---------------------------------------------------------------------------
 # Arquivos de saida do runtime

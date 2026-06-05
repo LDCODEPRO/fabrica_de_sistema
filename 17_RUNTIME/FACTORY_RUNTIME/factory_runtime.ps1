@@ -8,8 +8,11 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ProjectName,
 
-    # Forcар re-orquestracao mesmo se MISSION_BOARD ja existir
+    # Forcar re-orquestracao mesmo se MISSION_BOARD ja existir
     [switch]$ForceOrchestrate,
+
+    # Executar AGENT_RUNTIME apos MISSION_EXECUTOR (modo HUMAN_ASSISTED)
+    [switch]$RunAgentRuntime,
 
     # Nao gerar relatorio final (apenas log)
     [switch]$NoReport
@@ -37,6 +40,7 @@ $pipelineResults = [ordered]@{
     Validate       = @{ Result = "PENDENTE"; Duration = 0; Detail = "" }
     Orchestrate    = @{ Result = "PENDENTE"; Duration = 0; Detail = "" }
     Execute        = @{ Result = "PENDENTE"; Duration = 0; Detail = "" }
+    AgentRuntime   = @{ Result = "NAO_EXECUTADO"; Duration = 0; Detail = "Parametro -RunAgentRuntime nao usado" }
     Status         = @{ Result = "PENDENTE"; Duration = 0; Detail = "" }
     Audit          = @{ Result = "PENDENTE"; Duration = 0; Detail = "" }
     AuditScore     = -1
@@ -142,7 +146,69 @@ Invoke-Stage -StageName "MISSION_EXECUTOR" -StageKey "Execute" -Action {
 } | Out-Null
 
 # ---------------------------------------------------------------------------
-# ETAPA 4: STATUS_ENGINE
+# ETAPA 4: AGENT_RUNTIME (opcional — ativado por -RunAgentRuntime)
+# ---------------------------------------------------------------------------
+if ($RunAgentRuntime) {
+    if (-not (Test-Path $AGENT_RUNTIME_SCRIPT)) {
+        $pipelineResults.AgentRuntime = @{ Result = "SKIP"; Duration = 0; Detail = "agent_runtime.ps1 nao encontrado em $AGENT_RUNTIME_SCRIPT" }
+        Write-RuntimeConsole -Stage "AGENT_RUNTIME" -Msg "Script nao encontrado. Pulando." -Level "SKIP"
+        Write-RuntimeLog -Project $ProjectName -Stage "AGENT_RUNTIME" -Result "SKIP" -Detail "Script nao encontrado"
+    } else {
+        # Ler agentes pendentes do MISSION_BOARD
+        $missionBoardPath = Join-Path $projectPath "MISSION_BOARD.md"
+        $boardLines = Get-Content -Path $missionBoardPath -Encoding UTF8
+        $agentRows  = @($boardLines | Where-Object { $_ -match '_AGENT' -and $_ -match '\|' })
+
+        $pendingAgents = @()
+        foreach ($row in $agentRows) {
+            $parts = ($row -split '\|') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
+            if ($parts.Count -ge 3) {
+                $aName   = $parts[0]
+                $aFile   = $parts[1]
+                $aStatus = $parts[2]
+                # Incluir agentes com task file real e status diferente de CONCLUIDO/AGENT_RESPONSE_RECEIVED
+                if ($aFile -notmatch '^[-–(]' -and $aFile.Length -gt 3 -and
+                    $aStatus -ne "CONCLUIDO" -and $aStatus -ne "AGENT_RESPONSE_RECEIVED") {
+                    $pendingAgents += $aName
+                }
+            }
+        }
+
+        if ($pendingAgents.Count -eq 0) {
+            $pipelineResults.AgentRuntime = @{ Result = "SKIP"; Duration = 0; Detail = "Nenhum agente pendente para gerar prompt" }
+            Write-RuntimeConsole -Stage "AGENT_RUNTIME" -Msg "Nenhum agente pendente. Pulando." -Level "SKIP"
+            Write-RuntimeLog -Project $ProjectName -Stage "AGENT_RUNTIME" -Result "SKIP" -Detail "Nenhum agente pendente"
+        } else {
+            $arPrompted = 0
+            $arFailed   = 0
+            $arT0       = Get-Date
+
+            foreach ($agentName in $pendingAgents) {
+                Write-RuntimeConsole -Stage "AGENT_RUNTIME" -Msg "Gerando prompt: $agentName" -Level "START"
+                try {
+                    $arRaw = & $AGENT_RUNTIME_SCRIPT -ProjectName $ProjectName -AgentName $agentName -Mode Generate 2>&1
+                    $arOut = ($arRaw | Select-Object -Last 1)
+                    Write-RuntimeConsole -Stage "AGENT_RUNTIME" -Msg "$agentName - $arOut" -Level "OK"
+                    $arPrompted++
+                } catch {
+                    $arFailed++
+                    Write-RuntimeConsole -Stage "AGENT_RUNTIME" -Msg "FALHA $agentName : $_" -Level "FAIL"
+                }
+            }
+
+            $arDuration = ((Get-Date) - $arT0).TotalSeconds
+            $arDetail   = "Prompts gerados: $arPrompted | Falhas: $arFailed | Agentes: $($pendingAgents -join ', ')"
+            $arResult   = if ($arFailed -eq 0) { "OK" } else { "PARCIAL" }
+
+            $pipelineResults.AgentRuntime = @{ Result = $arResult; Duration = $arDuration; Detail = $arDetail }
+            Write-RuntimeLog -Project $ProjectName -Stage "AGENT_RUNTIME" -Result $arResult -Detail $arDetail -Duration $arDuration
+            Write-RuntimeConsole -Stage "AGENT_RUNTIME" -Msg $arDetail -Level "OK"
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# ETAPA 5: STATUS_ENGINE
 # ---------------------------------------------------------------------------
 Invoke-Stage -StageName "STATUS_ENGINE" -StageKey "Status" -Action {
     $raw = & $STATUS_SCRIPT -ProjectName $ProjectName 2>&1
@@ -216,7 +282,7 @@ if (-not $NoReport) {
     $null = $sb.AppendLine("| Etapa | Resultado | Duracao | Detalhe |")
     $null = $sb.AppendLine("|---|---|---|---|")
 
-    foreach ($key in @("Validate","Orchestrate","Execute","Status","Audit")) {
+    foreach ($key in @("Validate","Orchestrate","Execute","AgentRuntime","Status","Audit")) {
         $s = $pipelineResults[$key]
         $dur = "$([math]::Round($s.Duration,1))s"
         $det = if ($s.Detail.Length -gt 80) { $s.Detail.Substring(0,80) + "..." } else { $s.Detail }

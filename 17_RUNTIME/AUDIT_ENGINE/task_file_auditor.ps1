@@ -22,7 +22,8 @@ $ErrorActionPreference = "Stop"
 
 $VALID_STATUSES = @(
     "AGUARDANDO", "EM EXECUCAO", "CONCLUIDO",
-    "REPROVADO", "BLOQUEADO", "PENDENTE"
+    "REPROVADO", "BLOQUEADO", "PENDENTE",
+    "PROMPT_GERADO", "AGENT_RESPONSE_RECEIVED", "EM_VALIDACAO"
 )
 
 # Agentes de coordenacao que nao precisam de task file

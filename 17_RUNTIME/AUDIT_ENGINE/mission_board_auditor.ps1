@@ -17,7 +17,8 @@ $ErrorActionPreference = "Stop"
 $VALID_STATUSES = @(
     "AGUARDANDO", "EM EXECUCAO", "EM ORQUESTRACAO",
     "CONCLUIDO", "REPROVADO", "BLOQUEADO",
-    "MISSOES GERADAS", "PENDENTE"
+    "MISSOES GERADAS", "PENDENTE",
+    "PROMPT_GERADO", "AGENT_RESPONSE_RECEIVED", "EM_VALIDACAO"
 )
 
 # ---------------------------------------------------------------------------
