@@ -158,5 +158,50 @@
     return F._live;
   }
 
-  window.ForjaAPI = { getJSON, hydrate };
+  // ---- Runtime real: executar missão, evidências, status ----
+  async function postJSON(path, body) {
+    const res = await fetch(BASE + path, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' em ' + path);
+    return res.json();
+  }
+
+  // POST /api/missions/{id}/run — executa missão real
+  async function runMission(missionId) {
+    const r = await postJSON('/api/missions/' + missionId + '/run');
+    console.info('[FORJA] runMission', missionId, '→', r.status, '(provider:', r.provider + ')');
+    return r;
+  }
+
+  // GET /api/missions/{id}/evidences
+  async function getEvidences(missionId) {
+    return getJSON('/api/missions/' + missionId + '/evidences');
+  }
+
+  // GET /api/runtime/status
+  async function getRuntimeStatus() {
+    return getJSON('/api/runtime/status');
+  }
+
+  // Atualiza window.FORJA.missoes a partir do backend (após execução)
+  async function refreshMissions() {
+    try {
+      const r = await getJSON('/api/missions');
+      const F = window.FORJA;
+      F.missoes = pick(mapMissoes(r.items), F.missoes, 'missoes', (F._live || {}).sources || {});
+      return F.missoes;
+    } catch (e) {
+      console.warn('[FORJA] refreshMissions falhou:', e);
+      return (window.FORJA || {}).missoes;
+    }
+  }
+
+  window.ForjaAPI = {
+    getJSON, hydrate, postJSON,
+    runMission, getEvidences, getRuntimeStatus, refreshMissions,
+  };
 })();

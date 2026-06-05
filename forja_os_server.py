@@ -104,8 +104,9 @@ def list_missions(
 
 
 @app.get("/api/missions/{mission_id}")
-def get_mission(mission_id: int, db: Session = Depends(get_db)):
-    ms = db.query(m.Mission).filter(m.Mission.id == mission_id).first()
+def get_mission(mission_id: str, db: Session = Depends(get_db)):
+    mid = int(mission_id.split("-")[1]) if mission_id.upper().startswith("MIS-") else int(mission_id)
+    ms = db.query(m.Mission).filter(m.Mission.id == mid).first()
     if not ms:
         raise HTTPException(status_code=404, detail="Missão não encontrada")
     return {
@@ -282,6 +283,67 @@ def system_status(db: Session = Depends(get_db)):
         },
         "database": "ok",
         "source": "real",
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AGENT RUNTIME REAL
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/missions/{mission_id}/run")
+def run_mission_endpoint(mission_id: str):
+    """Executa uma missão real via agent_runtime (provider LLM real)."""
+    import agent_runtime
+    result = agent_runtime.run_mission(mission_id)
+    if not result["ok"] and result.get("error") == "missão não encontrada":
+        raise HTTPException(status_code=404, detail="Missão não encontrada")
+    return result
+
+
+@app.get("/api/missions/{mission_id}/evidences")
+def mission_evidences(mission_id: str, db: Session = Depends(get_db)):
+    """Lista evidências reais de uma missão."""
+    if mission_id.upper().startswith("MIS-"):
+        mid = int(mission_id.split("-")[1])
+    else:
+        mid = int(mission_id)
+    rows = db.execute(
+        m.Evidence.__table__.select().where(m.Evidence.mission_id == mid)
+        .order_by(m.Evidence.id.desc())
+    ).fetchall()
+    return {
+        "mission_id": f"MIS-{mid:03d}",
+        "total": len(rows),
+        "items": [
+            {
+                "id": r.id,
+                "mission_id": r.mission_id,
+                "description": r.description,
+                "file_path": r.file_path,
+                "created_at": r.created_at.isoformat() if hasattr(r.created_at, "isoformat") else r.created_at,
+            }
+            for r in rows
+        ],
+        "source": "real_database",
+    }
+
+
+@app.get("/api/runtime/status")
+def runtime_status_endpoint():
+    """Status operacional do runtime real."""
+    import agent_runtime
+    return agent_runtime.runtime_status()
+
+
+@app.get("/api/providers/test")
+def providers_test():
+    """Status de configuração dos providers (NUNCA expõe chaves)."""
+    import provider_router
+    providers = {p: provider_router.provider_status(p) for p in provider_router.PREFERRED_ORDER}
+    return {
+        "providers": providers,
+        "available": [p for p, s in providers.items() if s == "CONFIGURADO"],
+        "note": "Status de configuração — valores de chave nunca expostos.",
     }
 
 
