@@ -13,10 +13,11 @@ from cost_zero_policy import PAID_API, SUBSCRIPTION, LOCAL
 
 logger = logging.getLogger(__name__)
 
+# Limites oficiais da Diretoria (substitui antigos $2/$5 e o limite mensal de $150).
 LIMITS = {
-    "per_mission": {"soft": 0.25, "hard": 0.50},
-    "daily":       {"soft": 2.00, "hard": 5.00},
-    "weekly":      {"soft": 10.00, "hard": 20.00},
+    "per_mission": {"soft": 0.10, "hard": 0.25},
+    "daily":       {"soft": 0.80, "hard": 1.00},   # teto diário $1.00
+    "monthly":     {"soft": 24.00, "hard": 30.00}, # teto mensal $30.00
 }
 
 COST_FILE = Path(__file__).parent / "reports" / "billing_state.json"

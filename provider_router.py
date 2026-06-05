@@ -17,7 +17,10 @@ import urllib.error
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 
-PREFERRED_ORDER = ["deepseek", "gemini", "openai", "claude", "ollama"]
+# Ordem oficial da Diretoria (assinaturas primeiro, DeepSeek depois, Ollama por último):
+# 1. Claude assinatura  2. OpenAI assinatura  3. Gemini assinatura
+# 4. DeepSeek V4 Pro     5. Ollama local (último fallback)
+PREFERRED_ORDER = ["claude", "openai", "gemini", "deepseek", "ollama"]
 
 PROVIDER_CONFIG = {
     "deepseek": {"env": "DEEPSEEK_API_KEY", "model": "deepseek-chat",

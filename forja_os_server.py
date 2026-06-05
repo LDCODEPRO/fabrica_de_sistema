@@ -349,6 +349,13 @@ def runtime_queue_endpoint():
     return agent_runtime.queue_status()
 
 
+@app.get("/api/billing/status")
+def billing_status_endpoint():
+    """Status de billing real: budgets $1/dia, $30/mês, uso real ou sem_dados_reais."""
+    import billing_config
+    return billing_config.get_billing_status()
+
+
 @app.get("/api/providers/test")
 def providers_test():
     """Status de configuração dos providers (NUNCA expõe chaves)."""

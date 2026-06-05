@@ -144,6 +144,22 @@
       F.auditoria = pick(mapAuditoria(r.items), F.auditoria, 'auditoria', sources);
     } catch (e) { errors.auditoria = String(e); sources.auditoria = 'fallback_window_forja'; }
 
+    // billing real ($1/dia, $30/mês) — nunca seed/demo
+    try {
+      const b = await getJSON('/api/billing/status');
+      F.custos = Object.assign({}, F.custos, {
+        diario: b.daily_used_usd,
+        mensal: b.monthly_used_usd,
+        limite: b.monthly_budget_usd,
+        limiteDiario: b.daily_budget_usd,
+        projecao: b.projection_usd,
+        source: b.source,
+        primaryProvider: b.primary_provider,
+        fallbackProvider: b.fallback_provider,
+      });
+      sources.billing = 'backend_real';
+    } catch (e) { errors.billing = String(e); sources.billing = 'fallback_window_forja'; }
+
     // status bar / serviços
     try {
       F.services = applyStatusToServices(F.services, health, status, llmHealth);
