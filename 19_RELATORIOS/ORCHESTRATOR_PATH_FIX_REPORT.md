@@ -161,7 +161,7 @@ Nenhum path absoluto hardcoded permanece nos scripts executaveis.
 
 | Acao | Resultado |
 |---|---|
-| git status | Executado |
-| git add | Staged |
-| git commit | Pendente |
-| git push | Pendente |
+| git status | OK — 19 arquivos modificados |
+| git add . | OK |
+| git commit `fa0b98f` | OK — "fix(orchestrator): remove hardcoded root paths" |
+| git push origin main | OK — f814441..fa0b98f |
