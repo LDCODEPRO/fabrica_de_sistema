@@ -126,7 +126,7 @@ O runtime esta preparado para integracao futura com APIs. Quando LLM_ROUTER_V1 e
 
 | Acao | Resultado |
 |---|---|
-| git status | OK |
-| git add | Staged |
-| git commit | Pendente |
-| git push | Pendente |
+| git status | OK - 5 novos arquivos + 2 modificados |
+| git add (11 arquivos) | OK |
+| git commit `89a3ecd` | OK - "feat(runtime): add agent runtime v1 human assisted mode" |
+| git push origin main | OK - 318c19a..89a3ecd |

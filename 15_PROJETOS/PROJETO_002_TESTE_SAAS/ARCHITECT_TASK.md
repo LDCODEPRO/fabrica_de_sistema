@@ -34,4 +34,4 @@ Definir a arquitetura técnica do projeto com base no tipo e template.
 
 ## Status
 
-EM EXECUCAO
+AGENT_RESPONSE_RECEIVED
