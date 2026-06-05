@@ -5,7 +5,7 @@
 
 ## REGRA 1 — VALIDAÇÃO OBRIGATÓRIA ANTES DO USO
 
-Nenhum provider pode ser marcado como `ACTIVE_REAL` sem:
+Nenhum provider pode ser marcado como `active_real` sem:
 
 1. Detecção de disponibilidade (health check)
 2. Teste de chamada real (quando permitido)

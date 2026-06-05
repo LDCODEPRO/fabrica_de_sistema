@@ -33,6 +33,10 @@ sdk:        anthropic==0.97.0
 
 ## STATUS ATUAL
 ```
-STATUS: SUBSCRIPTION_OK
-Evidência: Este ambiente é executado via Claude Code CLI
+STATUS: unknown
+Evidência: assinatura/CLI pode existir, mas esta entrada nao executa missao real nem certifica provider ativo.
 ```
+
+## REGRA ATUAL
+
+Claude Pro/Claude Code deve ser tratado como assinatura assistida. Nao calcular custo por token e nao marcar como ativo para agentes diretos sem evidencia executada.

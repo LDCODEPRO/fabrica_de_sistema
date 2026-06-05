@@ -35,10 +35,10 @@ def health_check() -> dict:
             models = [m.get("name", "") for m in data.get("models", [])]
             has_llama = any("llama3.2" in m or "llama3" in m for m in models)
             return {
-                "provider": "ollama",
-                "status": "LOCAL_OK" if has_llama else "CONFIG_REQUIRED",
+                "provider": "ollama_local",
+                "status": "active_real" if has_llama else "unavailable",
                 "available_models": [m for m in models if "llama" in m],
                 "note": "Instalar com: ollama pull llama3.2:latest" if not has_llama else "",
             }
     except Exception as e:
-        return {"provider": "ollama", "status": "TEMPORARILY_UNAVAILABLE", "error": str(e)}
+        return {"provider": "ollama_local", "status": "unavailable", "error": str(e)}

@@ -14,35 +14,35 @@ def _routing(task_type: str) -> list:
 
 def test_architecture_first_is_deepseek():
     chain = _routing("architecture")
-    assert chain[0] == "deepseek", f"Arquitetura: primeiro deve ser deepseek, foi {chain[0]}"
+    assert chain[0] == "deepseek_v4_pro", f"Arquitetura: primeiro deve ser deepseek_v4_pro, foi {chain[0]}"
 
 
 def test_coding_first_is_deepseek():
     chain = _routing("coding")
-    assert chain[0] == "deepseek", f"Coding: primeiro deve ser deepseek, foi {chain[0]}"
+    assert chain[0] == "deepseek_v4_pro", f"Coding: primeiro deve ser deepseek_v4_pro, foi {chain[0]}"
 
 
 def test_documentation_first_is_gemini():
     chain = _routing("documentation")
-    assert chain[0] == "gemini", f"Documentação: primeiro deve ser gemini, foi {chain[0]}"
+    assert chain[0] == "gemini_advanced", f"Documentação: primeiro deve ser gemini_advanced, foi {chain[0]}"
 
 
 def test_research_first_is_gemini():
     chain = _routing("research")
-    assert chain[0] == "gemini", f"Pesquisa: primeiro deve ser gemini, foi {chain[0]}"
+    assert chain[0] == "gemini_advanced", f"Pesquisa: primeiro deve ser gemini_advanced, foi {chain[0]}"
 
 
 def test_fallback_chain_ends_with_local():
     chain = _routing("fallback")
-    locals_ = {"gemma4", "ollama"}
+    locals_ = {"ollama_local"}
     assert any(p in locals_ for p in chain), "Fallback deve incluir provider local"
 
 
 def test_all_chains_end_with_local_option():
     data = json.loads(open(REGISTRY_PATH, encoding="utf-8").read())
-    locals_ = {"gemma4", "ollama"}
+    locals_ = {"ollama_local"}
     for task, chain in data["routing_table"].items():
-        if task == "multimodal":
+        if task in {"assisted", "multimodal"}:
             continue
         has_local = any(p in locals_ for p in chain)
         assert has_local, f"Cadeia '{task}' deve incluir fallback local"

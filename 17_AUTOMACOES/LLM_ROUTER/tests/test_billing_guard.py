@@ -7,9 +7,9 @@ from billing_guard import check_before_call, LIMITS
 
 
 def test_local_always_allowed():
-    result = check_before_call("mission_test", "ollama", None, is_local=True)
+    result = check_before_call("mission_test", "ollama_local", None, is_local=True)
     assert result.allowed, "Provider local deve sempre ser permitido"
-    assert result.reason == "LOCAL_FREE_OK"
+    assert result.reason == "LOCAL_ZERO_INCREMENTAL_OK"
 
 
 def test_unknown_cost_blocked():

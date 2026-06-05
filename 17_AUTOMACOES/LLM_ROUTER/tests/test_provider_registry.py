@@ -6,10 +6,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 REGISTRY_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "provider_registry.json")
 
-REQUIRED_FIELDS = ["name", "env_var", "base_url", "model_id", "tier", "priority", "status", "capabilities"]
-VALID_STATUSES = {"ACTIVE_REAL", "SUBSCRIPTION_OK", "API_KEY_REQUIRED", "LOCAL_OK",
-                  "CONFIG_REQUIRED", "TEMPORARILY_UNAVAILABLE", "BLOCKED_BY_TERMS", "FAILED_VALIDATION"}
-REQUIRED_PROVIDERS = {"deepseek", "gemini", "openai", "anthropic", "gemma4", "ollama"}
+REQUIRED_FIELDS = [
+    "provider_name", "display_name", "provider_type", "automation_mode",
+    "billing_mode", "cost_incremental", "requires_api_key",
+    "requires_director_approval", "health_status", "last_health_check",
+    "allowed_for_agents", "notes"
+]
+VALID_STATUSES = {"unknown", "active_real", "inactive", "missing_key", "unavailable"}
+REQUIRED_PROVIDERS = {"deepseek_v4_pro", "claude_pro", "chatgpt_plus", "gemini_advanced", "ollama_local"}
 
 
 def test_registry_loads():
@@ -36,7 +40,7 @@ def test_all_providers_have_required_fields():
 def test_all_statuses_valid():
     data = json.loads(open(REGISTRY_PATH, encoding="utf-8").read())
     for pid, p in data["providers"].items():
-        assert p["status"] in VALID_STATUSES, f"Provider {pid} tem status inválido: {p['status']}"
+        assert p["health_status"] in VALID_STATUSES, f"Provider {pid} tem status inválido: {p['health_status']}"
 
 
 def test_no_api_keys_in_registry():

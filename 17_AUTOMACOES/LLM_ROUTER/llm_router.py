@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional, Any
 
 from billing_guard import check_before_call, record_cost
+from cost_zero_policy import PAID_API, SUBSCRIPTION, LOCAL, incremental_cost
 from secret_guard import safe_log, validate_no_secrets
 
 logger = logging.getLogger(__name__)
@@ -33,8 +34,8 @@ def _get_provider_config(provider_id: str) -> Optional[dict]:
     return registry["providers"].get(provider_id)
 
 
-def _estimate_cost(provider: dict, tokens: int) -> float:
-    return (tokens / 1000) * (provider.get("cost_per_1k_input", 0) + provider.get("cost_per_1k_output", 0))
+def _estimate_cost(provider: dict, tokens: int) -> Optional[float]:
+    return incremental_cost(provider, tokens)
 
 
 class LLMRouterResult:
@@ -87,12 +88,19 @@ class LLMRouter:
         estimated_tokens: int = 1000,
         require_vision: bool = False,
         force_local: bool = False,
+        execution_mode: str = "assisted",
+        director_approved: bool = False,
     ) -> LLMRouterResult:
         """
         Roteia a tarefa para o provider adequado.
         Tenta cada provider na hierarquia até encontrar um disponível.
         """
-        chain = _get_provider_chain("fallback" if force_local else task_type)
+        if force_local or execution_mode == "automation":
+            chain = _get_provider_chain("automation")
+        elif execution_mode == "assisted":
+            chain = _get_provider_chain(task_type)
+        else:
+            chain = _get_provider_chain(task_type)
 
         for provider_id in chain:
             provider = _get_provider_config(provider_id)
@@ -103,16 +111,39 @@ class LLMRouter:
             if require_vision and not provider.get("supports_vision", False):
                 continue
 
-            # Skip providers locais se force_local=False e há disponíveis melhores
-            is_local = provider.get("local", False)
+            provider_type = provider.get("provider_type")
+            is_local = provider_type == LOCAL or provider.get("local", False)
+            health_status = provider.get("health_status", "unknown")
 
-            est_cost = 0.0 if is_local else _estimate_cost(provider, estimated_tokens)
+            if execution_mode == "automation" and provider_type == SUBSCRIPTION:
+                logger.info("ASSISTED_ONLY_SKIP provider=%s", provider_id)
+                continue
+
+            if provider_type in {LOCAL, PAID_API} and health_status != "active_real":
+                logger.warning("HEALTH_BLOCK provider=%s health=%s", provider_id, health_status)
+                continue
+
+            if provider_type == SUBSCRIPTION and provider.get("automation_mode") == "assisted":
+                return LLMRouterResult(
+                    success=False,
+                    provider_id=provider_id,
+                    model=provider.get("model_id", "assisted"),
+                    response=None,
+                    mission_id=self.mission_id,
+                    reason="ASSISTED_SUBSCRIPTION_REQUIRES_HUMAN_INTERFACE",
+                )
+
+            est_cost = _estimate_cost(provider, estimated_tokens)
 
             billing = check_before_call(
                 mission_id=self.mission_id,
                 provider=provider_id,
-                estimated_cost=est_cost if not is_local else None,
+                estimated_cost=est_cost,
                 is_local=is_local,
+                provider_type=provider_type,
+                director_approved=director_approved,
+                secret_guard_ok=True,
+                provider_health=health_status,
             )
 
             if not billing:
@@ -141,7 +172,7 @@ class LLMRouter:
                     self.mission_id, provider_id, provider["model_id"], fallback
                 )
 
-                if not is_local and est_cost > 0:
+                if provider_type == PAID_API and est_cost and est_cost > 0:
                     record_cost(self.mission_id, est_cost, provider_id)
 
                 return LLMRouterResult(
@@ -174,12 +205,11 @@ class LLMRouter:
     def _call_provider(self, provider_id: str, provider: dict, prompt: str) -> str:
         """Despacha para o adapter correto."""
         adapters = {
-            "deepseek": "_call_openai_compatible",
-            "openai":   "_call_openai_compatible",
-            "anthropic": "_call_anthropic",
-            "gemini":   "_call_gemini",
-            "gemma4":   "_call_ollama",
-            "ollama":   "_call_ollama",
+            "deepseek_api": "_call_openai_compatible",
+            "openai_api":   "_call_openai_compatible",
+            "claude_api": "_call_anthropic",
+            "gemini_api":   "_call_gemini",
+            "ollama_local":   "_call_ollama",
         }
         method_name = adapters.get(provider_id)
         if not method_name:

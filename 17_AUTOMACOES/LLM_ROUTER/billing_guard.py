@@ -9,6 +9,8 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
+from cost_zero_policy import PAID_API, SUBSCRIPTION, LOCAL
+
 logger = logging.getLogger(__name__)
 
 LIMITS = {
@@ -75,13 +77,28 @@ def check_before_call(
     provider: str,
     estimated_cost: Optional[float],
     is_local: bool = False,
+    provider_type: Optional[str] = None,
+    director_approved: bool = False,
+    secret_guard_ok: bool = True,
+    provider_health: str = "unknown",
 ) -> BillingGuardResult:
     """
     Verifica se a chamada pode prosseguir.
     Retorna BillingGuardResult com decisão e motivo.
     """
-    if is_local:
-        return BillingGuardResult(True, "LOCAL_FREE_OK")
+    if is_local or provider_type == LOCAL:
+        return BillingGuardResult(True, "LOCAL_ZERO_INCREMENTAL_OK")
+
+    if provider_type == SUBSCRIPTION:
+        return BillingGuardResult(True, "SUBSCRIPTION_ZERO_INCREMENTAL_OK")
+
+    if provider_type == PAID_API:
+        if not director_approved:
+            return BillingGuardResult(False, "PAID_API_REQUIRES_DIRECTOR_APPROVAL", use_fallback=True)
+        if not secret_guard_ok:
+            return BillingGuardResult(False, "PAID_API_BLOCKED_BY_SECRET_GUARD", use_fallback=True)
+        if provider_health != "active_real":
+            return BillingGuardResult(False, f"PAID_API_HEALTH_NOT_ACTIVE_REAL:{provider_health}", use_fallback=True)
 
     if estimated_cost is None:
         logger.warning("BILLING_GUARD BLOCK: custo desconhecido para provider=%s", provider)

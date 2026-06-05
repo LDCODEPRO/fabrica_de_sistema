@@ -37,7 +37,8 @@ def health_check() -> dict:
     """Verifica disponibilidade sem fazer chamada LLM."""
     has_key = bool(os.environ.get("DEEPSEEK_API_KEY", ""))
     return {
-        "provider": "deepseek",
-        "status": "ACTIVE_REAL" if has_key else "API_KEY_REQUIRED",
+        "provider": "deepseek_api",
+        "status": "unknown" if has_key else "missing_key",
         "env_var_present": has_key,
+        "note": "Credencial detectada, mas sem chamada real de health; nao marcar active_real apenas por chave." if has_key else "",
     }

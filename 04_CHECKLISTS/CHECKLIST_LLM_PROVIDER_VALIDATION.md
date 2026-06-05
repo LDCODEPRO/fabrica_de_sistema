@@ -1,59 +1,29 @@
 # CHECKLIST_LLM_PROVIDER_VALIDATION
-**Versão:** 1.0.0 | **Data:** 2026-06-05
 
-Use este checklist antes de marcar qualquer provider como `ACTIVE_REAL`.
+## Antes De Marcar Um Provider Como Ativo
 
----
+- [ ] Provider existe no `provider_registry.json`.
+- [ ] Tipo declarado: `subscription`, `local` ou `paid_api`.
+- [ ] Nao ha segredo gravado no registry.
+- [ ] Health real executado quando houver automacao direta.
+- [ ] `active_real` somente com evidencia executada.
 
-## PRÉ-VALIDAÇÃO
+## Assinatura
 
-- [ ] Provider está listado no `provider_registry.json`
-- [ ] Campos obrigatórios preenchidos (name, env_var, base_url, model_id, tier, priority, status, capabilities)
-- [ ] Status inicial definido como `API_KEY_REQUIRED` ou `CONFIG_REQUIRED`
-- [ ] Nenhuma credencial hardcodada no registry
+- [ ] Custo incremental exibido como R$ 0,00.
+- [ ] Billing por token marcado como nao aplicavel.
+- [ ] Automacao direta nao presumida.
 
-## VALIDAÇÃO DE CREDENCIAL
+## Local
 
-- [ ] Variável de ambiente existe (apenas verificar existência, nunca valor)
-- [ ] Variável tem comprimento adequado (> 8 chars)
-- [ ] Credencial vem do cofre em `E:\` (não de outro lugar)
+- [ ] Endpoint local respondeu.
+- [ ] Modelo local foi listado ou executado.
+- [ ] Billing por token desativado.
 
-## VALIDAÇÃO DE CONECTIVIDADE
+## API Paga
 
-- [ ] Health check passou (provider_health_check.py)
-- [ ] Base URL acessível
-- [ ] Para Ollama: modelo disponível no `ollama list`
-
-## VALIDAÇÃO FUNCIONAL
-
-- [ ] Chamada de teste real realizada
-- [ ] Resposta válida recebida
-- [ ] Erros tratados gracefully
-- [ ] Billing guard não bloqueou
-
-## VALIDAÇÃO DE SEGURANÇA
-
-- [ ] secret_guard não detectou vazamento
-- [ ] Nenhuma chave apareceu no log
-- [ ] Relatório de validação gerado sem segredos
-
-## PÓS-VALIDAÇÃO
-
-- [ ] Status atualizado para `ACTIVE_REAL` (ou `SUBSCRIPTION_OK`, `LOCAL_OK`)
-- [ ] Resultado registrado em `LLM_PROVIDER_VALIDATION_REPORT.md`
-- [ ] Roteador atualizado se necessário
-
----
-
-## APROVAÇÃO
-
-```
-Provider: ________________
-Validado por: ____________
-Data: ____________________
-Status final: ____________
-```
-
----
-
-_Fábrica de Sistemas · 2026-06-05_
+- [ ] Chave presente fora do Git.
+- [ ] Protecao de Segredos aprovada.
+- [ ] Billing Guard aprovado.
+- [ ] Autorizacao da Diretoria registrada.
+- [ ] Health check real passou.

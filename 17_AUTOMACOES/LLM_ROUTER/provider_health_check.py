@@ -65,36 +65,35 @@ def check_provider(provider_id: str) -> dict:
 
     result = {
         "provider": provider_id,
-        "name": provider["name"],
+        "name": provider.get("display_name", provider.get("name", provider_id)),
         "checked_at": datetime.utcnow().isoformat(),
-        "is_local": provider.get("local", False),
+        "is_local": provider.get("provider_type") == "local" or provider.get("local", False),
         "env_var": provider.get("env_var"),
         "status": "FAILED_VALIDATION",
         "reason": "",
     }
 
-    # Provider com assinatura ativa conhecida
-    if provider.get("subscription_active"):
-        result["status"] = "SUBSCRIPTION_OK"
-        result["reason"] = "Assinatura ativa conhecida"
+    if provider.get("provider_type") == "subscription":
+        result["status"] = "unknown"
+        result["reason"] = "Assinatura/interface exige validação humana ou conector real; sem health automático nesta execução"
         return result
 
     # Provider local (Ollama)
-    if provider.get("local"):
+    if provider.get("provider_type") == "local" or provider.get("local"):
         ok, msg = _check_ollama(provider["base_url"], provider["model_id"])
-        result["status"] = "LOCAL_OK" if ok else "TEMPORARILY_UNAVAILABLE"
+        result["status"] = "active_real" if ok else "unavailable"
         result["reason"] = msg
         return result
 
     # Provider via API — verificar credencial
     has_key = _check_env_var(provider.get("env_var"))
     if not has_key:
-        result["status"] = "API_KEY_REQUIRED"
+        result["status"] = "missing_key"
         result["reason"] = f"Variável {provider.get('env_var')} não configurada"
         return result
 
-    result["status"] = "ACTIVE_REAL"
-    result["reason"] = "Credencial detectada"
+    result["status"] = "unknown"
+    result["reason"] = "Credencial detectada, mas chamada real nao executada; nao marcar active_real"
     return result
 
 
@@ -103,7 +102,7 @@ def check_all_providers() -> list[dict]:
     results = []
     for provider_id in registry["providers"]:
         r = check_provider(provider_id)
-        status_icon = "✅" if r["status"] in ("ACTIVE_REAL", "SUBSCRIPTION_OK", "LOCAL_OK") else "⚠️"
+        status_icon = "✅" if r["status"] == "active_real" else "⚠️"
         logger.info("%s %s → %s", status_icon, r["name"], r["status"])
         results.append(r)
     return results
@@ -119,7 +118,7 @@ def generate_validation_report(results: list[dict]) -> str:
         "|----------|--------|--------|",
     ]
     for r in results:
-        icon = "✅" if r["status"] in ("ACTIVE_REAL", "SUBSCRIPTION_OK", "LOCAL_OK") else "❌"
+        icon = "✅" if r["status"] == "active_real" else "❌"
         lines.append(f"| {r['name']} | {icon} {r['status']} | {r['reason']} |")
 
     lines += [

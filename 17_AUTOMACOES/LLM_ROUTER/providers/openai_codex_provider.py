@@ -45,6 +45,8 @@ def health_check() -> dict:
     has_key = bool(os.environ.get("OPENAI_API_KEY", ""))
     return {
         "provider": "openai_codex",
-        "status": "ACTIVE_REAL" if has_key else "API_KEY_REQUIRED",
+        "status": "unknown" if has_key else "missing_key",
         "model": CODEX_MODEL,
+        "env_var_present": has_key,
+        "note": "Adapter legado de API; nao marcar active_real apenas por chave." if has_key else "",
     }

@@ -32,7 +32,8 @@ def call(prompt: str, model: Optional[str] = None, max_tokens: int = 2048) -> st
 def health_check() -> dict:
     has_key = bool(os.environ.get("GOOGLE_API_KEY", ""))
     return {
-        "provider": "gemini",
-        "status": "ACTIVE_REAL" if has_key else "API_KEY_REQUIRED",
+        "provider": "gemini_api",
+        "status": "unknown" if has_key else "missing_key",
         "env_var_present": has_key,
+        "note": "Credencial detectada, mas sem chamada real de health; nao marcar active_real apenas por chave." if has_key else "",
     }

@@ -43,8 +43,9 @@ def health_check() -> dict:
         if result.returncode == 0:
             return {
                 "provider": "claude_code",
-                "status": "SUBSCRIPTION_OK",
+                "status": "unknown",
                 "version": result.stdout.strip(),
+                "note": "CLI detectado, mas resposta real nao foi executada nesta verificacao.",
             }
         return {"provider": "claude_code", "status": "FAILED_VALIDATION", "error": result.stderr}
     except FileNotFoundError:

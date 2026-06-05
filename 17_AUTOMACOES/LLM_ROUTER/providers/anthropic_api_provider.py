@@ -26,8 +26,8 @@ def call(prompt: str, model: Optional[str] = None, max_tokens: int = 2048) -> st
 def health_check() -> dict:
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY", ""))
     return {
-        "provider": "anthropic",
-        "status": "SUBSCRIPTION_OK",
+        "provider": "claude_api",
+        "status": "unknown" if has_key else "missing_key",
         "env_var_present": has_key,
-        "note": "Claude Code CLI ativo neste ambiente",
+        "note": "Credencial detectada, mas sem chamada real de health; nao marcar active_real apenas por chave." if has_key else "",
     }

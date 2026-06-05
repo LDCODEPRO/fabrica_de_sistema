@@ -8,56 +8,54 @@ REGISTRY_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 
 
 def test_no_fake_status_active_without_evidence():
-    """Nenhum provider pode ter ACTIVE_REAL sem ter sido testado realmente."""
+    """Nenhum provider pode ter active_real sem evidência operacional real."""
     data = json.loads(open(REGISTRY_PATH, encoding="utf-8").read())
     for pid, p in data["providers"].items():
-        if p["status"] == "ACTIVE_REAL":
-            is_local = p.get("local", False)
-            has_key_var = p.get("env_var") is not None
-            has_subscription = p.get("subscription_active", False)
-            assert is_local or has_key_var or has_subscription, (
-                f"Provider {pid} marcado ACTIVE_REAL sem evidência de credencial ou assinatura"
+        if p["health_status"] == "active_real":
+            assert p.get("last_health_check"), (
+                f"Provider {pid} marcado active_real sem timestamp de health check"
             )
 
 
 def test_local_providers_have_no_env_var():
     data = json.loads(open(REGISTRY_PATH, encoding="utf-8").read())
     for pid, p in data["providers"].items():
-        if p.get("local"):
+        if p.get("provider_type") == "local":
             assert p.get("env_var") is None, f"Provider local {pid} não deve exigir env_var"
 
 
-def test_all_providers_have_base_url():
+def test_direct_providers_have_base_url():
     data = json.loads(open(REGISTRY_PATH, encoding="utf-8").read())
     for pid, p in data["providers"].items():
-        assert p.get("base_url"), f"Provider {pid} sem base_url"
+        if p.get("automation_mode") == "direct":
+            assert p.get("base_url"), f"Provider direto {pid} sem base_url"
 
 
 def test_priority_order_is_correct():
-    """Deepseek deve ser prioridade 1, Ollama deve ser prioridade >= 5."""
+    """Assinaturas priorizam DeepSeek V4 Pro; automação começa pelo Ollama local."""
     data = json.loads(open(REGISTRY_PATH, encoding="utf-8").read())
-    assert data["providers"]["deepseek"]["priority"] == 1
-    assert data["providers"]["ollama"]["priority"] >= 5
+    assert data["routing_table"]["assisted"][0] == "deepseek_v4_pro"
+    assert data["routing_table"]["automation"][0] == "ollama_local"
 
 
-def test_subscription_ok_only_for_verified():
-    """SUBSCRIPTION_OK só pode ser dado a providers com evidência real."""
+def test_subscriptions_are_not_token_billed_or_automated():
+    """Assinaturas não podem ser tratadas como API paga nem automação direta."""
     data = json.loads(open(REGISTRY_PATH, encoding="utf-8").read())
-    verified_subscription = {"anthropic"}
     for pid, p in data["providers"].items():
-        if p["status"] == "SUBSCRIPTION_OK":
-            assert pid in verified_subscription, (
-                f"Provider {pid} marcado SUBSCRIPTION_OK sem verificação real"
-            )
+        if p["provider_type"] == "subscription":
+            assert p["automation_mode"] == "assisted"
+            assert p["billing_mode"] == "fixed_subscription"
+            assert p["cost_incremental"] == 0
+            assert p["allowed_for_agents"] is False
 
 
 if __name__ == "__main__":
     tests = [
         test_no_fake_status_active_without_evidence,
         test_local_providers_have_no_env_var,
-        test_all_providers_have_base_url,
+        test_direct_providers_have_base_url,
         test_priority_order_is_correct,
-        test_subscription_ok_only_for_verified,
+        test_subscriptions_are_not_token_billed_or_automated,
     ]
     passed = 0
     failed = 0
