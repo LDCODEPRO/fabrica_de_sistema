@@ -18,7 +18,7 @@ Todo uso deve ser: **autorizado · rastreável · seguro · econômico · valida
 | 2 | Gemini | Pesquisa, documentação, multimodal |
 | 3 | OpenAI GPT/Codex | Validação, código crítico |
 | 4 | Claude/Claude Code | Engenharia assistida, escrita técnica |
-| 5 | Gemma 4 (local) | Fallback leve local |
+| 5 | Ollama Local `llama3.2:latest` | Fallback leve local validado |
 | 6 | Llama/Ollama | Fallback gratuito offline |
 
 ---

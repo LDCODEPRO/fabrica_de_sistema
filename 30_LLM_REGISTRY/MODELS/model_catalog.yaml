@@ -125,19 +125,26 @@ models:
 
   # ── LOCAL MODELS ──────────────────────────────────────────────────────────
   local_models:
-    - id: llama3
+    - id: llama3.2:latest
       provider: ollama
       tier: free
       cost: "$0.00"
       status: active
-      evidence: "E:\\Agente X\\01_CORE\\orchestrator\\llm_router.py"
+      evidence: "OLLAMA_REVALIDATION_V1 / api_generate HTTP 200"
 
-    - id: ollama-local
+    - id: llama3:latest
       provider: ollama
       tier: free
       cost: "$0.00"
       status: active
-      evidence: "E:\\PHANDORA\\01_CORE\\providers\\provider_router.py"
+      evidence: "OLLAMA_REVALIDATION_V1 / api_tags inventory"
+
+    - id: qwen3:8b
+      provider: ollama
+      tier: free
+      cost: "$0.00"
+      status: partial
+      evidence: "OLLAMA_REVALIDATION_V1 / HTTP 200 with response field empty in short prompt"
 
   # ── PRODUCTION MODELS ─────────────────────────────────────────────────────
   production_models:

@@ -78,17 +78,17 @@ providers:
   ollama:
     name: "Ollama (Local)"
     env_var: null
-    base_url: "http://localhost:11434"
+    base_url: "http://127.0.0.1:11434"
     models:
-      - llama3
-      - ollama-local
-      - nomic-embed-text
+      - llama3.2:latest
+      - llama3:latest
+      - qwen3:8b
     tier: free
     cost: 0
     status: active
     priority: 0
     evidence: "E:\\Agente X\\01_CORE\\orchestrator\\llm_router.py"
-    notes: "Prioridade máxima — zero custo, máxima privacidade"
+    notes: "Prioridade maxima local validada em 2026-06-05; llama3.2:latest respondeu OK via /api/generate"
 
   openrouter:
     name: "OpenRouter"

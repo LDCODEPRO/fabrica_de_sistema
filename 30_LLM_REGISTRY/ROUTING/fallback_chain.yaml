@@ -7,7 +7,7 @@ fallback_chain:
   - tier: 0
     name: "LOCAL"
     providers: [ollama]
-    models: [llama3, ollama-local]
+    models: [llama3.2:latest, llama3:latest, qwen3:8b]
     cost: "$0.00"
     trigger: "SEMPRE — tentar primeiro"
 
@@ -55,4 +55,4 @@ routing_strategy:
   complexity_high:   { primary: claude-opus,    fallback: gpt-4o }
   coding:            { primary: deepseek-v4-pro, fallback: claude-sonnet }
   embeddings:        { primary: voyage-2,        fallback: text-embedding-3-small }
-  local_only:        { primary: ollama-local,    fallback: null }
+  local_only:        { primary: llama3.2:latest, fallback: llama3:latest }

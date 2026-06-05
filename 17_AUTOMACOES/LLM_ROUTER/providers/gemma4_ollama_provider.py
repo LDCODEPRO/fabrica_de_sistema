@@ -3,9 +3,9 @@ import json
 import urllib.request
 from typing import Optional
 
-BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "gemma3:12b"
-LIGHT_MODEL = "gemma3:4b"
+BASE_URL = "http://127.0.0.1:11434"
+DEFAULT_MODEL = "llama3.2:latest"
+LIGHT_MODEL = "llama3.2:latest"
 
 
 def call(prompt: str, model: Optional[str] = None, max_tokens: int = 2048) -> str:
@@ -33,12 +33,12 @@ def health_check() -> dict:
         with urllib.request.urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read())
             models = [m.get("name", "") for m in data.get("models", [])]
-            has_gemma = any("gemma" in m for m in models)
+            has_model = any("llama3.2" in m or "gemma" in m for m in models)
             return {
                 "provider": "gemma4",
-                "status": "LOCAL_OK" if has_gemma else "CONFIG_REQUIRED",
-                "available_models": [m for m in models if "gemma" in m],
-                "note": "Instalar com: ollama pull gemma3:12b" if not has_gemma else "",
+                "status": "LOCAL_OK" if has_model else "CONFIG_REQUIRED",
+                "available_models": [m for m in models if "llama3.2" in m or "gemma" in m],
+                "note": "Instalar com: ollama pull llama3.2:latest" if not has_model else "",
             }
     except Exception as e:
         return {"provider": "gemma4", "status": "TEMPORARILY_UNAVAILABLE", "error": str(e)}

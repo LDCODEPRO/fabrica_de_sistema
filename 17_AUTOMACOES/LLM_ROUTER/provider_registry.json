@@ -68,11 +68,11 @@
       "subscription_active": true
     },
     "gemma4": {
-      "name": "Gemma 4 (Local via Ollama)",
+      "name": "Ollama Local Primary (llama3.2, legacy gemma4 id)",
       "env_var": null,
-      "base_url": "http://localhost:11434",
-      "model_id": "gemma3:12b",
-      "model_id_light": "gemma3:4b",
+      "base_url": "http://127.0.0.1:11434",
+      "model_id": "llama3.2:latest",
+      "model_id_light": "llama3.2:latest",
       "tier": "free",
       "priority": 5,
       "status": "LOCAL_OK",
@@ -86,9 +86,9 @@
     "ollama": {
       "name": "Llama / Ollama (Local)",
       "env_var": null,
-      "base_url": "http://localhost:11434",
-      "model_id": "llama3.1:8b",
-      "model_id_light": "llama3.2:3b",
+      "base_url": "http://127.0.0.1:11434",
+      "model_id": "llama3.2:latest",
+      "model_id_light": "llama3.2:latest",
       "tier": "free",
       "priority": 6,
       "status": "LOCAL_OK",

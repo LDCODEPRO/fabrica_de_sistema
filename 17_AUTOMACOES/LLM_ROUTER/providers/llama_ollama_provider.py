@@ -3,9 +3,9 @@ import json
 import urllib.request
 from typing import Optional
 
-BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "llama3.1:8b"
-LIGHT_MODEL = "llama3.2:3b"
+BASE_URL = "http://127.0.0.1:11434"
+DEFAULT_MODEL = "llama3.2:latest"
+LIGHT_MODEL = "llama3.2:latest"
 
 
 def call(prompt: str, model: Optional[str] = None, max_tokens: int = 2048) -> str:
@@ -33,12 +33,12 @@ def health_check() -> dict:
         with urllib.request.urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read())
             models = [m.get("name", "") for m in data.get("models", [])]
-            has_llama = any("llama" in m for m in models)
+            has_llama = any("llama3.2" in m or "llama3" in m for m in models)
             return {
                 "provider": "ollama",
                 "status": "LOCAL_OK" if has_llama else "CONFIG_REQUIRED",
                 "available_models": [m for m in models if "llama" in m],
-                "note": "Instalar com: ollama pull llama3.1:8b" if not has_llama else "",
+                "note": "Instalar com: ollama pull llama3.2:latest" if not has_llama else "",
             }
     except Exception as e:
         return {"provider": "ollama", "status": "TEMPORARILY_UNAVAILABLE", "error": str(e)}
