@@ -1,6 +1,6 @@
 ﻿# FACTORY AUDIT REPORT
 
-**Gerado em:** 2026-06-04 21:52
+**Gerado em:** 2026-06-04 22:02
 **Motor:** AUDIT_ENGINE_V1
 
 ---
@@ -9,37 +9,39 @@
 
 | Metrica | Valor |
 |---|---|
-| Total de projetos auditados | 3 |
+| Total de itens em 15_PROJETOS | 3 |
+| Projetos operacionais auditados | 1 |
 | Projetos APROVADOS | 1 |
 | Projetos com ALERTA | 0 |
-| Projetos REPROVADOS | 2 |
-| Issues criticas | 2 |
+| Projetos REPROVADOS | 0 |
+| Projetos NEEDS_ORCHESTRATION (legados) | 1 |
+| Itens excluidos (sistemas internos) | 1 |
+| Itens excluidos (templates) | 0 |
+| Issues criticas | 0 |
 | Issues altas | 0 |
 | Issues medias | 0 |
 | Issues baixas | 0 |
-| **Score operacional da Fabrica** | **83 / 100** |
+| **Score operacional da Fabrica** | **100 / 100** |
 
-**Nivel operacional:** BOM
+**Nivel operacional:** EXCELENTE
 
 ## Proxima Acao Recomendada
 
-URGENTE: 2 issue(s) critica(s). Revisar projetos REPROVADOS imediatamente.
+1 projeto(s) legado(s) sem MISSION_BOARD. Executar PROJECT_ORCHESTRATOR para estruturar.
 
 ---
 
 ## Detalhe por Projeto
 
-### [REPROVADO] PROJECT_FACTORY - Score: 75/100
+### [SISTEMA_INTERNO] PROJECT_FACTORY - EXCLUDED_INTERNAL_SYSTEM
+
+_Nenhuma issue encontrada._
+
+### [LEGADO] PROJETO_001_REFACTOR - NEEDS_ORCHESTRATION
 
 | Severidade | Codigo | Descricao |
 |---|---|---|
-| CRITICAL | MB001 | MISSION_BOARD.md nao encontrado no projeto |
-
-### [REPROVADO] PROJETO_001_REFACTOR - Score: 75/100
-
-| Severidade | Codigo | Descricao |
-|---|---|---|
-| CRITICAL | MB001 | MISSION_BOARD.md nao encontrado no projeto |
+| INFO | CL001 | Projeto legado sem MISSION_BOARD. Recomendado: executar PROJECT_ORCHESTRATOR para criar estrutura. |
 
 ### [OK] PROJETO_002_TESTE_SAAS - Score: 100/100
 
@@ -49,15 +51,12 @@ _Nenhuma issue encontrada._
 
 ## Issues Criticas
 
-| Codigo | Descricao |
-|---|---|
-| MB001 | MISSION_BOARD.md nao encontrado no projeto |
-| MB001 | MISSION_BOARD.md nao encontrado no projeto |
+_Nenhuma issue critica._
 
 ## Issues Altas
 
 _Nenhuma issue alta._
 
 ---
-_Auditoria gerada por AUDIT_ENGINE_V1 em 2026-06-04 21:52_
+_Auditoria gerada por AUDIT_ENGINE_V1 em 2026-06-04 22:02_
 

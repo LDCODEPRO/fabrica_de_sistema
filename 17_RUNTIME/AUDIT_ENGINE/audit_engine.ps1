@@ -103,33 +103,43 @@ Write-Log "Auditoria concluida. $($allResults.Count) projeto(s) processados."
 # ---------------------------------------------------------------------------
 # Calcular metricas globais
 # ---------------------------------------------------------------------------
-$total      = $allResults.Count
-$approved   = @($allResults | Where-Object { $_.Verdict -eq "APROVADO" }).Count
-$alert      = @($allResults | Where-Object { $_.Verdict -eq "ALERTA"   }).Count
-$failed     = @($allResults | Where-Object { $_.Verdict -eq "REPROVADO"}).Count
+$total            = $allResults.Count
+$approved         = @($allResults | Where-Object { $_.Verdict -eq "APROVADO"                }).Count
+$alert            = @($allResults | Where-Object { $_.Verdict -eq "ALERTA"                  }).Count
+$failed           = @($allResults | Where-Object { $_.Verdict -eq "REPROVADO"               }).Count
+$needsOrch        = @($allResults | Where-Object { $_.Verdict -eq "NEEDS_ORCHESTRATION"     }).Count
+$excludedInternal = @($allResults | Where-Object { $_.Verdict -eq "EXCLUDED_INTERNAL_SYSTEM"}).Count
+$excludedTemplate = @($allResults | Where-Object { $_.Verdict -eq "EXCLUDED_TEMPLATE"       }).Count
 
-$allIssues  = @($allResults | ForEach-Object { $_.Issues } | Where-Object { $_ -ne $null })
-$criticals  = @($allIssues  | Where-Object { $_.Severity -eq "CRITICAL" }).Count
-$highs      = @($allIssues  | Where-Object { $_.Severity -eq "HIGH"     }).Count
-$mediums    = @($allIssues  | Where-Object { $_.Severity -eq "MEDIUM"   }).Count
-$lows       = @($allIssues  | Where-Object { $_.Severity -eq "LOW"      }).Count
+# Apenas projetos operacionais entram nos calculos de issues e score
+$operationalResults = @($allResults | Where-Object { $_.Classification -eq "OPERATIONAL_PROJECT" })
 
-# Score operacional da Fabrica (media dos scores)
+$allIssues = @($operationalResults | ForEach-Object { $_.Issues } | Where-Object { $_ -ne $null })
+$criticals = @($allIssues | Where-Object { $_.Severity -eq "CRITICAL" }).Count
+$highs     = @($allIssues | Where-Object { $_.Severity -eq "HIGH"     }).Count
+$mediums   = @($allIssues | Where-Object { $_.Severity -eq "MEDIUM"   }).Count
+$lows      = @($allIssues | Where-Object { $_.Severity -eq "LOW"      }).Count
+
+# Score operacional: media apenas dos projetos operacionais auditados
 $factoryScore = 0
-if ($total -gt 0) {
+if ($operationalResults.Count -gt 0) {
     $scoreSum = 0
-    foreach ($r in $allResults) { $scoreSum += [int]$r.Score }
-    $factoryScore = [math]::Round($scoreSum / $total, 0)
+    foreach ($r in $operationalResults) { $scoreSum += [int]$r.Score }
+    $factoryScore = [math]::Round($scoreSum / $operationalResults.Count, 0)
+} elseif ($total -gt 0) {
+    $factoryScore = 100   # sem projetos operacionais ainda = base limpa
 }
 
 # Proximo passo
 $nextAction = "Fabrica operacional. Nenhuma acao critica necessaria."
 if ($criticals -gt 0) {
-    $nextAction = "URGENTE: $criticals issue(s) critica(s). Revisar projetos REPROVADOS imediatamente."
+    $nextAction = "URGENTE: $criticals issue(s) critica(s) em projetos operacionais. Revisar projetos REPROVADOS imediatamente."
 } elseif ($highs -gt 0) {
     $nextAction = "ATENCAO: $highs issue(s) alta(s). Corrigir task files ausentes ou status inconsistentes."
 } elseif ($mediums -gt 0) {
     $nextAction = "REVISAR: $mediums issue(s) media(s). Verificar status e campos obrigatorios."
+} elseif ($needsOrch -gt 0) {
+    $nextAction = "$needsOrch projeto(s) legado(s) sem MISSION_BOARD. Executar PROJECT_ORCHESTRATOR para estruturar."
 } elseif ($lows -gt 0) {
     $nextAction = "MANUTENCAO: $lows issue(s) baixa(s). Melhorar documentacao e logs."
 }
@@ -154,10 +164,14 @@ $null = $sb.AppendLine("## Resumo Executivo")
 $null = $sb.AppendLine("")
 $null = $sb.AppendLine("| Metrica | Valor |")
 $null = $sb.AppendLine("|---|---|")
-$null = $sb.AppendLine("| Total de projetos auditados | $total |")
+$null = $sb.AppendLine("| Total de itens em 15_PROJETOS | $total |")
+$null = $sb.AppendLine("| Projetos operacionais auditados | $($operationalResults.Count) |")
 $null = $sb.AppendLine("| Projetos APROVADOS | $approved |")
 $null = $sb.AppendLine("| Projetos com ALERTA | $alert |")
 $null = $sb.AppendLine("| Projetos REPROVADOS | $failed |")
+$null = $sb.AppendLine("| Projetos NEEDS_ORCHESTRATION (legados) | $needsOrch |")
+$null = $sb.AppendLine("| Itens excluidos (sistemas internos) | $excludedInternal |")
+$null = $sb.AppendLine("| Itens excluidos (templates) | $excludedTemplate |")
 $null = $sb.AppendLine("| Issues criticas | $criticals |")
 $null = $sb.AppendLine("| Issues altas | $highs |")
 $null = $sb.AppendLine("| Issues medias | $mediums |")
@@ -188,13 +202,17 @@ $null = $sb.AppendLine("")
 foreach ($r in $allResults) {
     $issueCount  = if ($r.Issues) { @($r.Issues).Count } else { 0 }
     $verdictIcon = switch ($r.Verdict) {
-        "APROVADO"  { "OK" }
-        "ALERTA"    { "ALERTA" }
-        "REPROVADO" { "REPROVADO" }
-        default     { "?" }
+        "APROVADO"                  { "OK" }
+        "ALERTA"                    { "ALERTA" }
+        "REPROVADO"                 { "REPROVADO" }
+        "NEEDS_ORCHESTRATION"       { "LEGADO" }
+        "EXCLUDED_INTERNAL_SYSTEM"  { "SISTEMA_INTERNO" }
+        "EXCLUDED_TEMPLATE"         { "TEMPLATE" }
+        default                     { "?" }
     }
 
-    $null = $sb.AppendLine("### [$verdictIcon] $($r.Project) - Score: $($r.Score)/100")
+    $scoreDisplay = if ($r.Score -ge 0) { "Score: $($r.Score)/100" } else { $r.Verdict }
+    $null = $sb.AppendLine("### [$verdictIcon] $($r.Project) - $scoreDisplay")
     $null = $sb.AppendLine("")
 
     if ($issueCount -eq 0) {

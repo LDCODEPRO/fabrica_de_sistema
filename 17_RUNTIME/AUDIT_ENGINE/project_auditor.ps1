@@ -24,17 +24,79 @@ $LogAuditor  = Join-Path $ScriptDir "log_consistency_auditor.ps1"
 $projectName = Split-Path $ProjectPath -Leaf
 
 # ---------------------------------------------------------------------------
+# Classificacao do projeto
+# ---------------------------------------------------------------------------
+# Retorna: OPERATIONAL_PROJECT | LEGACY_PROJECT | INTERNAL_FACTORY_SYSTEM | TEMPLATE_OR_REFERENCE
+function Get-ProjectClassification {
+    param([string]$Name, [string]$Path)
+
+    # Sistemas internos conhecidos da Fabrica
+    $internalNames = @("PROJECT_FACTORY", "PROJECT_FACTORY_CLI", "PROJECT_INTAKE_SYSTEM", "PROJECT_ORCHESTRATOR")
+    if ($internalNames -contains $Name) { return "INTERNAL_FACTORY_SYSTEM" }
+
+    # Templates e referencias
+    if ($Name -match '^TEMPLATE' -or $Name -match '_TEMPLATE$' -or $Name -match '^MODELO') {
+        return "TEMPLATE_OR_REFERENCE"
+    }
+
+    # Projetos operacionais: nome comeca com PROJETO_ e tem MISSION_BOARD
+    if ($Name -match '^PROJETO_') {
+        $board = Join-Path $Path "MISSION_BOARD.md"
+        if (Test-Path $board) { return "OPERATIONAL_PROJECT" }
+        return "LEGACY_PROJECT"
+    }
+
+    # Qualquer outro nome sem MISSION_BOARD = referencia interna
+    $board = Join-Path $Path "MISSION_BOARD.md"
+    if (-not (Test-Path $board)) { return "INTERNAL_FACTORY_SYSTEM" }
+
+    return "OPERATIONAL_PROJECT"
+}
+
+$classification = Get-ProjectClassification -Name $projectName -Path $ProjectPath
+
+# ---------------------------------------------------------------------------
 # Resultado base
 # ---------------------------------------------------------------------------
 $result = [PSCustomObject]@{
-    Project      = $projectName
-    Path         = $ProjectPath
-    Verdict      = "APROVADO"   # APROVADO | ALERTA | REPROVADO
-    Score        = 100
-    Issues       = @()
-    MBResult     = $null
-    TFResult     = $null
-    LogResult    = $null
+    Project        = $projectName
+    Path           = $ProjectPath
+    Classification = $classification
+    Verdict        = "APROVADO"
+    Score          = 100
+    Issues         = @()
+    MBResult       = $null
+    TFResult       = $null
+    LogResult      = $null
+}
+
+# ---------------------------------------------------------------------------
+# Saida antecipada para classificacoes que nao exigem auditoria completa
+# ---------------------------------------------------------------------------
+if ($classification -eq "INTERNAL_FACTORY_SYSTEM") {
+    $result.Verdict = "EXCLUDED_INTERNAL_SYSTEM"
+    $result.Score   = -1
+    Write-Output ($result | ConvertTo-Json -Depth 8 -Compress)
+    exit 0
+}
+
+if ($classification -eq "TEMPLATE_OR_REFERENCE") {
+    $result.Verdict = "EXCLUDED_TEMPLATE"
+    $result.Score   = -1
+    Write-Output ($result | ConvertTo-Json -Depth 8 -Compress)
+    exit 0
+}
+
+if ($classification -eq "LEGACY_PROJECT") {
+    $result.Verdict = "NEEDS_ORCHESTRATION"
+    $result.Score   = -1
+    $result.Issues += [PSCustomObject]@{
+        Severity = "INFO"
+        Code     = "CL001"
+        Message  = "Projeto legado sem MISSION_BOARD. Recomendado: executar PROJECT_ORCHESTRATOR para criar estrutura."
+    }
+    Write-Output ($result | ConvertTo-Json -Depth 8 -Compress)
+    exit 0
 }
 
 function Merge-Issues {
