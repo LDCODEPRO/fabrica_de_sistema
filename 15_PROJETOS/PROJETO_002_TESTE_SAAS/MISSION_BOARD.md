@@ -12,7 +12,7 @@
 | **Etapa Atual**    | MISSOES GERADAS                                                      |
 | **Proxima Etapa**  | EXECUCAO DOS AGENTES                                                 |
 | **Bloqueios**      | Nenhum                                                               |
-| **Data Criacao**   | 2026-06-04 00:45                                                           |
+| **Data Criacao**   | 2026-06-05 00:18                                                           |
 
 ---
 
@@ -20,7 +20,7 @@
 
 | Agente              | Missao                  | Status     |
 |---------------------|-------------------------|------------|
-| ORCHESTRATOR_AGENT | — (Coordenação) | AGUARDANDO |
+| ORCHESTRATOR_AGENT | -- (Coordenacao) | AGUARDANDO |
 | QA_AGENT | QA_TASK.md | EM EXECUCAO |
 | DOCS_AGENT | DOCS_TASK.md | EM EXECUCAO |
 | ARCHITECT_AGENT | ARCHITECT_TASK.md | EM EXECUCAO |
@@ -36,7 +36,7 @@ SAAS_PIPELINE: Intake → Arquitetura → Desenvolvimento → QA → Deploy → 
 
 ## Log de Orquestracao
 
-- [2026-06-04 00:45] Projeto recebido pelo PROJECT_ORCHESTRATOR.
-- [2026-06-04 00:45] Metadados lidos com sucesso.
-- [2026-06-04 00:45] Missoes geradas para 5 agentes.
-- [2026-06-04 00:45] Status: PRONTO PARA EXECUCAO.
+- [2026-06-05 00:18] Projeto recebido pelo PROJECT_ORCHESTRATOR.
+- [2026-06-05 00:18] Metadados lidos com sucesso.
+- [2026-06-05 00:18] Missoes geradas para 5 agentes.
+- [2026-06-05 00:18] Status: PRONTO PARA EXECUCAO.

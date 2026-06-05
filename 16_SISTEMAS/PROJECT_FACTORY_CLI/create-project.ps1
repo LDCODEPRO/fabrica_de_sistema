@@ -3,7 +3,9 @@
     [Parameter(Mandatory=$false)][string]$ProjectType,
     [Parameter(Mandatory=$false)][string]$ProjectDescription,
     [Parameter(Mandatory=$false)][string]$ProjectClient,
-    [Parameter(Mandatory=$false)][string]$ProjectPriority
+    [Parameter(Mandatory=$false)][string]$ProjectPriority,
+    # Raiz da Fabrica (detectada automaticamente se omitida)
+    [Parameter(Mandatory=$false)][string]$RootPath = ""
 )
 
 if (-not $ProjectName) { $ProjectName = Read-Host "Nome do Projeto" }
@@ -55,7 +57,11 @@ $agentsList = $agents -join ", "
 $date = Get-Date -Format "yyyy-MM-dd"
 
 # 2. Criar Estrutura do Projeto
-$projectDir = "D:\FABRICA_DE_SISTEMAS\15_PROJETOS\$ProjectName"
+# Resolucao dinamica: PSScriptRoot = 16_SISTEMAS\PROJECT_FACTORY_CLI -> dois niveis acima = FABRICA_DE_SISTEMAS
+if (-not $RootPath) {
+    $RootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+}
+$projectDir = Join-Path $RootPath "15_PROJETOS\$ProjectName"
 if (Test-Path $projectDir) {
     Write-Host "Projeto jÃ¡ existe!"
     exit

@@ -1,6 +1,6 @@
 ﻿# FACTORY STATUS DASHBOARD
 
-**Gerado em:** 2026-06-04 23:52
+**Gerado em:** 2026-06-05 00:19
 **Motor:** STATUS_ENGINE_V1
 
 ---
@@ -36,13 +36,13 @@
 | Etapa Atual | MISSOES GERADAS |
 | Proxima Etapa | EXECUCAO DOS AGENTES |
 | Bloqueios | Nenhum |
-| Criado em | 2026-06-04 00:45 |
+| Criado em | 2026-06-05 00:18 |
 
 **Agentes:**
 
 | Agente | Tarefa | Status |
 |---|---|---|
-| ORCHESTRATOR_AGENT | — (Coordenação) | AGUARDANDO |
+| ORCHESTRATOR_AGENT | -- (Coordenacao) | AGUARDANDO |
 | QA_AGENT | QA_TASK.md | EM EXECUCAO |
 | DOCS_AGENT | DOCS_TASK.md | EM EXECUCAO |
 | ARCHITECT_AGENT | ARCHITECT_TASK.md | EM EXECUCAO |
@@ -57,7 +57,7 @@
 | QA_TASK.md | EM EXECUCAO | 6 | 0 |
 | DOCS_TASK.md | EM EXECUCAO | 6 | 0 |
 
-**Ultimo log:** - [2026-06-04 00:45] Status: PRONTO PARA EXECUCAO.
+**Ultimo log:** - [2026-06-05 00:18] Status: PRONTO PARA EXECUCAO.
 
 ## Agentes Ativos
 
@@ -78,10 +78,11 @@
 
 | Data/Hora | Agente | Tarefa | Status Anterior | Status Novo |
 |---|---|---|---|---|
-| 2026-06-04 21:02 | QA_AGENT | QA_TASK.md | AGUARDANDO | EM EXECUCAO |
-| 2026-06-04 21:02 | DOCS_AGENT | DOCS_TASK.md | AGUARDANDO | EM EXECUCAO |
-| 2026-06-04 21:02 | ARCHITECT_AGENT | ARCHITECT_TASK.md | AGUARDANDO | EM EXECUCAO |
 | 2026-06-04 21:02 | DEVELOPER_AGENT | DEVELOPER_TASK.md | AGUARDANDO | EM EXECUCAO |
+| 2026-06-05 00:18 | QA_AGENT | QA_TASK.md | AGUARDANDO | EM EXECUCAO |
+| 2026-06-05 00:18 | DOCS_AGENT | DOCS_TASK.md | AGUARDANDO | EM EXECUCAO |
+| 2026-06-05 00:18 | ARCHITECT_AGENT | ARCHITECT_TASK.md | AGUARDANDO | EM EXECUCAO |
+| 2026-06-05 00:18 | DEVELOPER_AGENT | DEVELOPER_TASK.md | AGUARDANDO | EM EXECUCAO |
 
 ## Bloqueios Encontrados
 
@@ -92,5 +93,5 @@ _Nenhum bloqueio registrado._
 4 agente(s) EM EXECUCAO. Monitorar conclusao e atualizar status para CONCLUIDO.
 
 ---
-_Dashboard gerado por STATUS_ENGINE_V1 em 2026-06-04 23:52_
+_Dashboard gerado por STATUS_ENGINE_V1 em 2026-06-05 00:19_
 

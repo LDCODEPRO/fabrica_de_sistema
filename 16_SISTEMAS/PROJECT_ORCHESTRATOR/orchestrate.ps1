@@ -1,6 +1,8 @@
-param(
+﻿param(
     [Parameter(Mandatory=$false)][string]$ProjectName,
-    [Parameter(Mandatory=$false)][switch]$Force
+    [Parameter(Mandatory=$false)][switch]$Force,
+    # Raiz da Fabrica (detectada automaticamente se omitida)
+    [Parameter(Mandatory=$false)][string]$RootPath = ""
 )
 
 # ============================================================
@@ -9,9 +11,19 @@ param(
 # automáticas para cada agente atribuído.
 # ============================================================
 
-$PROJECTS_BASE = "D:\FABRICA_DE_SISTEMAS\15_PROJETOS"
-$ORCHESTRATOR_DIR = "D:\FABRICA_DE_SISTEMAS\16_SISTEMAS\PROJECT_ORCHESTRATOR"
-$TEMPLATES_DIR = "$ORCHESTRATOR_DIR\templates"
+# Resolucao dinamica de caminhos
+# PSScriptRoot = 16_SISTEMAS\PROJECT_ORCHESTRATOR -> dois niveis acima = FABRICA_DE_SISTEMAS
+if (-not $RootPath) {
+    $RootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+}
+if (-not (Test-Path $RootPath)) {
+    Write-Host "[ERRO] Raiz da Fabrica nao encontrada: $RootPath" -ForegroundColor Red
+    exit 1
+}
+
+$PROJECTS_BASE    = Join-Path $RootPath "15_PROJETOS"
+$ORCHESTRATOR_DIR = $PSScriptRoot
+$TEMPLATES_DIR    = Join-Path $ORCHESTRATOR_DIR "templates"
 $DATE = Get-Date -Format "yyyy-MM-dd"
 $TIMESTAMP = Get-Date -Format "yyyy-MM-dd HH:mm"
 
@@ -112,7 +124,7 @@ $agentTableRows = ($agents | ForEach-Object {
         "*DEVELOPER*"  { "DEVELOPER_TASK.md" }
         "*QA*"         { "QA_TASK.md" }
         "*DOCS*"       { "DOCS_TASK.md" }
-        "*ORCHESTRAT*" { "— (Coordenação)" }
+        "*ORCHESTRAT*" { "-- (Coordenacao)" }
         "*DESIGNER*"   { "DESIGNER_TASK.md" }
         default        { "TASK_$agentName.md" }
     }

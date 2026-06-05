@@ -126,31 +126,10 @@ if ($orchStatus.Orchestrated -and -not $ForceOrchestrate) {
     Write-RuntimeLog -Project $ProjectName -Stage "ORCHESTRATOR" -Result "SKIP" -Detail "Ja orquestrado"
     Write-RuntimeConsole -Stage "ORCHESTRATOR" -Msg "MISSION_BOARD existente. Pulando." -Level "SKIP"
 } else {
-    # Verificar se o orchestrator usa o path correto
-    $orchContent = Get-Content -Path $ORCHESTRATOR_SCRIPT -Encoding UTF8 -Raw
-    $orchUsesDrivePath = $orchContent -match 'D:\\FABRICA_DE_SISTEMAS'
-
-    if ($orchUsesDrivePath) {
-        # Orchestrator tem path hardcoded incompativel — tentar mesmo assim, capturar resultado
-        $orchOK = Invoke-Stage -StageName "ORCHESTRATOR" -StageKey "Orchestrate" -Action {
-            $raw = & $ORCHESTRATOR_SCRIPT -ProjectName $ProjectName 2>&1
-            $output = ($raw | Where-Object { $_ -notmatch '^\s*$' } | Select-Object -Last 3) -join " | "
-            if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
-                throw "Exit $LASTEXITCODE : $output"
-            }
-            $output
-        }
-        if (-not $orchOK) {
-            Write-RuntimeConsole -Stage "ORCHESTRATOR" -Msg "AVISO: Orchestrator com path hardcoded D:\. Continuando pipeline." -Level "INFO"
-            $pipelineResults.Orchestrate.Result = "SKIP_PATH_MISMATCH"
-            Write-RuntimeLog -Project $ProjectName -Stage "ORCHESTRATOR" -Result "SKIP_PATH_MISMATCH" -Detail "Path D:\ incompativel com instalacao atual"
-        }
-    } else {
-        Invoke-Stage -StageName "ORCHESTRATOR" -StageKey "Orchestrate" -Action {
-            $raw = & $ORCHESTRATOR_SCRIPT -ProjectName $ProjectName 2>&1
-            ($raw | Select-Object -Last 3) -join " | "
-        } | Out-Null
-    }
+    Invoke-Stage -StageName "ORCHESTRATOR" -StageKey "Orchestrate" -Action {
+        $raw = & $ORCHESTRATOR_SCRIPT -ProjectName $ProjectName -RootPath $FABRICA_ROOT 2>&1
+        ($raw | Where-Object { $_ -notmatch '^\s*$' } | Select-Object -Last 3) -join " | "
+    } | Out-Null
 }
 
 # ---------------------------------------------------------------------------
