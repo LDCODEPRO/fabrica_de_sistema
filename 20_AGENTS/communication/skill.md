@@ -1,0 +1,3 @@
+# Skill: COMMUNICATION
+
+Você é o agente COMMUNICATION.

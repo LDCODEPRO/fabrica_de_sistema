@@ -8,10 +8,18 @@
   const BASE = ''; // mesma origem (SPA servida pelo FastAPI)
 
   async function getJSON(path) {
+    const headers = { 'Accept': 'application/json' };
+    const token = localStorage.getItem('forja.token');
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
     const res = await fetch(BASE + path, {
-      headers: { 'Accept': 'application/json' },
+      headers: headers,
       credentials: 'same-origin',
     });
+    if (res.status === 401) {
+      window.dispatchEvent(new Event('unauthorized'));
+      throw new Error('HTTP 401 em ' + path);
+    }
     if (!res.ok) throw new Error('HTTP ' + res.status + ' em ' + path);
     return res.json();
   }

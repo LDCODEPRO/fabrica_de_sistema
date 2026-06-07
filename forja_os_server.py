@@ -30,6 +30,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 from _compat_db import get_db, init_db
 import _compat_models as m
 
+# Importa a camada de autenticação
+sys.path.insert(0, str(Path(__file__).parent / "17_RUNTIME" / "auth"))
+from auth_service import router as auth_router, get_current_user, check_permissions
+
+
 # ── Logging ────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("forja_os")
@@ -55,6 +60,46 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
+
+# --- Middleware de Autenticação Global ---
+from fastapi.responses import JSONResponse
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    import os
+    from auth_service import FORJA_AUTH_REQUIRED, decode_token, is_session_revoked
+    from _compat_db import SessionLocal
+
+    if not FORJA_AUTH_REQUIRED:
+        return await call_next(request)
+
+    path = request.url.path
+    if not path.startswith("/api/") or path.startswith("/api/auth/login") or path.startswith("/api/health") or path == "/api/docs" or path == "/api/openapi.json":
+        return await call_next(request)
+
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return JSONResponse(status_code=401, content={"detail": "Token ausente ou invalido"})
+
+    token = auth_header.split(" ")[1]
+    db = SessionLocal()
+    try:
+        payload = decode_token(token)
+        jti = payload.get("jti")
+        if not jti or is_session_revoked(db, jti):
+            return JSONResponse(status_code=401, content={"detail": "Sessão revogada ou invalida"})
+        
+        # Injeta info de auth no request state
+        request.state.user = payload
+    except Exception as e:
+        db.close()
+        return JSONResponse(status_code=401, content={"detail": str(e)})
+    
+    db.close()
+    return await call_next(request)
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
