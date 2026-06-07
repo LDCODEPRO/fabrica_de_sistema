@@ -482,6 +482,45 @@ def providers_test():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# HOME EXECUTIVE (REALITY ENGINE)
+# ══════════════════════════════════════════════════════════════════════════════
+sys.path.insert(0, str(Path(__file__).parent / "17_RUNTIME"))
+from reality_engine import reality_engine as re_facade
+
+@app.get("/api/home/overview")
+def home_overview(db: Session = Depends(get_db)):
+    return re_facade.get_overview(db)
+
+@app.get("/api/home/health")
+def home_health(db: Session = Depends(get_db)):
+    return re_facade.get_health(db)
+
+@app.get("/api/home/providers")
+def home_providers(db: Session = Depends(get_db)):
+    return re_facade.get_providers(db)
+
+@app.get("/api/home/missions")
+def home_missions(db: Session = Depends(get_db)):
+    return re_facade.get_missions(db)
+
+@app.get("/api/home/github")
+def home_github(db: Session = Depends(get_db)):
+    return re_facade.get_github(db)
+
+@app.get("/api/home/timeline")
+def home_timeline(db: Session = Depends(get_db)):
+    return re_facade.get_timeline(db)
+
+@app.get("/api/home/alerts")
+def home_alerts(db: Session = Depends(get_db)):
+    return re_facade.get_alerts(db)
+
+@app.get("/api/home/evidence")
+def home_evidence(db: Session = Depends(get_db)):
+    return re_facade.get_evidence(db)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # STATIC FILES — serve frontend buildado
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -518,6 +557,7 @@ else:
             {"error": "Frontend não buildado", "instrucao": "cd 16_SISTEMAS/FORJA_OS_PLATFORM && npm run build"},
             status_code=503,
         )
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -59,7 +59,7 @@
   // ---- custos — billing real ($1/dia, $30/mês) via /api/billing/status ----
   const custos = {
     diario: 0, mensal: 0, limite: 30, limiteDiario: 1, projecao: 0,
-    source: 'sem_dados_reais', primaryProvider: 'deepseek_v4_pro', fallbackProvider: 'ollama',
+    source: 'not_configured', primaryProvider: 'deepseek_v4_pro', fallbackProvider: 'ollama',
     deltaMes: 0,
     serieDiaria: [],
     serieMensal: [],
