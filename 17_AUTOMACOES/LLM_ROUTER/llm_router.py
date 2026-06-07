@@ -20,6 +20,25 @@ logger = logging.getLogger(__name__)
 REGISTRY_PATH = Path(__file__).parent / "provider_registry.json"
 
 
+def _load_local_env() -> None:
+    """Carrega o .env da raiz sem expor ou sobrescrever segredos."""
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    if not env_path.exists():
+        return
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
+_load_local_env()
+
+
 def _load_registry() -> dict:
     return json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
 
@@ -207,6 +226,7 @@ class LLMRouter:
         adapters = {
             "deepseek_api": "_call_openai_compatible",
             "openai_api":   "_call_openai_compatible",
+            "openrouter_api": "_call_openai_compatible",
             "claude_api": "_call_anthropic",
             "gemini_api":   "_call_gemini",
             "ollama_local":   "_call_ollama",
@@ -218,23 +238,31 @@ class LLMRouter:
 
     def _call_openai_compatible(self, provider: dict, prompt: str) -> str:
         import urllib.request
+        import urllib.error
         api_key = os.environ.get(provider["env_var"], "")
-        payload = json.dumps({
-            "model": provider["model_id"],
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 1024,
-        }).encode("utf-8")
         base_url = provider['base_url']
         endpoint = f"{base_url}/chat/completions" if base_url.endswith("/v1") else f"{base_url}/v1/chat/completions"
-        req = urllib.request.Request(
-            endpoint,
-            data=payload,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read())
-            return data["choices"][0]["message"]["content"]
+        models = [provider["model_id"], *provider.get("fallback_model_ids", [])]
+        errors = []
+        for model in models:
+            payload = json.dumps({
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 1024,
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                endpoint,
+                data=payload,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    data = json.loads(resp.read())
+                    return data["choices"][0]["message"]["content"]
+            except urllib.error.HTTPError as exc:
+                errors.append(f"{model}:HTTP_{exc.code}")
+        raise RuntimeError("Nenhum modelo OpenRouter respondeu: " + ", ".join(errors))
 
     def _call_anthropic(self, provider: dict, prompt: str) -> str:
         try:

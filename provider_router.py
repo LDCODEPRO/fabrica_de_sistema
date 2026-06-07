@@ -8,7 +8,8 @@ REGRAS:
 - Chamadas HTTP REAIS (urllib, sem deps externas).
 - NUNCA loga/retorna API keys.
 - Sem simulação: se nao houver chave/serviço, retorna ok=False com erro real.
-- Ordem preferencial: DeepSeek -> Gemini -> OpenAI -> Claude -> Ollama local.
+- OpenAI e Claude usam assinatura; Gemini usa assinatura assistida.
+- Ollama e local/gratuito. Demais modelos usam OpenRouter mediante autorização.
 """
 import os
 import re
@@ -17,6 +18,26 @@ import shutil
 import subprocess
 import urllib.request
 import urllib.error
+from pathlib import Path
+
+
+def _load_local_env():
+    """Carrega o .env local sem sobrescrever variáveis já definidas."""
+    env_path = Path(__file__).resolve().parent / ".env"
+    if not env_path.exists():
+        return
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
+_load_local_env()
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 
@@ -24,27 +45,37 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 # assinatura, como o Claude Code/Codex fazem — sem API key, sem navegador).
 # 1. Claude (assinatura, CLI `claude`)
 # 2. ChatGPT/Codex (assinatura, CLI `codex`)
-# 3. Ollama local (último recurso grátis)
-PREFERRED_ORDER = ["claude_sub", "codex_sub", "ollama"]
+# 3. Gemini (assinatura, CLI oficial `gemini`)
+# 4. Ollama local (último recurso grátis)
+# OpenRouter fica disponível apenas por seleção explícita; não entra no
+# fallback automático para impedir consumo pago acidental.
+PREFERRED_ORDER = ["claude_sub", "codex_sub", "gemini_sub", "ollama"]
 
 # Providers de ASSINATURA via CLI oficial (custo incremental R$ 0, sem API key)
 SUBSCRIPTION_CLIS = {
     "claude_sub": {"bin": "claude", "label": "Claude (assinatura)"},
     "codex_sub":  {"bin": "codex",  "label": "ChatGPT/Codex (assinatura)"},
+    "gemini_sub": {"bin": "gemini", "label": "Gemini (assinatura)"},
 }
 
 PROVIDER_CONFIG = {
     # Assinaturas via CLI (sem env/url — usam o login da própria CLI)
     "claude_sub": {"env": None, "model": "claude-subscription", "cli": "claude"},
     "codex_sub":  {"env": None, "model": "chatgpt-subscription", "cli": "codex"},
+    "gemini_sub": {"env": None, "model": "gemini-subscription", "cli": "gemini"},
     # Local grátis
     "ollama":   {"env": None, "model": os.getenv("OLLAMA_MODEL", "llama3.2:latest")},
-    # APIs pagas (NÃO usadas por padrão — só referência, bloqueadas)
+    # APIs diretas legadas (NÃO usadas por padrão — assinaturas têm prioridade)
     "deepseek": {"env": "DEEPSEEK_API_KEY", "model": "deepseek-chat",
                  "url": "https://api.deepseek.com/v1/chat/completions"},
     "gemini":   {"env": "GOOGLE_API_KEY", "model": "gemini-2.5-flash"},
     "openai":   {"env": "OPENAI_API_KEY", "model": "gpt-4o-mini",
                  "url": "https://api.openai.com/v1/chat/completions"},
+    # Gateway autorizado para modelos sem assinatura/local.
+    "openrouter": {"env": "OPENROUTER_API_KEY",
+                   "model": os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-v4-pro"),
+                   "fallback_models": ["moonshotai/kimi-k2.6"],
+                   "url": "https://openrouter.ai/api/v1/chat/completions"},
     "claude":   {"env": "ANTHROPIC_API_KEY", "model": "claude-haiku-4-5-20251001",
                  "url": "https://api.anthropic.com/v1/messages"},
 }
@@ -52,6 +83,10 @@ PROVIDER_CONFIG = {
 
 def _resolve_bin(bin_name):
     """Resolve caminho do executável (Windows: .cmd/.exe via PATHEXT)."""
+    if bin_name == "gemini":
+        portable = Path(__file__).resolve().parent / ".tools" / "gemini" / "node_modules" / ".bin" / "gemini.cmd"
+        if portable.exists():
+            return str(portable)
     return (shutil.which(bin_name)
             or shutil.which(bin_name + ".cmd")
             or shutil.which(bin_name + ".exe")
@@ -59,6 +94,10 @@ def _resolve_bin(bin_name):
 
 
 def _cli_available(bin_name):
+    if bin_name == "gemini":
+        portable = Path(__file__).resolve().parent / ".tools" / "gemini" / "node_modules" / ".bin" / "gemini.cmd"
+        if portable.exists():
+            return True
     return (shutil.which(bin_name) or shutil.which(bin_name + ".cmd")
             or shutil.which(bin_name + ".exe")) is not None
 
@@ -91,6 +130,41 @@ def _codex_cli(cfg, prompt, system, max_tokens):
     if proc.returncode != 0 and not raw.strip():
         raise RuntimeError(((proc.stderr or "").strip() or "codex CLI falhou")[:160])
     return _parse_codex_output(raw)
+
+
+def _gemini_cli(cfg, prompt, system, max_tokens):
+    """Gemini via assinatura Google usando o CLI oficial em modo headless."""
+    full = (system + "\n\n" + prompt) if system else prompt
+    root = Path(__file__).resolve().parent
+    runtime_dir = root / ".gemini-forja" / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env["GEMINI_CLI_HOME"] = str(root / ".gemini-forja")
+    env["GEMINI_CLI_TRUST_WORKSPACE"] = "true"
+    # Assinatura OAuth deve prevalecer sobre qualquer API key herdada do host.
+    env.pop("GOOGLE_API_KEY", None)
+    env.pop("GEMINI_API_KEY", None)
+    proc = subprocess.run(
+        [
+            _resolve_bin("gemini"),
+            "-p", full,
+            "--output-format", "json",
+            "--approval-mode", "plan",
+            "--skip-trust",
+        ],
+        capture_output=True, text=True, timeout=180, env=env, cwd=runtime_dir,
+    )
+    raw = (proc.stdout or "").strip()
+    err = (proc.stderr or "").strip()
+    if proc.returncode != 0 or not raw:
+        raise RuntimeError((err or raw or "gemini CLI sem saída")[:160])
+    data = json.loads(raw)
+    if data.get("error"):
+        raise RuntimeError(str(data["error"])[:160])
+    response = str(data.get("response") or "").strip()
+    if not response:
+        raise RuntimeError("gemini CLI retornou resposta vazia")
+    return response
 
 
 def _parse_codex_output(raw):
@@ -154,6 +228,36 @@ def _openai_compatible(cfg, prompt, system, max_tokens):
     return out["choices"][0]["message"]["content"]
 
 
+def _openrouter(cfg, prompt, system, max_tokens):
+    """OpenRouter com ordem oficial de modelos e fallback explícito."""
+    key = os.environ.get(cfg["env"], "")
+    if not key:
+        raise RuntimeError(f"{cfg['env']} ausente")
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+    errors = []
+    models = [cfg["model"], *cfg.get("fallback_models", [])]
+    for model in models:
+        try:
+            out = _post(
+                cfg["url"],
+                {"model": model, "messages": messages, "max_tokens": max_tokens},
+                {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            )
+            content = out["choices"][0]["message"].get("content") or ""
+            if not content.strip():
+                errors.append(f"{model}:EMPTY_RESPONSE")
+                continue
+            return content, model
+        except urllib.error.HTTPError as exc:
+            errors.append(f"{model}:HTTP_{exc.code}")
+        except Exception as exc:
+            errors.append(f"{model}:{type(exc).__name__}")
+    raise RuntimeError("OpenRouter sem modelo disponível: " + ", ".join(errors))
+
+
 def _gemini(cfg, prompt, system, max_tokens):
     key = os.environ.get(cfg["env"], "")
     if not key:
@@ -205,10 +309,12 @@ def _ollama(cfg, prompt, system, max_tokens):
 _DISPATCH = {
     "claude_sub": _claude_cli,   # assinatura Claude (CLI)
     "codex_sub": _codex_cli,     # assinatura ChatGPT (Codex CLI)
+    "gemini_sub": _gemini_cli,   # assinatura Google (Gemini CLI)
     "ollama": _ollama,
     # APIs pagas (não usadas por padrão)
     "deepseek": _openai_compatible,
     "openai": _openai_compatible,
+    "openrouter": _openrouter,
     "gemini": _gemini,
     "claude": _claude,
 }
@@ -225,7 +331,12 @@ def execute_llm(provider, prompt, system=None, max_tokens=500):
     result["model"] = cfg["model"]
     try:
         fn = _DISPATCH[provider]
-        text = fn(cfg, prompt, system, max_tokens)
+        output = fn(cfg, prompt, system, max_tokens)
+        if isinstance(output, tuple):
+            text, actual_model = output
+            result["model"] = actual_model
+        else:
+            text = output
         result["ok"] = True
         result["response"] = text
         result["tokens_estimated"] = _estimate_tokens(prompt) + _estimate_tokens(text)

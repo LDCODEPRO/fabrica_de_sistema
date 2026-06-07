@@ -1,0 +1,68 @@
+services:
+  operational_core:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-fabrica-vps}_operational_core
+    restart: ${FACTORY_RESTART_POLICY:-unless-stopped}
+    env_file:
+      - path: .env.vps
+        required: false
+      - path: .env
+        required: false
+    environment:
+      FACTORY_PROFILE: ${FACTORY_PROFILE:-VPS_LINUX}
+      ENVIRONMENT: ${FACTORY_ENV:-production}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/data/nexus.db}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://forja.example.com}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${FACTORY_API_HOST_PORT:-8000}:8000"
+    volumes:
+      - ${FACTORY_DATA_DIR:-./data}:/app/data
+      - ${FACTORY_LOG_DIR:-./logs}:/app/logs
+      - ${FACTORY_BACKUP_DIR:-./backups}:/app/backups
+      - ${FACTORY_CONFIG_DIR:-./config}:/app/config:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  forja_os:
+    build:
+      context: ./16_SISTEMAS/FORJA_OS_PLATFORM
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-fabrica-vps}_forja_os
+    restart: ${FACTORY_RESTART_POLICY:-unless-stopped}
+    env_file:
+      - path: .env.vps
+        required: false
+      - path: .env
+        required: false
+    ports:
+      - "${FORJA_OS_HOST_PORT:-8080}:8080"
+    depends_on:
+      operational_core:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health.json"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"

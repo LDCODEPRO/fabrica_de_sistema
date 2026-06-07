@@ -39,20 +39,21 @@
   const agentes = [];
 
   // ---- LLMs (config/política real, sem custo fabricado) ----
+  // APIs diretas de OpenAI, Claude e Gemini: bloqueadas, Sem chave validada.
   const llms = [
-    { id: 'claude_pro', provider: 'Claude Pro', modelos: ['Pro'], tipo: 'Assinatura', status: 'unknown', modoUso: 'Assistido', automacao: 'Assistida', custoIncremental: 'R$ 0,00', billing: 'Não aplicável', ultimoHealth: 'Não validado', observacao: '1ª na ordem oficial do roteador.', ativo: false },
-    { id: 'chatgpt_plus', provider: 'ChatGPT Plus / GPT', modelos: ['Plus'], tipo: 'Assinatura', status: 'unknown', modoUso: 'Assistido', automacao: 'Assistida', custoIncremental: 'R$ 0,00', billing: 'Não aplicável', ultimoHealth: 'Não validado', observacao: 'Não confundir com OpenAI API.', ativo: false },
-    { id: 'gemini_advanced', provider: 'Gemini Advanced', modelos: ['Advanced'], tipo: 'Assinatura', status: 'unknown', modoUso: 'Assistido', automacao: 'Assistida', custoIncremental: 'R$ 0,00', billing: 'Não aplicável', ultimoHealth: 'Não validado', observacao: 'Pesquisa e documentação assistidas.', ativo: false },
-    { id: 'deepseek_v4_pro', provider: 'DeepSeek V4 Pro', modelos: ['V4 Pro'], tipo: 'Assinatura', status: 'unknown', modoUso: 'Assistido', automacao: 'Assistida', custoIncremental: 'R$ 0,00', billing: 'Não aplicável', ultimoHealth: 'Não validado', observacao: 'Provider após assinaturas.', ativo: false },
+    { id: 'claude_pro', provider: 'Claude Pro', modelos: ['Pro'], tipo: 'Assinatura', status: 'unknown', modoUso: 'Assistido', automacao: 'Assistida', custoIncremental: 'R$ 0,00', billing: 'Não aplicável', ultimoHealth: 'Não validado', observacao: 'Assinatura instalada; execução ainda não certificada.', ativo: false },
+    { id: 'chatgpt_plus', provider: 'ChatGPT Plus / Codex', modelos: ['Codex'], tipo: 'Assinatura', status: 'unknown', modoUso: 'Assistido', automacao: 'Assistida', custoIncremental: 'R$ 0,00', billing: 'Não aplicável', ultimoHealth: 'Não validado pelo Router', observacao: 'Aplicativo autenticado; integração automática ainda parcial.', ativo: false },
+    { id: 'gemini_advanced', provider: 'Gemini Google One AI Pro', modelos: ['gemini-subscription'], tipo: 'Assinatura', status: 'active_real', modoUso: 'Direto', automacao: 'direct', custoIncremental: 'R$ 0,00', billing: 'Assinatura fixa', ultimoHealth: '06/06/2026', observacao: 'OAuth e resposta real GEMINI_ASSINATURA_OK confirmados.', ativo: true },
+    { id: 'openrouter_api', provider: 'OpenRouter', modelos: ['deepseek/deepseek-v4-pro', 'moonshotai/kimi-k2.6'], tipo: 'API Paga', status: 'active_real', modoUso: 'Direto com autorização', automacao: 'direct', custoIncremental: 'Por consumo', billing: 'Controle de custos', ultimoHealth: '06/06/2026', observacao: 'Prioridade: DeepSeek V4 Pro; alternativa: Kimi K2.6.', ativo: true },
     { id: 'ollama_local', provider: 'Ollama Local', modelos: ['Llama/Gemma/Qwen configuráveis'], tipo: 'Local', status: 'unknown', modoUso: 'Local', automacao: 'Direta após health check', custoIncremental: 'R$ 0,00', billing: 'Energia/hardware local', ultimoHealth: 'Não validado nesta execução', observacao: 'Último fallback local. Só ativo após health real.', ativo: false },
   ];
 
   const rotas = [
-    { id: 'R1', quando: 'assinatura primária', modelo: 'Claude Pro', fallback: 'ChatGPT Plus' },
-    { id: 'R2', quando: 'validação/código', modelo: 'ChatGPT Plus', fallback: 'Gemini Advanced' },
-    { id: 'R3', quando: 'pesquisa e documentação', modelo: 'Gemini Advanced', fallback: 'DeepSeek V4 Pro' },
-    { id: 'R4', quando: 'após assinaturas', modelo: 'DeepSeek V4 Pro', fallback: 'Ollama Local' },
-    { id: 'R5', quando: 'fallback local', modelo: 'Ollama Local', fallback: '—' },
+    { id: 'R1', quando: 'assinatura Google validada', modelo: 'Gemini AI Pro', fallback: 'Ollama Local' },
+    { id: 'R2', quando: 'execução local e gratuita', modelo: 'Ollama Local', fallback: 'OpenRouter autorizada' },
+    { id: 'R3', quando: 'OpenRouter autorizada', modelo: 'DeepSeek V4 Pro', fallback: 'Kimi K2.6' },
+    { id: 'R4', quando: 'DeepSeek indisponível ou vazio', modelo: 'Kimi K2.6', fallback: '—' },
+    { id: 'R5', quando: 'assinaturas não certificadas', modelo: 'Bloqueado', fallback: 'Validação manual' },
   ];
 
   // ---- custos — billing real ($1/dia, $30/mês) via /api/billing/status ----

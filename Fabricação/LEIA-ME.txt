@@ -1,0 +1,14 @@
+FORJA OS - abertura portatil
+
+Abra um destes arquivos:
+
+1. ABRIR_FORJA_OS.cmd
+   Melhor opcao no Windows.
+
+2. ABRIR_FORJA_OS.html
+   Alternativa pelo navegador.
+
+Esta pasta foi preparada para funcionar por caminho relativo.
+Pode ser copiada para um pendrive junto com a subpasta forja-os.
+
+Nao depende de caminho fixo, servidor local ou Docker para abrir esta versao estatica.

@@ -292,7 +292,7 @@ function LLMCenter({ setView }) {
                   <tr key={l.id} className={sel.id===l.id?'on':''} onClick={()=>setSel(l)} style={{opacity: l.ativo?1:0.55}}>
                     <td><div className="cell-strong">{l.provider}</div><div className="id-cell mono">{l.modelos.join(' · ')}</div></td>
                     <td><span className="tag">{l.tipo}</span></td>
-                    <td><span className={'pill ' + (l.status==='active_real'?'ok':l.status==='inactive'?'err':'warn')}>{l.status}</span></td>
+                    <td><span className={'pill ' + (l.status==='active_real'?'ok':l.status==='inactive'?'err':'warn')}>{l.statusLabel || l.status}</span></td>
                     <td>{l.modoUso}</td>
                     <td>{l.automacao}</td>
                     <td className="mono">{l.custoIncremental}</td>
@@ -327,13 +327,13 @@ function LLMCenter({ setView }) {
             <div className="detail-head">
               <div className="ch-crumb">{sel.id}</div>
               <h2>{sel.provider}</h2>
-              <div className="tags"><span className={'pill ' + (sel.status==='active_real'?'ok':sel.status==='inactive'?'err':'warn')}>{sel.status}</span><span className="tag">{sel.tipo}</span></div>
+              <div className="tags"><span className={'pill ' + (sel.status==='active_real'?'ok':sel.status==='inactive'?'err':'warn')}>{sel.statusLabel || sel.status}</span><span className="tag">{sel.tipo}</span></div>
             </div>
             <div className="grid-2" style={{gap:10}}>
               <div className="kpi" style={{padding:'10px 12px'}}><div className="kpi-label">Tipo</div><div className="kpi-val" style={{fontSize:18}}>{sel.tipo}</div></div>
               <div className="kpi" style={{padding:'10px 12px'}}><div className="kpi-label">Automação</div><div className="kpi-val" style={{fontSize:18}}>{sel.automacao}</div></div>
               <div className="kpi" style={{padding:'10px 12px'}}><div className="kpi-label">Custo incremental</div><div className="kpi-val" style={{fontSize:18}}>{sel.custoIncremental}</div></div>
-              <div className="kpi" style={{padding:'10px 12px'}}><div className="kpi-label">Health</div><div className="kpi-val" style={{fontSize:18}}>{sel.status}</div></div>
+              <div className="kpi" style={{padding:'10px 12px'}}><div className="kpi-label">Saúde</div><div className="kpi-val" style={{fontSize:18}}>{sel.statusLabel || sel.status}</div></div>
             </div>
             <div className="detail-block">
               <span className="eyebrow">Modelos disponíveis</span>

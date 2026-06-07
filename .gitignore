@@ -5,9 +5,26 @@
 Thumbs.db
 .DS_Store
 desktop.ini
+_tmp_test_dir/
+
+# Ambientes e segredos locais
+.env
+.env.local
+.env.vps
+.env.*.local
+config/secrets/
+secrets/
+
+# Dados operacionais gerados
+data/
+logs/
+backups/
 
 # Dependencias locais de validacao Codex
 .codex_pydeps/
+.tools/
+.npm-cache/
+.gemini-forja/
 agent_execution_test.db
 __pycache__/
 *.pyc

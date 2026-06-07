@@ -205,6 +205,14 @@ def llm_providers():
             "allowed_for_agents": p.get("allowed_for_agents", False),
             "capabilities": p.get("capabilities", []),
             "notes": p.get("notes", ""),
+            "models": [
+                model for model in [
+                    p.get("model_id"),
+                    *p.get("fallback_model_ids", []),
+                ] if model
+            ],
+            "primary_model": p.get("model_id"),
+            "fallback_models": p.get("fallback_model_ids", []),
         }
 
         # Health real para Ollama — nunca simulado
