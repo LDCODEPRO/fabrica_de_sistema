@@ -1,0 +1,182 @@
+{
+  "/api/home/overview": {
+    "status": 200,
+    "duration_ms": 65,
+    "zero_ghost_compliant": true,
+    "forbidden_word_found": null,
+    "payload_snippet": "{'status': 'ok', 'active_missions': 0, 'total_projects': 0, 'system_alerts': 0, 'latest_deployment': 'not_configured', 'source': 'reality_engine'}",
+    "full_payload": {
+      "status": "ok",
+      "active_missions": 0,
+      "total_projects": 0,
+      "system_alerts": 0,
+      "latest_deployment": "not_configured",
+      "source": "reality_engine"
+    },
+    "is_ok": true
+  },
+  "/api/home/health": {
+    "status": 200,
+    "duration_ms": 7,
+    "zero_ghost_compliant": true,
+    "forbidden_word_found": null,
+    "payload_snippet": "{'status': 'ok', 'database': {'status': 'disconnected'}, 'filesystem': {'status': 'writable'}, 'runtime': {'status': 'active'}}",
+    "full_payload": {
+      "status": "ok",
+      "database": {
+        "status": "disconnected"
+      },
+      "filesystem": {
+        "status": "writable"
+      },
+      "runtime": {
+        "status": "active"
+      }
+    },
+    "is_ok": true
+  },
+  "/api/home/providers": {
+    "status": 200,
+    "duration_ms": 30,
+    "zero_ghost_compliant": true,
+    "forbidden_word_found": null,
+    "payload_snippet": "{'status': 'ok', 'items': [{'name': 'claude_sub', 'status': 'environment_pending', 'latency_ms': 0}, {'name': 'codex_sub', 'status': 'environment_pending', 'latency_ms': 0}, {'name': 'gemini_sub', 'st...",
+    "full_payload": {
+      "status": "ok",
+      "items": [
+        {
+          "name": "claude_sub",
+          "status": "environment_pending",
+          "latency_ms": 0
+        },
+        {
+          "name": "codex_sub",
+          "status": "environment_pending",
+          "latency_ms": 0
+        },
+        {
+          "name": "gemini_sub",
+          "status": "environment_pending",
+          "latency_ms": 0
+        },
+        {
+          "name": "ollama",
+          "status": "environment_pending",
+          "latency_ms": 0
+        },
+        {
+          "name": "openrouter",
+          "status": "certified",
+          "latency_ms": 0
+        },
+        {
+          "name": "openai",
+          "status": "missing_implementation",
+          "latency_ms": 0
+        },
+        {
+          "name": "deepseek",
+          "status": "missing_implementation",
+          "latency_ms": 0
+        }
+      ]
+    },
+    "is_ok": true
+  },
+  "/api/home/missions": {
+    "status": 200,
+    "duration_ms": 2,
+    "zero_ghost_compliant": true,
+    "forbidden_word_found": null,
+    "payload_snippet": "{'status': 'ok', 'total': 7, 'active': 0, 'completed': 7, 'error': 0, 'items': []}",
+    "full_payload": {
+      "status": "ok",
+      "total": 7,
+      "active": 0,
+      "completed": 7,
+      "error": 0,
+      "items": []
+    },
+    "is_ok": true
+  },
+  "/api/home/github": {
+    "status": 200,
+    "duration_ms": 417,
+    "zero_ghost_compliant": true,
+    "forbidden_word_found": null,
+    "payload_snippet": "{'status': 'ok', 'branch': 'main', 'last_commit': '87d9b285bf68893ad9305f2d36e09333c8e7ccfd', 'message': 'feat(forja): add reality engine and github collector foundation', 'author': 'Fabrica de Sistem...",
+    "full_payload": {
+      "status": "ok",
+      "branch": "main",
+      "last_commit": "87d9b285bf68893ad9305f2d36e09333c8e7ccfd",
+      "message": "feat(forja): add reality engine and github collector foundation",
+      "author": "Fabrica de Sistemas",
+      "date": "2026-06-07T15:06:39-03:00"
+    },
+    "is_ok": true
+  },
+  "/api/home/timeline": {
+    "status": 200,
+    "duration_ms": 9,
+    "zero_ghost_compliant": true,
+    "forbidden_word_found": null,
+    "payload_snippet": "{'status': 'ok', 'events': []}",
+    "full_payload": {
+      "status": "ok",
+      "events": []
+    },
+    "is_ok": true
+  },
+  "/api/home/alerts": {
+    "status": 200,
+    "duration_ms": 7,
+    "zero_ghost_compliant": true,
+    "forbidden_word_found": null,
+    "payload_snippet": "{'status': 'ok', 'total_unresolved': 0, 'items': []}",
+    "full_payload": {
+      "status": "ok",
+      "total_unresolved": 0,
+      "items": []
+    },
+    "is_ok": true
+  },
+  "/api/home/evidence": {
+    "status": 200,
+    "duration_ms": 23,
+    "zero_ghost_compliant": true,
+    "forbidden_word_found": null,
+    "payload_snippet": "{'status': 'ok', 'total': 18, 'items': [{'id': 18, 'description': 'Execu\u00e7\u00e3o real via ollama', 'path': 'D:\\\\FABRICA_DE_SISTEMAS\\\\19_RELATORIOS\\\\EVIDENCES\\\\MISSION_6_EVIDENCE_20260606T172400.md'}, {'id'...",
+    "full_payload": {
+      "status": "ok",
+      "total": 18,
+      "items": [
+        {
+          "id": 18,
+          "description": "Execu\u00e7\u00e3o real via ollama",
+          "path": "D:\\FABRICA_DE_SISTEMAS\\19_RELATORIOS\\EVIDENCES\\MISSION_6_EVIDENCE_20260606T172400.md"
+        },
+        {
+          "id": 17,
+          "description": "Execu\u00e7\u00e3o real via codex_sub",
+          "path": "D:\\FABRICA_DE_SISTEMAS\\19_RELATORIOS\\EVIDENCES\\MISSION_7_EVIDENCE_20260605T223611.md"
+        },
+        {
+          "id": 16,
+          "description": "Execu\u00e7\u00e3o real via codex_sub",
+          "path": "D:\\FABRICA_DE_SISTEMAS\\19_RELATORIOS\\EVIDENCES\\MISSION_6_EVIDENCE_20260605T223553.md"
+        },
+        {
+          "id": 15,
+          "description": "Execu\u00e7\u00e3o real via codex_sub",
+          "path": "D:\\FABRICA_DE_SISTEMAS\\19_RELATORIOS\\EVIDENCES\\MISSION_2_EVIDENCE_20260605T223333.md"
+        },
+        {
+          "id": 14,
+          "description": "Execu\u00e7\u00e3o real via openai",
+          "path": "D:\\FABRICA_DE_SISTEMAS\\19_RELATORIOS\\EVIDENCES\\MISSION_7_EVIDENCE_20260605T222209.md"
+        }
+      ]
+    },
+    "is_ok": true
+  }
+}
