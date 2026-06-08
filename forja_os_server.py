@@ -30,6 +30,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 from _compat_db import get_db, init_db
 import _compat_models as m
 
+# Importa a camada de autenticação
+sys.path.insert(0, str(Path(__file__).parent / "17_RUNTIME" / "auth"))
+from auth_service import router as auth_router, get_current_user, check_permissions
+
+
 # ── Logging ────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("forja_os")
@@ -55,6 +60,46 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
+
+# --- Middleware de Autenticação Global ---
+from fastapi.responses import JSONResponse
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    import os
+    from auth_service import FORJA_AUTH_REQUIRED, decode_token, is_session_revoked
+    from _compat_db import SessionLocal
+
+    if not FORJA_AUTH_REQUIRED:
+        return await call_next(request)
+
+    path = request.url.path
+    if not path.startswith("/api/") or path.startswith("/api/auth/login") or path.startswith("/api/health") or path == "/api/docs" or path == "/api/openapi.json":
+        return await call_next(request)
+
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return JSONResponse(status_code=401, content={"detail": "Token ausente ou invalido"})
+
+    token = auth_header.split(" ")[1]
+    db = SessionLocal()
+    try:
+        payload = decode_token(token)
+        jti = payload.get("jti")
+        if not jti or is_session_revoked(db, jti):
+            return JSONResponse(status_code=401, content={"detail": "Sessão revogada ou invalida"})
+        
+        # Injeta info de auth no request state
+        request.state.user = payload
+    except Exception as e:
+        db.close()
+        return JSONResponse(status_code=401, content={"detail": str(e)})
+    
+    db.close()
+    return await call_next(request)
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -205,6 +250,14 @@ def llm_providers():
             "allowed_for_agents": p.get("allowed_for_agents", False),
             "capabilities": p.get("capabilities", []),
             "notes": p.get("notes", ""),
+            "models": [
+                model for model in [
+                    p.get("model_id"),
+                    *p.get("fallback_model_ids", []),
+                ] if model
+            ],
+            "primary_model": p.get("model_id"),
+            "fallback_models": p.get("fallback_model_ids", []),
         }
 
         # Health real para Ollama — nunca simulado
@@ -474,6 +527,45 @@ def providers_test():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# HOME EXECUTIVE (REALITY ENGINE)
+# ══════════════════════════════════════════════════════════════════════════════
+sys.path.insert(0, str(Path(__file__).parent / "17_RUNTIME"))
+from reality_engine import reality_engine as re_facade
+
+@app.get("/api/home/overview")
+def home_overview(db: Session = Depends(get_db)):
+    return re_facade.get_overview(db)
+
+@app.get("/api/home/health")
+def home_health(db: Session = Depends(get_db)):
+    return re_facade.get_health(db)
+
+@app.get("/api/home/providers")
+def home_providers(db: Session = Depends(get_db)):
+    return re_facade.get_providers(db)
+
+@app.get("/api/home/missions")
+def home_missions(db: Session = Depends(get_db)):
+    return re_facade.get_missions(db)
+
+@app.get("/api/home/github")
+def home_github(db: Session = Depends(get_db)):
+    return re_facade.get_github(db)
+
+@app.get("/api/home/timeline")
+def home_timeline(db: Session = Depends(get_db)):
+    return re_facade.get_timeline(db)
+
+@app.get("/api/home/alerts")
+def home_alerts(db: Session = Depends(get_db)):
+    return re_facade.get_alerts(db)
+
+@app.get("/api/home/evidence")
+def home_evidence(db: Session = Depends(get_db)):
+    return re_facade.get_evidence(db)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # STATIC FILES — serve frontend buildado
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -510,6 +602,7 @@ else:
             {"error": "Frontend não buildado", "instrucao": "cd 16_SISTEMAS/FORJA_OS_PLATFORM && npm run build"},
             status_code=503,
         )
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
