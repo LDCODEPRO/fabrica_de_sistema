@@ -82,28 +82,14 @@ def _select_agent(conn, title):
     return name, agents.get(name)
 
 
-def _build_prompt(conn, mission, agent_name, agent_id):
-    skill_text = ""
-    if agent_id:
-        skill = conn.execute("SELECT skill_path FROM agent_skills WHERE agent_id = ?", (agent_id,)).fetchone()
-        if skill and skill["skill_path"]:
-            skill_path = ROOT / skill["skill_path"]
-            if skill_path.exists():
-                try:
-                    skill_text = skill_path.read_text(encoding="utf-8")
-                except Exception:
-                    pass
-
-    base = (
+def _build_prompt(mission, agent_name):
+    return (
         f"Você é o agente {agent_name} da Fábrica de Sistemas.\n"
         f"Missão {mission['id']}: {mission['title']}\n"
         f"Descrição: {mission['description'] or '(sem descrição)'}\n\n"
+        f"Produza um resultado operacional objetivo (máx. 8 linhas) com os passos "
+        f"executados e o status final. Responda em português."
     )
-    if skill_text:
-        base += f"--- INSTRUÇÕES GLOBAIS DO AGENTE (SKILL) ---\n{skill_text}\n-------------------------------------------\n\n"
-        
-    base += "Produza um resultado operacional objetivo (máx. 8 linhas) com os passos executados e o status final. Responda em português."
-    return base
 
 
 def run_mission(mission_id):
@@ -151,7 +137,7 @@ def run_mission(mission_id):
         _audit(conn, "MISSION_RUNNING", f"MIS-{mid:03d} agente={agent_name}")
 
         # Prompt + provider real (com fallback)
-        prompt = _build_prompt(conn, ms, agent_name, agent_id)
+        prompt = _build_prompt(ms, agent_name)
         llm = pr.execute_with_fallback(prompt, max_tokens=400)
         result["provider"] = llm.get("provider")
 
@@ -194,28 +180,6 @@ def run_mission(mission_id):
         )
         conn.commit()
         result["evidence_id"] = cur.lastrowid
-        
-        # Memória do Agente: banco
-        if agent_id:
-            now_str = datetime.utcnow().isoformat()
-            try:
-                conn.execute(
-                    "INSERT INTO agent_memories (agent_id, mission_id, content, created_at, updated_at) "
-                    "VALUES (?,?,?,?,?)",
-                    (agent_id, mid, llm["response"], now_str, now_str)
-                )
-                conn.commit()
-            except sqlite3.OperationalError:
-                pass # Em caso de tabela não existir (transição)
-            
-            # Memória cache temporária em arquivo
-            try:
-                cache_dir = ROOT / "20_AGENTS" / agent_name.lower() / "memory"
-                if cache_dir.exists():
-                    cache_file = cache_dir / f"cache_mid_{mid}.txt"
-                    cache_file.write_text(llm["response"], encoding="utf-8")
-            except Exception:
-                pass
 
         # COMPLETED
         conn.execute("UPDATE missions SET status='COMPLETED', updated_at=? WHERE id=?",

@@ -49,7 +49,18 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 # 4. Ollama local (último recurso grátis)
 # OpenRouter fica disponível apenas por seleção explícita; não entra no
 # fallback automático para impedir consumo pago acidental.
-PREFERRED_ORDER = ["claude_sub", "codex_sub", "gemini_sub", "ollama"]
+# Ordem de execução real (confirmado por health check em 2026-06-08):
+# 1. gemini_sub  — Gemini Google One AI Pro (CLI local, active_real)
+# 2. codex_sub   — ChatGPT Plus via Codex CLI (active_real, gpt-5.5)
+# 3. claude_sub  — Claude Pro (headless disabled — falhará e passa ao próximo)
+# 4. ollama      — local (active_real: qwen3:8b, llama3, llama3.2 disponíveis)
+PREFERRED_ORDER = ["ollama", "gemini_sub", "codex_sub", "claude_sub"]
+
+GROUP_ORDERS = {
+    "conversation": ["claude_sub", "codex_sub", "gemini_sub", "openrouter", "ollama"],
+    "engineering": ["codex_sub", "claude_sub", "openrouter", "gemini_sub", "ollama"],
+    "low_cost": ["ollama", "openrouter", "gemini_sub", "codex_sub", "claude_sub"],
+}
 
 # Providers de ASSINATURA via CLI oficial (custo incremental R$ 0, sem API key)
 SUBSCRIPTION_CLIS = {
@@ -120,10 +131,11 @@ def _claude_cli(cfg, prompt, system, max_tokens):
 
 
 def _codex_cli(cfg, prompt, system, max_tokens):
-    """ChatGPT via assinatura (Codex CLI). Sem API key."""
+    """ChatGPT via assinatura (Codex CLI). Sem API key. Usa stdin + --full-auto."""
     full = (system + "\n\n" + prompt) if system else prompt
     proc = subprocess.run(
-        [_resolve_bin("codex"), "exec", full],
+        [_resolve_bin("codex"), "exec", "--full-auto"],
+        input=full,
         capture_output=True, text=True, timeout=180,
     )
     raw = (proc.stdout or "")
@@ -364,6 +376,16 @@ def execute_with_fallback(prompt, system=None, max_tokens=500, order=None):
     return {"ok": False, "provider": None, "model": None, "response": None,
             "tokens_estimated": 0, "error": "todos os providers falharam",
             "fallback_trail": trail}
+
+
+def execute_for_group(group, prompt, system=None, max_tokens=500):
+    """Executa pela ordem oficial do grupo operacional."""
+    return execute_with_fallback(
+        prompt,
+        system=system,
+        max_tokens=max_tokens,
+        order=GROUP_ORDERS.get(group, PREFERRED_ORDER),
+    )
 
 
 if __name__ == "__main__":

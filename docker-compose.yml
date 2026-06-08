@@ -1,22 +1,29 @@
-version: '3.8'
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
+  operational_core:
+    build: .
+    container_name: operational_core
+    restart: always
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "8000:8000"
     volumes:
-      - ./nexus.db:/app/nexus.db
-      - ./19_RELATORIOS:/app/19_RELATORIOS
-    env_file:
-      - .env.production
-    restart: unless-stopped
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+      # SQLite persistency
+      - nexus_data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    ports:
-      - "80:80"
-    restart: unless-stopped
+volumes:
+  nexus_data:
