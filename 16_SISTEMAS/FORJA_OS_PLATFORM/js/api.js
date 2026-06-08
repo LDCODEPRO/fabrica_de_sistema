@@ -8,10 +8,18 @@
   const BASE = ''; // mesma origem (SPA servida pelo FastAPI)
 
   async function getJSON(path) {
+    const headers = { 'Accept': 'application/json' };
+    const token = localStorage.getItem('forja.token');
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
     const res = await fetch(BASE + path, {
-      headers: { 'Accept': 'application/json' },
+      headers: headers,
       credentials: 'same-origin',
     });
+    if (res.status === 401) {
+      window.dispatchEvent(new Event('unauthorized'));
+      throw new Error('HTTP 401 em ' + path);
+    }
     if (!res.ok) throw new Error('HTTP ' + res.status + ' em ' + path);
     return res.json();
   }
@@ -63,17 +71,28 @@
     const tipoMap = {
       subscription: 'Assinatura', local: 'Local', paid_api: 'API Paga',
     };
+    const statusMap = {
+      active_real: 'Ativa real',
+      unavailable: 'Indisponível',
+      inactive: 'Inativa',
+      missing_key: 'Bloqueada',
+      unknown: 'Não validada',
+    };
     return (providers || []).map(p => ({
       id: p.id,
       provider: p.display_name,
       modelos: p.models && p.models.length ? p.models : ['configurável'],
       tipo: tipoMap[p.provider_type] || p.provider_type,
       status: p.health_status || 'unknown',
+      statusLabel: statusMap[p.health_status] || p.health_status || 'Não validada',
       modoUso: p.automation_mode === 'assisted' ? 'Assistido'
-             : p.automation_mode === 'direct' ? 'Direto/Local' : '—',
+             : p.automation_mode === 'direct'
+               ? (p.provider_type === 'local' ? 'Direto/Local' : 'Direto')
+               : '—',
       automacao: p.automation_mode,
-      custoIncremental: (p.cost_incremental === 0 || p.cost_incremental === null)
-        ? 'R$ 0,00' : ('R$ ' + p.cost_incremental),
+      custoIncremental: p.cost_incremental === 0
+        ? 'R$ 0,00'
+        : p.provider_type === 'paid_api' ? 'Por consumo' : 'Não informado',
       billing: p.billing_mode,
       ultimoHealth: p.last_health_check || 'Não validado',
       observacao: p.notes || '',

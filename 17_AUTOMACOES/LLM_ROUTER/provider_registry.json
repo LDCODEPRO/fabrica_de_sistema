@@ -53,19 +53,19 @@
     },
     "gemini_advanced": {
       "provider_name": "gemini_advanced",
-      "display_name": "Gemini Advanced",
+      "display_name": "Gemini Google One AI Pro",
       "provider_type": "subscription",
-      "automation_mode": "assisted",
+      "automation_mode": "direct",
       "billing_mode": "fixed_subscription",
       "cost_incremental": 0,
       "requires_api_key": false,
       "requires_director_approval": false,
-      "health_status": "unknown",
-      "last_health_check": "",
-      "allowed_for_agents": false,
-      "model_id": "gemini-advanced",
+      "health_status": "active_real",
+      "last_health_check": "2026-06-06T15:46:00-03:00",
+      "allowed_for_agents": true,
+      "model_id": "gemini-subscription",
       "capabilities": ["research", "documentation", "multimodal", "analysis"],
-      "notes": "Assinatura/interface. Nao calcular custo por token."
+      "notes": "Assinatura Google One AI Pro validada por OAuth e resposta real via Gemini CLI. Sem custo incremental por token."
     },
     "ollama_local": {
       "provider_name": "ollama_local",
@@ -144,6 +144,27 @@
       "cost_per_1k_output": null,
       "notes": "API paga distinta de Gemini Advanced; bloqueada por padrao."
     },
+    "openrouter_api": {
+      "provider_name": "openrouter_api",
+      "display_name": "OpenRouter API",
+      "provider_type": "paid_api",
+      "automation_mode": "direct",
+      "billing_mode": "token_based",
+      "cost_incremental": null,
+      "requires_api_key": true,
+      "requires_director_approval": true,
+      "health_status": "active_real",
+      "last_health_check": "2026-06-06T15:55:00-03:00",
+      "allowed_for_agents": true,
+      "env_var": "OPENROUTER_API_KEY",
+      "base_url": "https://openrouter.ai/api/v1",
+      "model_id": "deepseek/deepseek-v4-pro",
+      "fallback_model_ids": ["moonshotai/kimi-k2.6"],
+      "capabilities": ["architecture", "coding", "reasoning", "audit", "fallback"],
+      "cost_per_1k_input": null,
+      "cost_per_1k_output": null,
+      "notes": "API paga agregadora. Ordem oficial: DeepSeek V4 Pro e depois Kimi K2.6. Uso requer aprovacao da Diretoria e Billing Guard."
+    },
     "deepseek_api": {
       "provider_name": "deepseek_api",
       "display_name": "DeepSeek API",
@@ -172,7 +193,7 @@
     "audit": ["deepseek_v4_pro", "claude_pro", "chatgpt_plus", "ollama_local"],
     "documentation": ["gemini_advanced", "claude_pro", "chatgpt_plus", "ollama_local"],
     "research": ["gemini_advanced", "chatgpt_plus", "deepseek_v4_pro", "ollama_local"],
-    "automation": ["ollama_local", "deepseek_api", "openai_api", "claude_api", "gemini_api"],
+    "automation": ["ollama_local", "openrouter_api"],
     "fallback": ["ollama_local"]
   }
 }

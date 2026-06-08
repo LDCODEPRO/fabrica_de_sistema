@@ -1,0 +1,20 @@
+{
+  "name": "forja-os-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FORJA OS - Sistema Operacional da Fabrica de Sistemas",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node tests/static-audit.mjs",
+    "serve": "node scripts/serve.mjs",
+    "validate": "npm run build && npm test"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.27.1"
+  }
+}

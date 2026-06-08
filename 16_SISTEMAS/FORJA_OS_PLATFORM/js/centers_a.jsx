@@ -30,174 +30,180 @@ function TileHead({ icon, title, badge, badgeClass, expandTo, setView }) {
   );
 }
 
-/* ===================== CENTRO DE COMANDOS ===================== */
+/* ===================== CENTRO DE COMANDOS (EXECUTIVE) ===================== */
 function FactoryCommandCenter({ setView }) {
-  const D = window.FORJA;
-  const running = D.missoes.filter(m => m.status === 'RUNNING');
-  const failed = D.missoes.filter(m => m.status === 'FAILED');
-  const online = D.agentes.filter(a => a.status === 'running');
-  const projAtivos = D.projetos.filter(p => p.status === 'building' || p.status === 'review');
-  const COLORS = ['var(--accent)','var(--info)','var(--violet)','var(--ok)','var(--text-3)','var(--warn)'];
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const fetchAll = async () => {
+      try {
+        const [overview, health, providers, missions, github, timeline, alerts, evidence] = await Promise.all([
+          window.ForjaAPI.getJSON('/api/home/overview'),
+          window.ForjaAPI.getJSON('/api/home/health'),
+          window.ForjaAPI.getJSON('/api/home/providers'),
+          window.ForjaAPI.getJSON('/api/home/missions'),
+          window.ForjaAPI.getJSON('/api/home/github'),
+          window.ForjaAPI.getJSON('/api/home/timeline'),
+          window.ForjaAPI.getJSON('/api/home/alerts'),
+          window.ForjaAPI.getJSON('/api/home/evidence')
+        ]);
+        if (active) {
+          setData({ overview, health, providers, missions, github, timeline, alerts, evidence });
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Failed to load Executive Center data:", err);
+      }
+    };
+    fetchAll();
+    return () => { active = false; };
+  }, []);
+
+  if (loading || !data) {
+    return (
+      <div className="center exec-center">
+        <CenterHeader icon="pulse" crumb="EXECUTIVE COMMAND" title="Executive Center" sub="Carregando arquitetura da Fábrica..." />
+        <div className="exec-grid" style={{padding: 24}}>
+           {[1,2,3,4,5,6].map(i => <div key={i} className="exec-card skeleton-pulse" style={{height: 140, borderRadius: 8}}></div>)}
+        </div>
+      </div>
+    );
+  }
+
+  // Lógica de Heath principal
+  const isHealthy = data.health?.runtime?.status === 'active' && data.health?.database?.status === 'disconnected';
+  const heroStatus = isHealthy ? 'Operacional' : (data.health?.database?.status === 'disconnected' ? 'Atenção' : 'Crítico');
+  const heroClass = isHealthy ? 'ok' : (data.health?.database?.status === 'disconnected' ? 'warn' : 'err');
 
   return (
-    <div className="center">
-      <CenterHeader icon="pulse" crumb="DIRETORIA · OPERAÇÃO DIÁRIA" title="Centro de Comandos"
-        sub="Gestão unificada da Fábrica · tempo real · todos os domínios em uma tela">
-        <div className="seg">
-          <button className="on">Ao vivo</button><button>Hoje</button><button>7d</button><button>30d</button>
-        </div>
-        <button className="btn"><Icon name="refresh" size={13} /></button>
-        <button className="btn primary"><Icon name="plus" size={13} /> Novo sistema</button>
-      </CenterHeader>
-
-      <div className="fcc">
-        {/* ---- KPI strip ---- */}
-        <div className="fcc-kpis">
-          {D.kpis.map(k => (
-            <div className="kpi fcc-kpi" key={k.id}>
-              <div className="kpi-label">{k.label}</div>
-              <div className="kpi-val">{k.valor}</div>
-              <div className="kpi-foot">
-                <span className={'kpi-delta ' + k.dir}>{k.delta}</span>
-                <span className="kpi-sub">{k.sub}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* ---- Row 1: Throughput | Cores | Alertas ---- */}
-        <div className="fcc-row">
-          <div className="panel fcc-tile">
-            <TileHead icon="activity" title="Produção · missões concluídas" badge="real" badgeClass="acc" />
-            <div className="panel-body fcc-body">
-              <div style={{display:'flex', alignItems:'baseline', gap:10, marginBottom:8}}>
-                <span style={{fontFamily:'var(--font-display)', fontSize:26, fontWeight:600}}>
-                  {D.missoes.filter(m=>m.status==='COMPLETED').length}</span>
-                <span className="muted" style={{fontSize:11}}>missões COMPLETED (banco real)</span>
-              </div>
-              <div className="muted" style={{fontSize:11}}>Série histórica: NÃO MONITORADA</div>
+    <div className="center exec-center scroll-y" style={{ background: 'var(--bg-0)' }}>
+      <CenterHeader icon="pulse" crumb="EXECUTIVE COMMAND" title="Executive Center" sub="Gestão unificada da Fábrica · Reality Engine" />
+      
+      <div className="exec-content" style={{ padding: '0 24px 24px' }}>
+        {/* SEÇÃO 1: HERO EXECUTIVO */}
+        <div className="exec-hero">
+          <div className="exec-hero-main">
+            <div className="exec-hero-label">Status da Fábrica</div>
+            <div className={`exec-hero-status status-${heroClass}`}>
+              <span className={`dot ${heroClass} blink`}></span> {heroStatus}
             </div>
           </div>
-          <div className="panel fcc-tile">
-            <TileHead icon="cpu" title="Saúde da Fábrica" badge={D.cores.filter(c=>c.status==='ok').length + '/' + D.cores.length} badgeClass="ok" expandTo="settings" setView={setView} />
-            <div className="panel-body fcc-body flush scroll-y">
-              {D.cores.map(c => (
-                <div className="health-row" key={c.id} style={{padding:'7px 14px'}}>
-                  <div className="health-name">
-                    <span className={'dot ' + (c.status==='ok'?'ok':'idle')} />
-                    <div style={{minWidth:0}}>
-                      <div className="nm truncate" style={{fontSize:12}}>{c.nome}</div>
-                    </div>
-                  </div>
-                  <div className="health-meta" style={{fontSize:11}}>{c.status==='ok'?'ativo':'não monitorado'}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="panel fcc-tile">
-            <TileHead icon="alert" title="Alertas Críticos" badge={D.governance.alertas.length} badgeClass="err" expandTo="audit" setView={setView} />
-            <div className="panel-body fcc-body flush scroll-y">
-              {D.governance.alertas.map((a, i) => (
-                <div key={i} className="fcc-alert">
-                  <span className={'pill ' + (a.nivel==='crítico'?'err':'warn')}>{a.tipo}</span>
-                  <span style={{fontSize:11.5, flex:1}}>{a.txt}</span>
-                </div>
-              ))}
-              {failed.length > 0 && failed.map(m => (
-                <div key={m.id} className="fcc-alert">
-                  <span className="pill err">missão</span>
-                  <span style={{fontSize:11.5, flex:1}}><span className="mono faint" style={{fontSize:10.5}}>{m.id}</span> {m.titulo}</span>
-                </div>
-              ))}
-            </div>
+          <div className="exec-hero-metrics">
+            <div className="exec-metric"><span>Projetos</span><strong>{data.overview.total_projects}</strong></div>
+            <div className="exec-metric"><span>Missões Ativas</span><strong>{data.overview.active_missions}</strong></div>
+            <div className="exec-metric"><span>Alertas</span><strong>{data.overview.system_alerts}</strong></div>
           </div>
         </div>
 
-        {/* ---- Linha 2: Missões | Equipe | Publicação ---- */}
-        <div className="fcc-row">
-          <div className="panel fcc-tile">
-            <TileHead icon="target" title="Missões em execução" badge={running.length} badgeClass="acc" expandTo="missions" setView={setView} />
-            <div className="panel-body fcc-body flush scroll-y">
-              {running.map(m => (
-                <div key={m.id} className="fcc-mis-row" onClick={()=>setView('missions')}>
-                  <span className={'prio ' + m.prio}>{m.prio}</span>
-                  <div style={{minWidth:0, flex:1}}>
-                    <div className="truncate" style={{fontSize:12, fontWeight:500}}>{m.titulo}</div>
-                    <div className="mono faint" style={{fontSize:10.5}}>{m.id} · {m.agente} · {m.llm}</div>
-                  </div>
-                  <div style={{textAlign:'right'}}>
-                    <div className="mono" style={{fontSize:11, color:'var(--accent-bright)'}}>{m.tempo}</div>
-                    <div className="mono faint" style={{fontSize:10}}>{m.etapa}/{m.etapas}</div>
-                  </div>
-                </div>
-              ))}
+        <div className="exec-grid">
+          {/* SEÇÃO 2: HEALTH CENTER */}
+          <div className="exec-card">
+            <div className="exec-card-head"><Icon name="cpu" size={14} /> <h3>Health Center</h3></div>
+            <div className="exec-card-body list-tight">
+              <div className="exec-row"><span className="label">Banco</span><span className={`exec-badge-${data.health.database?.status==='disconnected'?'ok':'warn'}`}>{data.health.database?.status || 'desconhecido'}</span></div>
+              <div className="exec-row"><span className="label">Runtime</span><span className={`exec-badge-${data.health.runtime?.status==='active'?'ok':'warn'}`}>{data.health.runtime?.status || 'inativo'}</span></div>
+              <div className="exec-row"><span className="label">Filesystem</span><span className={`exec-badge-${data.health.filesystem?.status==='writable'?'ok':'err'}`}>{data.health.filesystem?.status || 'readonly'}</span></div>
+              <div className="exec-row"><span className="label">Reality Engine</span><span className="exec-badge-ok">active</span></div>
             </div>
           </div>
-          <div className="panel fcc-tile">
-            <TileHead icon="cpu" title="Equipe Ativa" badge={online.length+'/'+D.agentes.length+' ativos'} badgeClass={online.length===D.agentes.length?'ok':'acc'} expandTo="agents" setView={setView} />
-            <div className="panel-body fcc-body flush scroll-y">
-              {D.agentes.map(a => (
-                <div key={a.id} className="fcc-agt-row" onClick={()=>setView('agents')}>
-                  <span className={'dot ' + (a.status==='running'?'ok':a.status==='blocked'?'err':'idle') + (a.status==='running'?' blink':'')} />
-                  <span className="mono" style={{fontSize:11, fontWeight:600, width:120, flex:'none'}}>{a.papel}</span>
-                  <span className="muted truncate" style={{fontSize:11, flex:1, minWidth:0}}>{a.missao}</span>
-                  <span className="mono faint" style={{fontSize:10}}>{a.tempoMedio}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="panel fcc-tile">
-            <TileHead icon="rocket" title="Publicações" badge="não monitorado" badgeClass="" expandTo="deploy" setView={setView} />
-            <div className="panel-body fcc-body">
-              <div className="muted" style={{fontSize:12, padding:'8px 0'}}>NÃO MONITORADO</div>
-              <div className="muted" style={{fontSize:11}}>Nenhuma publicação ou ambiente real conectado.</div>
-            </div>
-          </div>
-        </div>
 
-        {/* ---- Row 3: Custos | Auditoria | Projetos ---- */}
-        <div className="fcc-row">
-          <div className="panel fcc-tile">
-            <TileHead icon="dollar" title="Custo incremental IA" badge={'R$ '+D.custos.mensal} badgeClass="acc" expandTo="costs" setView={setView} />
-            <div className="panel-body fcc-body" style={{display:'flex', gap:14, alignItems:'center'}}>
-              <Donut value={D.custos.limite ? D.custos.mensal/D.custos.limite : 0} size={86} stroke={10} color="var(--accent)" label={D.custos.limite ? Math.round(D.custos.mensal/D.custos.limite*100)+'%' : 'R$ 0'} />
-              <div style={{flex:1, minWidth:0}} className="legend">
-                {D.custos.byLLM.slice(0,5).map((l,i)=>(
-                  <div className="legend-item" key={l.nome}>
-                    <span className="legend-sw" style={{background: l.cor}}/>
-                    <span className="truncate">{l.nome}</span>
-                    <span className="legend-val">R$ {l.custo.toFixed(2)}</span>
+          {/* SEÇÃO 3: LLM COMMAND CENTER */}
+          <div className="exec-card">
+            <div className="exec-card-head"><Icon name="zap" size={14} /> <h3>LLM Command Center</h3></div>
+            <div className="exec-card-body list-tight scroll-y" style={{maxHeight: 180}}>
+              {(data.providers.items || []).map(p => {
+                let pClass = p.status === 'certified' ? 'ok' : (p.status === 'environment_pending' ? 'warn' : 'err');
+                if (p.status === 'missing_implementation') pClass = 'neutral';
+                return (
+                  <div className="exec-row" key={p.name}>
+                    <span className="label" style={{textTransform:'capitalize'}}>{p.name.replace('_sub','')}</span>
+                    <span className={`exec-badge-${pClass}`}>{p.status.replace('_', ' ')}</span>
                   </div>
-                ))}
-              </div>
+                );
+              })}
+              {(!data.providers.items || data.providers.items.length === 0) && <div className="exec-empty">unavailable</div>}
             </div>
           </div>
-          <div className="panel fcc-tile">
-            <TileHead icon="shield" title="Auditoria · ao vivo" badge={<><span className="dot ok blink"/> registros</>} badgeClass="acc" expandTo="audit" setView={setView} />
-            <div className="panel-body fcc-body flush">
-              <div className="term" style={{border:'none', borderRadius:0, height:'100%', maxHeight:'none', overflow:'auto'}}>
-                {D.auditoria.slice(0,8).map(a=>(
-                  <div className="ln" key={a.id}>
-                    <span className="t">{a.ts.slice(0,5)}</span>
-                    <span className={'lv-'+(a.sev==='crítico'?'err':a.sev==='aviso'?'warn':'info')}>[{a.ator}] {a.acao} → {a.alvo}</span>
-                  </div>
-                ))}
-              </div>
+
+          {/* SEÇÃO 4: MISSION CENTER */}
+          <div className="exec-card">
+            <div className="exec-card-head"><Icon name="target" size={14} /> <h3>Mission Center</h3></div>
+            <div className="exec-card-body list-tight">
+               <div className="exec-row"><span className="label">Total de Missões</span><strong>{data.missions.total}</strong></div>
+               <div className="exec-row"><span className="label">Em Execução</span><strong>{data.missions.active}</strong></div>
+               <div className="exec-row"><span className="label">Concluídas</span><strong>{data.missions.completed}</strong></div>
+               <div className="exec-row"><span className="label">Com Erro</span><strong>{data.missions.error}</strong></div>
             </div>
           </div>
-          <div className="panel fcc-tile">
-            <TileHead icon="folder" title="Projetos ativos" badge={projAtivos.length} badgeClass="acc" expandTo="projects" setView={setView} />
-            <div className="panel-body fcc-body flush scroll-y">
-              {projAtivos.map(p=>(
-                <div key={p.id} className="fcc-prj-row" onClick={()=>setView('projects')}>
-                  <span className={'prio ' + p.prio}>{p.prio}</span>
-                  <div style={{minWidth:0, flex:1}}>
-                    <div className="truncate" style={{fontSize:12, fontWeight:500}}>{p.nome}</div>
-                    <div className="mono faint" style={{fontSize:10.5}}>{p.id} · {p.agenteResp}</div>
-                  </div>
-                  <div style={{width:80}}><Progress value={p.prog/100} color="var(--accent)" /><div className="mono" style={{fontSize:10, textAlign:'right', marginTop:2}}>{p.prog}%</div></div>
+
+          {/* SEÇÃO 5: GITHUB COMMAND CENTER */}
+          <div className="exec-card">
+            <div className="exec-card-head"><Icon name="git" size={14} /> <h3>GitHub Command</h3></div>
+            <div className="exec-card-body">
+              {data.github.status === 'ok' ? (
+                <div className="exec-git-block">
+                  <div className="exec-row"><span className="label">Branch</span><span className="mono">{data.github.branch}</span></div>
+                  <div className="exec-row"><span className="label">Autor</span><span className="truncate" style={{maxWidth:120}}>{data.github.author}</span></div>
+                  <div className="exec-row"><span className="label">Commit</span><span className="mono">{data.github.last_commit.substring(0,7)}</span></div>
+                  <div className="exec-msg">"{data.github.message}"</div>
                 </div>
-              ))}
+              ) : (
+                 <div className="exec-empty">unavailable</div>
+              )}
+            </div>
+          </div>
+
+          {/* SEÇÃO 7: ALERT CENTER */}
+          <div className="exec-card">
+            <div className="exec-card-head"><Icon name="alert" size={14} /> <h3>Alert Center</h3></div>
+            <div className="exec-card-body list-tight scroll-y" style={{maxHeight: 180}}>
+              <div className="exec-row" style={{marginBottom: 8}}><span className="label">Não resolvidos</span><strong style={{color: data.alerts.total_unresolved > 0 ? 'var(--exec-err)' : 'inherit'}}>{data.alerts.total_unresolved}</strong></div>
+              {(data.alerts.items || []).length > 0 ? (
+                 (data.alerts.items).map((a, i) => (
+                   <div className="exec-row" key={i}><span className="label">{a.severity}</span><span className="truncate">{a.message}</span></div>
+                 ))
+              ) : (
+                 <div className="exec-empty" style={{marginTop: 10}}>Nenhum alerta ativo.</div>
+              )}
+            </div>
+          </div>
+
+          {/* SEÇÃO 8: EVIDENCE CENTER */}
+          <div className="exec-card">
+            <div className="exec-card-head"><Icon name="file" size={14} /> <h3>Evidence Center</h3></div>
+            <div className="exec-card-body list-tight scroll-y" style={{maxHeight: 180}}>
+              {(data.evidence.items || []).length > 0 ? (
+                 data.evidence.items.slice(0, 5).map((e) => (
+                   <div className="exec-evidence-row" key={e.id}>
+                     <div className="truncate" style={{fontSize: 12}}>{e.description}</div>
+                     <div className="mono faint" style={{fontSize: 10, marginTop: 3}}>{e.path.split('\\\\').pop().split('/').pop()}</div>
+                   </div>
+                 ))
+              ) : (
+                 <div className="exec-empty">Nenhuma evidência registrada.</div>
+              )}
+            </div>
+          </div>
+
+          {/* SEÇÃO 6: TIMELINE OPERACIONAL */}
+          <div className="exec-card" style={{gridColumn: '1 / -1'}}>
+            <div className="exec-card-head"><Icon name="activity" size={14} /> <h3>Timeline Operacional</h3></div>
+            <div className="exec-card-body scroll-y" style={{maxHeight: 200}}>
+              {(data.timeline.events || []).length > 0 ? (
+                 <div className="exec-timeline">
+                   {data.timeline.events.map((ev, i) => (
+                     <div className="exec-timeline-item" key={i}>
+                       <span className="time">{ev.time}</span>
+                       <span className={`badge exec-badge-neutral`}>{ev.source}</span>
+                       <span className="msg">{ev.event}</span>
+                     </div>
+                   ))}
+                 </div>
+              ) : (
+                 <div className="exec-empty" style={{padding: '20px 0'}}>Nenhuma atividade registrada.</div>
+              )}
             </div>
           </div>
         </div>
@@ -205,6 +211,7 @@ function FactoryCommandCenter({ setView }) {
     </div>
   );
 }
+
 
 /* ===================== CENTRAL DE PROJETOS (V2) ===================== */
 function ProjectCenter({ setView }) {
