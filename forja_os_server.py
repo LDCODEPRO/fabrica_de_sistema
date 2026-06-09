@@ -243,6 +243,40 @@ def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
     }
 
 # ══════════════════════════════════════════════════════════════════════════════
+# CHAT STATUS (health check real — sem textos fantasma)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/chat/status")
+def chat_status():
+    """Retorna status REAL dos providers disponíveis para o chat.
+    ZERO GHOST: só reporta 'online' se houver provider certificado de verdade."""
+    import provider_router as pr
+
+    available = []
+    unavailable = []
+    for prov in pr.PREFERRED_ORDER:
+        st = pr.provider_status(prov)
+        healthy = pr._is_provider_healthy(prov)
+        cfg = pr.PROVIDER_CONFIG.get(prov, {})
+        label = pr.SUBSCRIPTION_CLIS.get(prov, {}).get("label", cfg.get("model", prov))
+        entry = {"id": prov, "label": label, "configured": st == "CONFIGURADO", "healthy": healthy}
+        if st == "CONFIGURADO" and healthy:
+            available.append(entry)
+        else:
+            entry["reason"] = "não configurado" if st != "CONFIGURADO" else "health indisponível"
+            unavailable.append(entry)
+
+    online = len(available) > 0
+    return {
+        "online": online,
+        "status_text": f"{len(available)} provider(s) disponível(is)" if online else "Nenhum provider disponível",
+        "available": available,
+        "unavailable": unavailable,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # MISSIONS
 # ══════════════════════════════════════════════════════════════════════════════
 

@@ -144,7 +144,7 @@ def _claude_cli(cfg, prompt, system, max_tokens):
     
     proc = subprocess.run(
         args,
-        capture_output=True, text=True, encoding='utf-8'
+        capture_output=True, text=True, encoding='utf-8', errors='replace'
     )
     out = (proc.stdout or "").strip()
     err = (proc.stderr or "").strip()
@@ -162,7 +162,7 @@ def _codex_cli(cfg, prompt, system, max_tokens):
     script = cfg["python_script"]
     proc = subprocess.run(
         ["python", script, full],
-        capture_output=True, text=True, timeout=50, encoding='utf-8'
+        capture_output=True, text=True, timeout=50, encoding='utf-8', errors='replace'
     )
     raw = (proc.stdout or "")
     if proc.returncode != 0 and not raw.strip():
@@ -176,7 +176,7 @@ def _gemini_cli(cfg, prompt, system, max_tokens):
     script = cfg["python_script"]
     proc = subprocess.run(
         ["python", script, full],
-        capture_output=True, text=True, timeout=50, encoding='utf-8'
+        capture_output=True, text=True, timeout=50, encoding='utf-8', errors='replace'
     )
     raw = (proc.stdout or "").strip()
     err = (proc.stderr or "").strip()

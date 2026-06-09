@@ -1,5 +1,5 @@
 # LLM_PROVIDER_VALIDATION_REPORT
-**Gerado:** 2026-06-09T04:12:54.344545
+**Gerado:** 2026-06-09T04:30:24.085412
 
 | Provider | Status | Motivo |
 |----------|--------|--------|

@@ -65,13 +65,12 @@
 
   /* ---- LLMs (ativos e em sequência prioritária) ---- */
   const llms = [
-    { id: 'claude',   nome: 'Claude',    modelo: 'Claude 3.5 Sonnet',     status: 'IMPL',   ativo: true,  conexao: ['API Anthropic (Ativo)'],        ultimoTeste: 'agora', latencia: '120ms', custo: '0.00', uso: 'Principal' },
-    { id: 'openai',   nome: 'OpenAI',    modelo: 'GPT-4o / O1',           status: 'IMPL',   ativo: true,  conexao: ['API OpenAI (Ativo)'],           ultimoTeste: 'agora', latencia: '150ms', custo: '0.00', uso: 'Fallback 1' },
-    { id: 'gemini',   nome: 'Gemini',    modelo: 'Gemini 2.0 Pro',        status: 'IMPL',   ativo: true,  conexao: ['API Google AI (Ativo)'],        ultimoTeste: 'agora', latencia: '180ms', custo: '0.00', uso: 'Fallback 2' },
-    { id: 'deepseek', nome: 'DeepSeek',  modelo: 'DeepSeek V4 Pro',       status: 'IMPL',   ativo: true,  conexao: ['API DeepSeek (Ativo)'],         ultimoTeste: 'agora', latencia: '200ms', custo: '0.00', uso: 'Fallback 3' },
-    { id: 'kimi',     nome: 'Kimi',      modelo: 'Kimi 2.6',              status: 'IMPL',   ativo: true,  conexao: ['API Moonshot/Kimi (Ativo)'],    ultimoTeste: 'agora', latencia: '190ms', custo: '0.00', uso: 'Fallback 4' },
-    { id: 'openrouter',nome:'OpenRouter',modelo: 'Multi-modelo',          status: 'IMPL',   ativo: true,  conexao: ['API OpenRouter (Ativo)'],       ultimoTeste: 'agora', latencia: '250ms', custo: '0.00', uso: 'Agregador Multi-LLM' },
-    { id: 'ollama',   nome: 'Ollama',    modelo: 'Local (Offline)',       status: 'OFFLINE', ativo: false, conexao: ['Servidor Local (Desligado)'],  ultimoTeste: '—',     latencia: '—',     custo: '—',    uso: 'Localhost' },
+    { id: 'claude',   nome: 'Claude',    modelo: 'Claude Pro',            status: 'IMPL',   ativo: true,  conexao: ['Assinatura/CLI'],               ultimoTeste: 'agora', latencia: '120ms', custo: '0.00', uso: 'Principal', tipo: 'Assinatura', modoUso: 'Assistido', automacao: 'assisted', custoIncremental: 0, billing: 'Pago', ultimoHealth: 'agora', observacao: 'Uso via assinatura local' },
+    { id: 'openai',   nome: 'OpenAI',    modelo: 'ChatGPT Plus',          status: 'IMPL',   ativo: true,  conexao: ['Assinatura/CLI'],               ultimoTeste: 'agora', latencia: '150ms', custo: '0.00', uso: 'Fallback 1', tipo: 'Assinatura', modoUso: 'Assistido', automacao: 'assisted', custoIncremental: 0, billing: 'Pago', ultimoHealth: 'agora', observacao: 'Uso via assinatura local' },
+    { id: 'gemini',   nome: 'Gemini',    modelo: 'Gemini Advanced',       status: 'IMPL',   ativo: true,  conexao: ['Assinatura/CLI'],               ultimoTeste: 'agora', latencia: '180ms', custo: '0.00', uso: 'Fallback 2', tipo: 'Assinatura', modoUso: 'Direto', automacao: 'direct', custoIncremental: 0, billing: 'Pago', ultimoHealth: 'agora', observacao: 'Uso via assinatura local' },
+    { id: 'ollama',   nome: 'Ollama',    modelo: 'Local (Offline)',       status: 'OFFLINE', ativo: false, conexao: ['Servidor Local (Desligado)'],  ultimoTeste: '—',     latencia: '—',     custo: '—',    uso: 'Localhost', tipo: 'Local', modoUso: 'Direto', automacao: 'direct', custoIncremental: 0, billing: 'Gratuito', ultimoHealth: '—', observacao: 'Sem custo incremental' },
+    { id: 'deepseek_api', nome: 'DeepSeek API', modelo: 'DeepSeek Chat',  status: 'BLOCK',  ativo: false, conexao: ['API Paga'],                     ultimoTeste: '—',     latencia: '—',     custo: '—',    uso: 'Bloqueada', tipo: 'API Paga', modoUso: 'Direto', automacao: 'direct', custoIncremental: null, billing: 'Bloqueada', ultimoHealth: 'Sem chave validada', observacao: 'Requer chave e aprovação' },
+    { id: 'openai_api',   nome: 'OpenAI API',   modelo: 'gpt-4o-mini',      status: 'BLOCK',  ativo: false, conexao: ['API Paga'],                     ultimoTeste: '—',     latencia: '—',     custo: '—',    uso: 'Bloqueada', tipo: 'API Paga', modoUso: 'Direto', automacao: 'direct', custoIncremental: null, billing: 'Bloqueada', ultimoHealth: 'Sem chave validada', observacao: 'Requer chave e aprovação' },
   ];
 
   /* ---- ferramentas (classificação honesta) ---- */
@@ -717,11 +716,32 @@ function HomeWorkspace({ setView }) {
   const [msgs, setMsgs] = useState(D.chatSeed || []);
   const [draft, setDraft] = useState('');
   const [pane, setPane] = useState('preview'); // preview | arquivos | terminal
+  const [chatStatus, setChatStatus] = useState({ online: null, status_text: 'Verificando...', available: [] });
   const bodyRef = useRef(null);
   const teamObj = teams.find(t=>t.id===team) || teams[0] || {};
   const llmObj = (D.llms || []).find(l=>l.id===llm) || (D.llms || [])[0] || {};
 
   useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [msgs]);
+
+  // Health check real ao montar e a cada 60s
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const res = await fetch('/api/chat/status');
+        if (res.ok) {
+          const data = await res.json();
+          setChatStatus(data);
+        } else {
+          setChatStatus({ online: false, status_text: 'Backend indisponível', available: [] });
+        }
+      } catch {
+        setChatStatus({ online: false, status_text: 'Sem conexão com o servidor', available: [] });
+      }
+    };
+    checkStatus();
+    const interval = setInterval(checkStatus, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const send = async () => {
     const t = draft.trim(); if (!t) return;
@@ -740,6 +760,14 @@ function HomeWorkspace({ setView }) {
       });
       const data = await res.json();
       
+      if (!res.ok) {
+        setMsgs(m => {
+          const withoutLoading = m.filter(msg => msg.id !== loadingId);
+          return [...withoutLoading, { de:'sistema', preview:true, error:true, txt: data.detail || 'Erro ' + res.status + ' — verifique os providers.' }];
+        });
+        return;
+      }
+
       setMsgs(m => {
         const withoutLoading = m.filter(msg => msg.id !== loadingId);
         return [...withoutLoading, {
@@ -752,10 +780,14 @@ function HomeWorkspace({ setView }) {
     } catch (err) {
       setMsgs(m => {
         const withoutLoading = m.filter(msg => msg.id !== loadingId);
-        return [...withoutLoading, { de:'sistema', preview:true, error:true, txt: 'Erro ao conectar com o Agentic Core.' }];
+        return [...withoutLoading, { de:'sistema', preview:true, error:true, txt: 'Erro de rede ao conectar com o backend.' }];
       });
     }
   };
+
+  // Indicador visual baseado no status real
+  const statusColor = chatStatus.online === null ? 'var(--warn)' : chatStatus.online ? 'var(--ok)' : 'var(--err, #e55)';
+  const statusDotClass = chatStatus.online === null ? 'pulse' : '';
 
   return (
     <div className="ws">
@@ -785,7 +817,7 @@ function HomeWorkspace({ setView }) {
           <div className="ws-chat-head">
             <Icon name="chat" size={14} style={{color:'var(--accent-bright)'}}/>
             <span style={{fontWeight:600,fontSize:13}}>Chat operacional</span>
-            <span className="pill" style={{marginLeft:'auto'}}><span className="zg-dot" style={{background:'var(--ok)'}}/> LLMs Online</span>
+            <span className="pill" style={{marginLeft:'auto'}}><span className={'zg-dot ' + statusDotClass} style={{background: statusColor}}/> {chatStatus.status_text}</span>
           </div>
 
           <div className="ws-chat-body scroll-y" ref={bodyRef}>
@@ -825,7 +857,7 @@ function HomeWorkspace({ setView }) {
                 onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();} }} />
               <button className="btn primary icon" onClick={send} title="Enviar"><Icon name="send" size={14}/></button>
             </div>
-            <div className="ws-hint">Roteia para <b>{teamObj.nome || 'Agente'}</b> via <b>{llmObj.nome || llmObj.provider || 'Padrão'}</b> · <span className="faint" style={{color:'var(--ok)'}}>Online e pronto</span></div>
+            <div className="ws-hint">Roteia para <b>{teamObj.nome || 'Agente'}</b> via <b>{llmObj.nome || llmObj.provider || 'Padrão'}</b> · <span className="faint" style={{color: statusColor}}>{chatStatus.online ? 'Pronto' : chatStatus.online === null ? 'Verificando...' : 'Offline'}</span></div>
           </div>
         </section>
 
@@ -857,7 +889,7 @@ function HomeWorkspace({ setView }) {
                 <div className="ln"><span className="t">$</span><span className="lv-acc">fabrica status</span></div>
                 <div className="ln"><span className="t"> </span><span className="lv-info">plataforma: A FÁBRICA · build dev</span></div>
                 <div className="ln"><span className="t"> </span><span className="lv-ok">workspace: pronto</span></div>
-                <div className="ln"><span className="t"> </span><span className="lv-ok">llms: conectadas e roteadas</span></div>
+                <div className="ln"><span className="t"> </span><span className={chatStatus.online ? 'lv-ok' : 'lv-warn'}>llms: {chatStatus.online ? chatStatus.status_text : 'verificando ou indisponível'}</span></div>
                 <div className="ln"><span className="t"> </span><span className="lv-warn">runtime: em desenvolvimento</span></div>
                 <div className="ln"><span className="t"> </span><span className="lv-info">zero-ghost: ativo · 0 violações</span></div>
                 <div className="ln"><span className="t">$</span><span className="lv-acc blink">_</span></div>
@@ -887,6 +919,7 @@ function HomeWorkspace({ setView }) {
 }
 
 Object.assign(window, { HomeWorkspace, FileTree });
+
 
 
 /* ============================================================
