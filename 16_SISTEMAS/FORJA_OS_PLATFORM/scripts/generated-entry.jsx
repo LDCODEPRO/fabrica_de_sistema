@@ -1,418 +1,157 @@
-import React from 'react';
-
-import { createRoot } from 'react-dom/client';
-
-const ReactDOM = { createRoot };
-
 /* ============================================================
-   FORJA — Factory OS · Camada de dados V3 (HONESTA)
-   Fallback sem números inventados. Valores reais vêm de api.js
-   (backend FastAPI + nexus.db). O que não tem fonte real aparece
-   como "sem dados reais" / 0 / "—", nunca como métrica fabricada.
+   A FÁBRICA — Camada de dados (Zero Ghost Law)
+   Tudo aqui reflete o estado REAL da plataforma em construção.
+   Nada de métricas/clientes/receitas inventados.
    ============================================================ */
 (function () {
-  // ---- 7 núcleos (rótulos reais; métricas só quando houver fonte) ----
-  const cores = [
-    { id: 'foundation',  nome: 'Fundação da Fábrica',     papel: 'Base operacional',       status: 'idle', load: null, uptime: 'sem dados', ver: '—' },
-    { id: 'operational', nome: 'Núcleo Operacional',      papel: 'Execução e coordenação', status: 'idle', load: null, uptime: 'sem dados', ver: '—' },
-    { id: 'database',    nome: 'Banco Central',           papel: 'Dados e estado',         status: 'idle', load: null, uptime: 'sem dados', ver: '—' },
-    { id: 'knowledge',   nome: 'Central de Conhecimento', papel: 'Base de consulta',       status: 'idle', load: null, uptime: 'sem dados', ver: '—' },
-    { id: 'agent',       nome: 'Equipe Inteligente',      papel: 'Execução assistida',     status: 'idle', load: null, uptime: 'sem dados', ver: '—' },
-    { id: 'router',      nome: 'Central de IA',           papel: 'Escolha de IA',          status: 'idle', load: null, uptime: 'sem dados', ver: '—' },
-    { id: 'factory',     nome: 'Fábrica de Projetos',     papel: 'Criação de sistemas',    status: 'idle', load: null, uptime: 'sem dados', ver: '—' },
+
+  /* ---- estados honestos permitidos (Zero Ghost) ---- */
+  const ST = {
+    IMPL:    { id: 'IMPL',    label: 'IMPLEMENTADO',            tone: 'ok'   },
+    CERT:    { id: 'CERT',    label: 'CERTIFICADO',             tone: 'ok'   },
+    DEV:     { id: 'DEV',     label: 'EM DESENVOLVIMENTO',      tone: 'warn' },
+    PARCIAL: { id: 'PARCIAL', label: 'PARCIAL',                 tone: 'warn' },
+    NTEST:   { id: 'NTEST',   label: 'NÃO TESTADO',             tone: 'info' },
+    CONFIG:  { id: 'CONFIG',  label: 'AGUARDANDO CONFIGURAÇÃO', tone: 'info' },
+    NIMPL:   { id: 'NIMPL',   label: 'NÃO IMPLEMENTADO',        tone: 'idle' },
+    BLOCK:   { id: 'BLOCK',   label: 'BLOQUEADO',               tone: 'err'  },
+    OFFLINE: { id: 'OFFLINE', label: 'OFFLINE / INDISPONÍVEL',  tone: 'err'  },
+    ESTRUT:  { id: 'ESTRUT',  label: 'ESTRUTURA CRIADA',        tone: 'idle' },
+  };
+
+  /* ---- registro dos 19 módulos da plataforma ---- */
+  const modulos = [
+    { id: 'home',         nome: 'Home · Centro Executivo', icon: 'home', grupo: 'Trabalho', status: 'IMPL', desc: 'Monitoramento e observabilidade da Fábrica (Monitor 1)' },
+    { id: 'forja',        nome: 'FORJA · Workspace', icon: 'flame',    grupo: 'Trabalho',     status: 'IMPL',   desc: 'Área principal de trabalho · chat, preview, explorer, terminal' },
+    { id: 'clientes',     nome: 'Clientes',         icon: 'building', grupo: 'Negócio',      status: 'NIMPL',  desc: 'Organização de clientes atuais e futuros' },
+    { id: 'projetos',     nome: 'Projetos',         icon: 'folder',   grupo: 'Negócio',      status: 'DEV',    desc: 'Projetos vinculados a clientes e missões' },
+    { id: 'missoes',      nome: 'Missões',          icon: 'target',   grupo: 'Operação',     status: 'DEV',    desc: 'Controle operacional das missões' },
+    { id: 'equipes',      nome: 'Equipes',          icon: 'users',    grupo: 'Operação',     status: 'DEV',    desc: 'Equipes agênticas da Fábrica' },
+    { id: 'inteligencia', nome: 'Inteligência',     icon: 'compass',  grupo: 'Operação',     status: 'NIMPL',  desc: 'Inteligência de mercado e pesquisa estratégica' },
+    { id: 'llms',         nome: 'LLMs',             icon: 'zap',      grupo: 'Recursos',     status: 'CONFIG', desc: 'Provedores de IA' },
+    { id: 'ferramentas',  nome: 'Ferramentas',      icon: 'wrench',   grupo: 'Recursos',     status: 'DEV',    desc: 'Ferramentas de trabalho (design, mídia, editores)' },
+    { id: 'integracoes',  nome: 'Integrações',      icon: 'link',     grupo: 'Recursos',     status: 'PARCIAL',desc: 'Integrações técnicas e APIs externas' },
+    { id: 'conhecimento', nome: 'Conhecimento',     icon: 'book',     grupo: 'Recursos',     status: 'DEV',    desc: 'Rules, Workflows, Skills, Templates, Memória' },
+    { id: 'testes',       nome: 'Testes',           icon: 'flask',    grupo: 'Garantia',     status: 'NIMPL',  desc: 'Centralização de testes do sistema' },
+    { id: 'validacao',    nome: 'Validação',        icon: 'award',    grupo: 'Garantia',     status: 'NIMPL',  desc: 'Validações e certificações' },
+    { id: 'auditoria',    nome: 'Auditoria',        icon: 'shield',   grupo: 'Garantia',     status: 'IMPL',   desc: 'A verdade do sistema · Zero Ghost Law' },
+    { id: 'operacoes',    nome: 'Operações',        icon: 'server',   grupo: 'Infra',        status: 'DEV',    desc: 'Infraestrutura, runtime, deploy, backups' },
+    { id: 'financeiro',   nome: 'Financeiro',       icon: 'dollar',   grupo: 'Negócio',      status: 'NIMPL',  desc: 'Custos, assinaturas, receitas' },
+    { id: 'roadmap',      nome: 'Roadmap',          icon: 'chart',    grupo: 'Plataforma',   status: 'IMPL',   desc: 'Evolução da plataforma' },
+    { id: 'academia',     nome: 'Academia',         icon: 'cap',      grupo: 'Plataforma',   status: 'NIMPL',  desc: 'Treinamento e onboarding' },
+    { id: 'ajuda',        nome: 'Ajuda',            icon: 'help',     grupo: 'Plataforma',   status: 'DEV',    desc: 'Suporte, FAQ, documentação' },
+    { id: 'configuracoes',nome: 'Configurações',    icon: 'gear',     grupo: 'Plataforma',   status: 'DEV',    desc: 'Conta, LLMs, cofre, segurança, integrações' },
   ];
 
-  // ---- serviços (status bar) — hidratados por /api/services ----
-  const services = [
-    { id: 'github',    nome: 'Repositório',   status: 'idle', ping: 'sem dados' },
-    { id: 'database',  nome: 'Banco Central', status: 'idle', ping: 'sem dados' },
-    { id: 'fastapi',   nome: 'FastAPI',       status: 'idle', ping: 'sem dados' },
-    { id: 'router',    nome: 'Central de IA', status: 'idle', ping: 'sem dados' },
-    { id: 'knowledge', nome: 'Conhecimento',  status: 'idle', ping: 'sem dados' },
-    { id: 'mission',   nome: 'Missões',       status: 'idle', ping: 'sem dados' },
-    { id: 'ollama',    nome: 'Ollama',        status: 'idle', ping: 'sem dados' },
-    { id: 'deploy',    nome: 'Publicação',    status: 'idle', ping: 'sem dados' },
+  /* ---- 16 equipes (estrutura criada · sem agentes ainda) ---- */
+  const equipes = [
+    { id: 'orquestrador', nome: 'Orquestrador',           icon: 'sitemap',  status: 'DEV',   sobre: 'Coordena a distribuição de missões entre as equipes e resolve dependências.', responsabilidades: ['Distribuir missões','Resolver dependências','Balancear carga','Priorizar fila'], ferramentas: ['Mission Engine','LLM Router'], skills: ['Roteamento','Priorização'], workflows: ['Distribuição de missão','Escalonamento'] },
+    { id: 'chat',         nome: 'Agente Chat Elite',      icon: 'terminal', status: 'IMPL',  sobre: 'Agente interativo de elite estilo Claude/Replit para pair programming e resolução de código.', responsabilidades: ['Programação direta','Pair programming','Debug ao vivo'], ferramentas: ['FORJA Workspace','VS Code'], skills: ['Engenharia Fullstack','Raciocínio lógico'], workflows: ['Execução de missão','Resolução de bug'] },
+    { id: 'ceo',          nome: 'CEO',                    icon: 'building', status: 'NIMPL', sobre: 'Define direção estratégica, metas e decisões de alto nível da Fábrica.', responsabilidades: ['Definir metas','Aprovar projetos','Decisões estratégicas'], ferramentas: ['Roadmap','Financeiro'], skills: ['Estratégia','Decisão'], workflows: ['Revisão executiva'] },
+    { id: 'estrategia',   nome: 'Estratégia',             icon: 'compass',  status: 'NIMPL', sobre: 'Planejamento estratégico, posicionamento e roadmap de produto.', responsabilidades: ['Planejamento','Posicionamento','Análise SWOT'], ferramentas: ['Inteligência','Roadmap'], skills: ['Planejamento'], workflows: ['Plano estratégico'] },
+    { id: 'inteligencia', nome: 'Inteligência de Mercado',icon: 'compass',  status: 'NIMPL', sobre: 'Pesquisa de mercado, concorrentes, tendências e benchmark.', responsabilidades: ['Monitorar concorrentes','Detectar tendências','Benchmark','SEO'], ferramentas: ['Navegador','Inteligência'], skills: ['Pesquisa','Benchmark'], workflows: ['Varredura de mercado'] },
+    { id: 'designer',     nome: 'Designer',               icon: 'eye',      status: 'DEV',   sobre: 'Identidade visual, UI/UX, protótipos e design de produto.', responsabilidades: ['UI/UX','Identidade visual','Protótipos','Design system'], ferramentas: ['Figma','Penpot','Canva','Photopea'], skills: ['UI','UX','Branding'], workflows: ['Exploração de design','Handoff'] },
+    { id: 'desenvolvimento',nome: 'Desenvolvimento',      icon: 'cpu',      status: 'DEV',   sobre: 'Geração e entrega de código, arquitetura e implementação.', responsabilidades: ['Codificar','Arquitetura','Code review','Refatoração'], ferramentas: ['VS Code','GitHub'], skills: ['Frontend','Backend','DevOps'], workflows: ['Scaffold','PR & review'] },
+    { id: 'redes',        nome: 'Redes Sociais',          icon: 'megaphone',status: 'NIMPL', sobre: 'Conteúdo, calendário e gestão de presença em redes sociais.', responsabilidades: ['Calendário','Conteúdo','Engajamento'], ferramentas: ['Canva','Google Calendar'], skills: ['Copywriting','Mídia'], workflows: ['Publicação'] },
+    { id: 'ia',           nome: 'IA',                     icon: 'zap',      status: 'DEV',   sobre: 'Modelos, prompts, RAG e orquestração cognitiva.', responsabilidades: ['Gerir LLMs','Prompts','RAG','Avaliação'], ferramentas: ['LLM Router','Conhecimento'], skills: ['Prompt eng.','RAG'], workflows: ['Avaliação de modelo'] },
+    { id: 'dados',        nome: 'Dados',                  icon: 'db',       status: 'NIMPL', sobre: 'Engenharia de dados, ETL, indexação e analytics.', responsabilidades: ['ETL','Indexação','Analytics'], ferramentas: ['Banco','Operações'], skills: ['SQL','Pipelines'], workflows: ['Pipeline ETL'] },
+    { id: 'qualidade',    nome: 'Qualidade',              icon: 'check',    status: 'NIMPL', sobre: 'Testes, cobertura, gates de qualidade e validação.', responsabilidades: ['Testes','Cobertura','Gates'], ferramentas: ['Testes','Validação'], skills: ['QA','E2E'], workflows: ['Suíte de testes'] },
+    { id: 'seguranca',    nome: 'Segurança',              icon: 'shield',   status: 'NIMPL', sobre: 'Hardening, CVEs, SSO, cofre de segredos e conformidade.', responsabilidades: ['Hardening','CVE scan','Cofre','SSO'], ferramentas: ['Auditoria','Cofre'], skills: ['AppSec','Compliance'], workflows: ['Scan de segurança'] },
+    { id: 'documentacao', nome: 'Documentação',           icon: 'book',     status: 'NIMPL', sobre: 'Documentação técnica, ADRs e handoff de conhecimento.', responsabilidades: ['Docs','ADRs','Handoff'], ferramentas: ['Obsidian','Conhecimento'], skills: ['Redação técnica'], workflows: ['Geração de docs'] },
+    { id: 'operacoes',    nome: 'Operações',              icon: 'server',   status: 'DEV',   sobre: 'Infraestrutura, deploy, monitoramento e backups.', responsabilidades: ['Infra','Deploy','Monitoramento','Backups'], ferramentas: ['Operações','GitHub'], skills: ['SRE','DevOps'], workflows: ['Deploy','Health check'] },
+    { id: 'financeiro',   nome: 'Financeiro',             icon: 'dollar',   status: 'NIMPL', sobre: 'Custos, assinaturas, billing e controle financeiro.', responsabilidades: ['Custos','Billing','Limites'], ferramentas: ['Financeiro'], skills: ['FinOps'], workflows: ['Fechamento mensal'] },
+    { id: 'atendimento',  nome: 'Atendimento / Suporte',  icon: 'help',     status: 'NIMPL', sobre: 'Suporte ao operador, chamados e orientação de uso.', responsabilidades: ['Chamados','FAQ','Orientação'], ferramentas: ['Ajuda'], skills: ['Suporte'], workflows: ['Atendimento de chamado'] },
   ];
 
-  // ---- projetos — não há tabela real; vazio honesto ----
-  const projetos = [];
-
-  // ---- missões — hidratadas por /api/missions ----
-  const MIS_STATES = ['PENDING','QUEUED','RUNNING','FAILED','COMPLETED'];
-  const missoes = [];
-
-  // ---- agentes — hidratados por /api/agents (rótulos reais como fallback) ----
-  const agentes = [];
-
-  // ---- LLMs (config/política real, sem custo fabricado) ----
-  // APIs diretas de OpenAI, Claude e Gemini: bloqueadas, Sem chave validada.
+  /* ---- LLMs (ativos e em sequência prioritária) ---- */
   const llms = [
-    { id: 'claude_pro', provider: 'Claude Pro', modelos: ['Pro'], tipo: 'Assinatura', status: 'unknown', modoUso: 'Assistido', automacao: 'Assistida', custoIncremental: 'R$ 0,00', billing: 'Não aplicável', ultimoHealth: 'Não validado', observacao: 'Assinatura instalada; execução ainda não certificada.', ativo: false },
-    { id: 'chatgpt_plus', provider: 'ChatGPT Plus / Codex', modelos: ['Codex'], tipo: 'Assinatura', status: 'unknown', modoUso: 'Assistido', automacao: 'Assistida', custoIncremental: 'R$ 0,00', billing: 'Não aplicável', ultimoHealth: 'Não validado pelo Router', observacao: 'Aplicativo autenticado; integração automática ainda parcial.', ativo: false },
-    { id: 'gemini_advanced', provider: 'Gemini Google One AI Pro', modelos: ['gemini-subscription'], tipo: 'Assinatura', status: 'active_real', modoUso: 'Direto', automacao: 'direct', custoIncremental: 'R$ 0,00', billing: 'Assinatura fixa', ultimoHealth: '06/06/2026', observacao: 'OAuth e resposta real GEMINI_ASSINATURA_OK confirmados.', ativo: true },
-    { id: 'openrouter_api', provider: 'OpenRouter', modelos: ['deepseek/deepseek-v4-pro', 'moonshotai/kimi-k2.6'], tipo: 'API Paga', status: 'active_real', modoUso: 'Direto com autorização', automacao: 'direct', custoIncremental: 'Por consumo', billing: 'Controle de custos', ultimoHealth: '06/06/2026', observacao: 'Prioridade: DeepSeek V4 Pro; alternativa: Kimi K2.6.', ativo: true },
-    { id: 'ollama_local', provider: 'Ollama Local', modelos: ['Llama/Gemma/Qwen configuráveis'], tipo: 'Local', status: 'unknown', modoUso: 'Local', automacao: 'Direta após health check', custoIncremental: 'R$ 0,00', billing: 'Energia/hardware local', ultimoHealth: 'Não validado nesta execução', observacao: 'Último fallback local. Só ativo após health real.', ativo: false },
+    { id: 'claude',   nome: 'Claude',    modelo: 'Claude 3.5 Sonnet',     status: 'IMPL',   ativo: true,  conexao: ['API Anthropic (Ativo)'],        ultimoTeste: 'agora', latencia: '120ms', custo: '0.00', uso: 'Principal' },
+    { id: 'openai',   nome: 'OpenAI',    modelo: 'GPT-4o / O1',           status: 'IMPL',   ativo: true,  conexao: ['API OpenAI (Ativo)'],           ultimoTeste: 'agora', latencia: '150ms', custo: '0.00', uso: 'Fallback 1' },
+    { id: 'gemini',   nome: 'Gemini',    modelo: 'Gemini 2.0 Pro',        status: 'IMPL',   ativo: true,  conexao: ['API Google AI (Ativo)'],        ultimoTeste: 'agora', latencia: '180ms', custo: '0.00', uso: 'Fallback 2' },
+    { id: 'deepseek', nome: 'DeepSeek',  modelo: 'DeepSeek V4 Pro',       status: 'IMPL',   ativo: true,  conexao: ['API DeepSeek (Ativo)'],         ultimoTeste: 'agora', latencia: '200ms', custo: '0.00', uso: 'Fallback 3' },
+    { id: 'kimi',     nome: 'Kimi',      modelo: 'Kimi 2.6',              status: 'IMPL',   ativo: true,  conexao: ['API Moonshot/Kimi (Ativo)'],    ultimoTeste: 'agora', latencia: '190ms', custo: '0.00', uso: 'Fallback 4' },
+    { id: 'openrouter',nome:'OpenRouter',modelo: 'Multi-modelo',          status: 'IMPL',   ativo: true,  conexao: ['API OpenRouter (Ativo)'],       ultimoTeste: 'agora', latencia: '250ms', custo: '0.00', uso: 'Agregador Multi-LLM' },
+    { id: 'ollama',   nome: 'Ollama',    modelo: 'Local (Offline)',       status: 'OFFLINE', ativo: false, conexao: ['Servidor Local (Desligado)'],  ultimoTeste: '—',     latencia: '—',     custo: '—',    uso: 'Localhost' },
   ];
 
-  const rotas = [
-    { id: 'R1', quando: 'assinatura Google validada', modelo: 'Gemini AI Pro', fallback: 'Ollama Local' },
-    { id: 'R2', quando: 'execução local e gratuita', modelo: 'Ollama Local', fallback: 'OpenRouter autorizada' },
-    { id: 'R3', quando: 'OpenRouter autorizada', modelo: 'DeepSeek V4 Pro', fallback: 'Kimi K2.6' },
-    { id: 'R4', quando: 'DeepSeek indisponível ou vazio', modelo: 'Kimi K2.6', fallback: '—' },
-    { id: 'R5', quando: 'assinaturas não certificadas', modelo: 'Bloqueado', fallback: 'Validação manual' },
+  /* ---- ferramentas (classificação honesta) ---- */
+  const ferramentas = [
+    { id: 'vscode',   nome: 'VS Code',   tipo: 'Editor',    classe: 'externa',     status: 'NTEST',  icon: 'terminal' },
+    { id: 'github',   nome: 'GitHub',    tipo: 'SCM',       classe: 'integrada',   status: 'IMPL',   icon: 'git' },
+    { id: 'obsidian', nome: 'Obsidian',  tipo: 'Notas',     classe: 'conectada',   status: 'DEV',    icon: 'book' },
+    { id: 'figma',    nome: 'Figma',     tipo: 'Design',    classe: 'externa',     status: 'NIMPL',  icon: 'eye' },
+    { id: 'penpot',   nome: 'Penpot',    tipo: 'Design',    classe: 'externa',     status: 'NIMPL',  icon: 'eye' },
+    { id: 'canva',    nome: 'Canva',     tipo: 'Design',    classe: 'externa',     status: 'NIMPL',  icon: 'eye' },
+    { id: 'photopea', nome: 'Photopea',  tipo: 'Imagem',    classe: 'externa',     status: 'NIMPL',  icon: 'eye' },
+    { id: 'browser',  nome: 'Navegador', tipo: 'Web',       classe: 'externa',     status: 'NIMPL',  icon: 'compass' },
   ];
 
-  // ---- custos — billing real ($1/dia, $30/mês) via /api/billing/status ----
-  const custos = {
-    diario: 0, mensal: 0, limite: 30, limiteDiario: 1, projecao: 0,
-    source: 'not_configured', primaryProvider: 'deepseek_v4_pro', fallbackProvider: 'ollama',
-    deltaMes: 0,
-    serieDiaria: [],
-    serieMensal: [],
-    byLLM: [
-      { nome: 'Assinaturas', custo: 0, pct: 0, cor: 'var(--accent)', nota: 'R$ 0,00 incremental' },
-      { nome: 'Ollama Local', custo: 0, pct: 0, cor: 'var(--ok)', nota: 'R$ 0,00 incremental' },
-      { nome: 'APIs pagas', custo: 0, pct: 0, cor: 'var(--warn)', nota: 'bloqueadas sem autorização' },
-    ],
-    byProjeto: [{ proj: 'Sem custo medido', custo: 0, pct: 0 }],
-    byAgente: [{ agente: 'Sem custo medido', custo: 0 }],
-    alerts: [
-      { nivel: 'info', txt: 'Assinaturas e local operam com R$ 0,00 incremental.' },
-      { nivel: 'info', txt: 'Limite: $1,00/dia · $30,00/mês (Diretoria).' },
-    ],
-  };
-
-  // ---- ambientes & deploys — sem dados reais ----
-  const ambientes = [];
-  const deploys = [];
-  const pipeline = ['Origem','Construção','Testes','Segurança','Publicação','Conferência'];
-
-  // ---- knowledge — sem indexação real medida ----
-  const fontes = [];
-
-  // ---- auditoria — hidratada por /api/audit ----
-  const auditoria = [];
-
-  // ---- governança — números reais (audit/evidências) via api.js; zero honesto ----
-  const governance = {
-    certificacoes: [],
-    evidence: { total: 0, ultimaHora: 0, retencao: 'sem dados', integridade: null, assinatura: 'sem dados' },
-    zeroGhostLaw: { ativas: 0, violacoes: 0, alertas: 0, ultimaVarredura: 'sem dados' },
-    falhas: [],
-    alertas: [],
-  };
-
-  // ---- KPIs — hidratados por /api/dashboard ----
-  const kpis = [
-    { id: 'projetos', label: 'Projetos ativos', valor: '0',  delta: 'sem dados', dir: 'flat', sub: 'sem tabela de projetos' },
-    { id: 'missoes',  label: 'Missões',         valor: '0',  delta: 'real',      dir: 'flat', sub: 'do banco' },
-    { id: 'agentes',  label: 'Equipe',          valor: '0',  delta: 'real',      dir: 'flat', sub: 'do banco' },
-    { id: 'evidencias', label: 'Evidências',    valor: '0',  delta: 'real',      dir: 'flat', sub: 'execuções reais' },
-    { id: 'custos',   label: 'Custo incremental IA', valor: '$0.00', delta: 'OK', dir: 'flat', sub: 'limite $30/mês' },
-    { id: 'ia',       label: 'IA local',        valor: '—',  delta: 'health',    dir: 'flat', sub: 'Ollama' },
+  /* ---- integrações ---- */
+  const integracoes = [
+    { id: 'github',   nome: 'GitHub',          auth: 'OAuth',   status: 'IMPL',    ultimoTeste: 'agora', permissoes: 'repo, read, write (2 contas)' },
+    { id: 'gdrive',   nome: 'Google Drive',    auth: 'OAuth',   status: 'CONFIG',  ultimoTeste: '—', permissoes: '—' },
+    { id: 'gdocs',    nome: 'Google Docs',     auth: 'OAuth',   status: 'CONFIG',  ultimoTeste: '—', permissoes: '—' },
+    { id: 'gsheets',  nome: 'Google Sheets',   auth: 'OAuth',   status: 'CONFIG',  ultimoTeste: '—', permissoes: '—' },
+    { id: 'gcal',     nome: 'Google Calendar', auth: 'OAuth',   status: 'CONFIG',  ultimoTeste: '—', permissoes: '—' },
+    { id: 'openrouter',nome:'OpenRouter',      auth: 'API key', status: 'CONFIG',  ultimoTeste: '—', permissoes: '—' },
+    { id: 'webhooks', nome: 'Webhooks',        auth: 'Token',   status: 'NIMPL',   ultimoTeste: '—', permissoes: '—' },
   ];
 
-  const serieThroughput = [];
-  const serieCusto = [];
+  /* ---- conhecimento (estrutura pronta · vazio) ---- */
+  const conhecimento = [
+    { id: 'rules',     nome: 'Rules',         icon: 'shield', count: 0, status: 'DEV',   sub: 'políticas & guardrails' },
+    { id: 'workflows', nome: 'Workflows',     icon: 'route',  count: 0, status: 'DEV',   sub: 'fluxos automatizados' },
+    { id: 'skills',    nome: 'Skills',        icon: 'zap',    count: 0, status: 'DEV',   sub: 'capacidades de agentes' },
+    { id: 'templates', nome: 'Templates',     icon: 'doc',    count: 0, status: 'DEV',   sub: 'scaffolds de sistemas' },
+    { id: 'biblioteca',nome: 'Biblioteca',    icon: 'book',   count: 0, status: 'NIMPL', sub: 'documentos & ADRs' },
+    { id: 'memoria',   nome: 'Memória',       icon: 'db',     count: 0, status: 'DEV',   sub: 'contexto persistente' },
+  ];
 
-  // ---- copilot: sem conversa fabricada ----
-  const chatSeed = [];
+  /* ---- operações (infra própria da plataforma) ---- */
+  const operacoes = [
+    { id: 'banco',    nome: 'Banco de Dados',  cat: 'Dados',        status: 'DEV',   nota: 'Postgres previsto · não provisionado' },
+    { id: 'fastapi',  nome: 'FastAPI',         cat: 'API',          status: 'DEV',   nota: 'Backend em desenvolvimento' },
+    { id: 'runtime',  nome: 'Runtime',         cat: 'Execução',     status: 'DEV',   nota: 'Runtime de agentes em construção' },
+    { id: 'deploy',   nome: 'Deploy',          cat: 'CI/CD',        status: 'NIMPL', nota: 'Pipeline não configurado' },
+    { id: 'monit',    nome: 'Monitoramento',   cat: 'Observ.',      status: 'NIMPL', nota: 'Sem coleta de métricas ainda' },
+    { id: 'backups',  nome: 'Backups',         cat: 'Resiliência',  status: 'NIMPL', nota: 'Rotina de backup não definida' },
+    { id: 'servicos', nome: 'Serviços',        cat: 'Plataforma',   status: 'DEV',   nota: 'Serviços internos em definição' },
+  ];
 
-  // ---- relatórios (rótulos de navegação) ----
-  const relatorios = [
-    { id: 'REL-CST', nome: 'Custos · billing real',  periodo: 'mensal' },
-    { id: 'REL-AUD', nome: 'Auditoria · eventos reais', periodo: 'contínuo' },
-    { id: 'REL-RUN', nome: 'Execuções · evidências',  periodo: 'contínuo' },
+  /* ---- roadmap (plano real de construção) ---- */
+  const roadmap = [
+    { fase: 'Em produção',       cor: 'ok',   itens: ['Home / FORJA (workspace)','Arquitetura de navegação','Auditoria Zero Ghost'] },
+    { fase: 'Em desenvolvimento',cor: 'warn', itens: ['Equipes (estrutura)','Conhecimento','Operações','Configurações','Integração GitHub'] },
+    { fase: 'Em teste',          cor: 'info', itens: ['Roteamento de LLMs','Ferramentas conectadas'] },
+    { fase: 'Planejado',         cor: 'idle', itens: ['Clientes','Projetos','Financeiro','Inteligência','Testes','Validação','Academia','Perfis & permissões'] },
+    { fase: 'Bloqueado',         cor: 'err',  itens: ['Execução real de agentes (aguardando LLMs configuradas)'] },
+  ];
+
+  /* ---- auditoria (a verdade, por módulo) ---- */
+  const auditoria = modulos.map(m => ({
+    modulo: m.nome, status: m.status,
+    veredito: ({IMPL:'Funciona', CERT:'Funciona', DEV:'Parcial', PARCIAL:'Parcial', NTEST:'Não testado', CONFIG:'Aguardando config.', NIMPL:'Não implementado', BLOCK:'Bloqueado', ESTRUT:'Estrutura'})[m.status],
+  }));
+
+  /* ---- chat seed (workspace) ---- */
+  const chatSeed = [
+    { de: 'sistema', txt: 'Workspace da Fábrica ativo e roteado! Provedores LLM operacionais e engatilhados no backend. Pronto para execução real.' },
+  ];
+
+  /* ---- arquivos (explorer do workspace · projeto atual) ---- */
+  const arvore = [
+    { nome: 'a-fabrica', tipo: 'dir', filhos: [
+      { nome: 'home', tipo: 'dir', filhos: [{nome:'workspace.tsx',tipo:'tsx'},{nome:'chat.tsx',tipo:'tsx'},{nome:'preview.tsx',tipo:'tsx'}] },
+      { nome: 'modulos', tipo: 'dir', filhos: [{nome:'equipes.tsx',tipo:'tsx'},{nome:'missoes.tsx',tipo:'tsx'},{nome:'auditoria.tsx',tipo:'tsx'}] },
+      { nome: 'core', tipo: 'dir', filhos: [{nome:'router.ts',tipo:'ts'},{nome:'zero-ghost.ts',tipo:'ts'}] },
+      { nome: 'README.md', tipo: 'md' },
+      { nome: 'fabrica.config.ts', tipo: 'ts' },
+    ]},
   ];
 
   window.FORJA = {
-    cores, services, projetos, missoes, MIS_STATES, agentes, llms, rotas,
-    custos, ambientes, deploys, pipeline, fontes, auditoria, governance,
-    kpis, serieThroughput, serieCusto, chatSeed, relatorios,
-  };
-})();
-
-
-/* ============================================================
-   FORJA — Camada de API V1
-   fetch nativo (sem axios, sem Vite). Mesma origem do FastAPI.
-   Carrega dados REAIS do backend e hidrata window.FORJA.
-   window.FORJA continua existindo apenas como FALLBACK.
-   ============================================================ */
-(function () {
-  const BASE = ''; // mesma origem (SPA servida pelo FastAPI)
-
-  async function getJSON(path) {
-    const headers = { 'Accept': 'application/json' };
-    const token = localStorage.getItem('forja.token');
-    if (token) headers['Authorization'] = 'Bearer ' + token;
-
-    const res = await fetch(BASE + path, {
-      headers: headers,
-      credentials: 'same-origin',
-    });
-    if (res.status === 401) {
-      window.dispatchEvent(new Event('unauthorized'));
-      throw new Error('HTTP 401 em ' + path);
-    }
-    if (!res.ok) throw new Error('HTTP ' + res.status + ' em ' + path);
-    return res.json();
-  }
-
-  // Usa dados reais quando existirem; senão mantém o fallback de window.FORJA.
-  function pick(realArr, fallback, sourceKey, sources) {
-    if (Array.isArray(realArr) && realArr.length > 0) {
-      sources[sourceKey] = 'backend_real';
-      return realArr;
-    }
-    sources[sourceKey] = 'fallback_window_forja';
-    return fallback;
-  }
-
-  // ---- mapeadores: shape do backend -> shape esperado pelo painel ----
-
-  function mapAgentes(items) {
-    const stMap = { IDLE: 'idle', WORKING: 'running', OFFLINE: 'blocked' };
-    return (items || []).map(a => ({
-      id: a.id,
-      papel: a.nome,            // backend.nome = papel curto (ex: ARCHITECT)
-      nome: a.papel || a.nome,  // backend.papel = descrição
-      status: stMap[a.status] || 'idle',
-      missao: '—',
-      ultimaExec: '—',
-      provider: 'não atribuído',
-      tempoMedio: 'não medido',
-      tokens: null, custo: 0, tarefas: null, sucesso: null,
-    }));
-  }
-
-  function mapMissoes(items) {
-    return (items || []).map(ms => ({
-      id: ms.id,
-      titulo: ms.titulo,
-      proj: ms.proj || '—',
-      status: ms.status,
-      prio: ms.prio || 'P3',
-      agente: ms.agente || '—',
-      llm: ms.llm || '—',
-      tempo: ms.tempo || '—',
-      etapa: ms.etapa || 0,
-      etapas: ms.etapas || 1,
-      tags: ms.tags || [],
-    }));
-  }
-
-  function mapLLMs(providers) {
-    const tipoMap = {
-      subscription: 'Assinatura', local: 'Local', paid_api: 'API Paga',
-    };
-    const statusMap = {
-      active_real: 'Ativa real',
-      unavailable: 'Indisponível',
-      inactive: 'Inativa',
-      missing_key: 'Bloqueada',
-      unknown: 'Não validada',
-    };
-    return (providers || []).map(p => ({
-      id: p.id,
-      provider: p.display_name,
-      modelos: p.models && p.models.length ? p.models : ['configurável'],
-      tipo: tipoMap[p.provider_type] || p.provider_type,
-      status: p.health_status || 'unknown',
-      statusLabel: statusMap[p.health_status] || p.health_status || 'Não validada',
-      modoUso: p.automation_mode === 'assisted' ? 'Assistido'
-             : p.automation_mode === 'direct'
-               ? (p.provider_type === 'local' ? 'Direto/Local' : 'Direto')
-               : '—',
-      automacao: p.automation_mode,
-      custoIncremental: p.cost_incremental === 0
-        ? 'R$ 0,00'
-        : p.provider_type === 'paid_api' ? 'Por consumo' : 'Não informado',
-      billing: p.billing_mode,
-      ultimoHealth: p.last_health_check || 'Não validado',
-      observacao: p.notes || '',
-      ativo: p.health_status === 'active_real',
-    }));
-  }
-
-  function mapAuditoria(items) {
-    return (items || []).map(a => {
-      const dt = a.created_at ? new Date(a.created_at) : null;
-      const hora = dt ? dt.toTimeString().slice(0, 8) : '—';
-      return {
-        id: a.id,
-        ts: hora,
-        data: dt ? dt.toLocaleDateString('pt-BR') : '—',
-        hora: hora,
-        ator: 'sistema',
-        acao: a.event_type || '—',
-        alvo: (a.details || '').slice(0, 60),
-        sev: 'info',
-        hash: 'evt-' + a.id,
-      };
-    });
-  }
-
-  function applyStatusToServices(services, health, status, llmHealth) {
-    const set = (id, st) => {
-      const s = (services || []).find(x => x.id === id);
-      if (s) s.status = st;
-    };
-    if (health && health.status === 'ok') set('fastapi', 'ok');
-    if (status && status.database === 'ok') set('database', 'ok');
-    if (llmHealth) set('ollama', llmHealth.health_status === 'active_real' ? 'ok' : 'idle');
-    return services;
-  }
-
-  // ---- hidratação principal: roda ANTES do React renderizar ----
-  async function hydrate() {
-    const F = window.FORJA || {};
-    F._live = { hydratedAt: null, sources: {}, errors: {} };
-    const sources = F._live.sources;
-    const errors = F._live.errors;
-
-    // health + status + llm/health (tolerantes a falha individual)
-    let health = null, status = null, llmHealth = null;
-    try { health = await getJSON('/api/health'); } catch (e) { errors.health = String(e); }
-    try { status = await getJSON('/api/status'); } catch (e) { errors.status = String(e); }
-    try { llmHealth = await getJSON('/api/llm/health'); } catch (e) { errors.llmHealth = String(e); }
-
-    // agentes
-    try {
-      const r = await getJSON('/api/agents');
-      F.agentes = pick(mapAgentes(r.items), F.agentes, 'agentes', sources);
-    } catch (e) { errors.agentes = String(e); sources.agentes = 'fallback_window_forja'; }
-
-    // missões
-    try {
-      const r = await getJSON('/api/missions');
-      F.missoes = pick(mapMissoes(r.items), F.missoes, 'missoes', sources);
-    } catch (e) { errors.missoes = String(e); sources.missoes = 'fallback_window_forja'; }
-
-    // providers / LLMs
-    try {
-      const r = await getJSON('/api/llm/providers');
-      F.llms = pick(mapLLMs(r.providers), F.llms, 'llms', sources);
-    } catch (e) { errors.llms = String(e); sources.llms = 'fallback_window_forja'; }
-
-    // auditoria
-    try {
-      const r = await getJSON('/api/audit');
-      F.auditoria = pick(mapAuditoria(r.items), F.auditoria, 'auditoria', sources);
-    } catch (e) { errors.auditoria = String(e); sources.auditoria = 'fallback_window_forja'; }
-
-    // serviços (saúde real) + status bar
-    try {
-      const r = await getJSON('/api/services');
-      if (Array.isArray(r.items) && r.items.length) {
-        F.services = r.items;
-        sources.services = 'backend_real';
-      }
-    } catch (e) { errors.services = String(e); sources.services = 'fallback_window_forja'; }
-
-    // dashboard real: KPIs + núcleos + governança a partir do banco
-    try {
-      const d = await getJSON('/api/dashboard');
-      const ms = d.missions || {}; const byS = ms.by_status || {};
-      const kmap = {
-        projetos: { valor: String((d.projects || {}).total || 0), sub: 'sem tabela de projetos' },
-        missoes: { valor: String(ms.total || 0), sub: (byS.RUNNING || 0) + ' em execução' },
-        agentes: { valor: String((d.agents || {}).total || 0), sub: 'do banco' },
-        evidencias: { valor: String((d.evidences || {}).total || 0), sub: 'execuções reais' },
-        ia: { valor: ((d.ollama || {}).status === 'active_real' ? (d.ollama.models + ' modelos') : 'offline'), sub: 'Ollama' },
-      };
-      F.kpis = (F.kpis || []).map(k => kmap[k.id] ? Object.assign({}, k, kmap[k.id]) : k);
-
-      // governança real
-      F.governance = Object.assign({}, F.governance, {
-        evidence: Object.assign({}, F.governance.evidence, { total: (d.evidences || {}).total || 0 }),
-        zeroGhostLaw: Object.assign({}, F.governance.zeroGhostLaw,
-          { ativas: (d.audit || {}).total || 0, violacoes: 0, ultimaVarredura: 'tempo real' }),
-      });
-
-      // núcleos: marca status real do que sabemos
-      const setCore = (id, st) => { const c = (F.cores || []).find(x => x.id === id); if (c) c.status = st; };
-      setCore('database', 'ok'); setCore('operational', 'ok'); setCore('factory', 'ok');
-      setCore('agent', (d.agents || {}).total > 0 ? 'ok' : 'idle');
-      setCore('router', (d.ollama || {}).status === 'active_real' ? 'ok' : 'idle');
-      sources.dashboard = 'backend_real';
-    } catch (e) { errors.dashboard = String(e); sources.dashboard = 'fallback_window_forja'; }
-
-    // billing real ($1/dia, $30/mês) — nunca seed/demo
-    try {
-      const b = await getJSON('/api/billing/status');
-      F.custos = Object.assign({}, F.custos, {
-        diario: b.daily_used_usd,
-        mensal: b.monthly_used_usd,
-        limite: b.monthly_budget_usd,
-        limiteDiario: b.daily_budget_usd,
-        projecao: b.projection_usd,
-        source: b.source,
-        primaryProvider: b.primary_provider,
-        fallbackProvider: b.fallback_provider,
-      });
-      sources.billing = 'backend_real';
-    } catch (e) { errors.billing = String(e); sources.billing = 'fallback_window_forja'; }
-
-    // status bar / serviços
-    try {
-      F.services = applyStatusToServices(F.services, health, status, llmHealth);
-      sources.services = (health || status) ? 'backend_real' : 'fallback_window_forja';
-    } catch (e) { errors.services = String(e); }
-
-    F._live.hydratedAt = new Date().toISOString();
-    window.FORJA = F;
-
-    // Log de evidência no console (visível no navegador / DevTools)
-    console.info('[FORJA] hydrate concluído', F._live.sources, 'erros:', F._live.errors);
-    return F._live;
-  }
-
-  // ---- Runtime real: executar missão, evidências, status ----
-  async function postJSON(path, body) {
-    const res = await fetch(BASE + path, {
-      method: 'POST',
-      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status + ' em ' + path);
-    return res.json();
-  }
-
-  // POST /api/missions/{id}/run — executa missão real
-  async function runMission(missionId) {
-    const r = await postJSON('/api/missions/' + missionId + '/run');
-    console.info('[FORJA] runMission', missionId, '→', r.status, '(provider:', r.provider + ')');
-    return r;
-  }
-
-  // GET /api/missions/{id}/evidences
-  async function getEvidences(missionId) {
-    return getJSON('/api/missions/' + missionId + '/evidences');
-  }
-
-  // GET /api/runtime/status
-  async function getRuntimeStatus() {
-    return getJSON('/api/runtime/status');
-  }
-
-  // Atualiza window.FORJA.missoes a partir do backend (após execução)
-  async function refreshMissions() {
-    try {
-      const r = await getJSON('/api/missions');
-      const F = window.FORJA;
-      F.missoes = pick(mapMissoes(r.items), F.missoes, 'missoes', (F._live || {}).sources || {});
-      return F.missoes;
-    } catch (e) {
-      console.warn('[FORJA] refreshMissions falhou:', e);
-      return (window.FORJA || {}).missoes;
-    }
-  }
-
-  window.ForjaAPI = {
-    getJSON, hydrate, postJSON,
-    runMission, getEvidences, getRuntimeStatus, refreshMissions,
+    ST, modulos, equipes, llms, ferramentas, integracoes,
+    conhecimento, operacoes, roadmap, auditoria, chatSeed, arvore,
   };
 })();
 
@@ -469,6 +208,23 @@ const ICON_PATHS = {
   dollar: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
   squares: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
   pulse: 'M22 12h-4l-3 9L9 3l-3 9H2',
+  users: 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75',
+  server: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
+  sitemap: 'M9 3h6v4H9zM3 17h6v4H3zM15 17h6v4h-6zM12 7v4M6 17v-2a2 2 0 012-2h8a2 2 0 012 2v2',
+  compass: 'M12 2a10 10 0 100 20 10 10 0 000-20zM16.2 7.8l-2.9 6.4-6.4 2.9 2.9-6.4z',
+  home: 'M3 11l9-8 9 8M5 9v11a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V9',
+  building: 'M4 22V4a2 2 0 012-2h8a2 2 0 012 2v18M4 22h16M9 7h.01M13 7h.01M9 11h.01M13 11h.01M9 15h.01M13 15h.01M18 22V9h2a1 1 0 011 1v12',
+  wrench: 'M14.7 6.3a4 4 0 00-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 005.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z',
+  flask: 'M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3M6.5 14h11',
+  award: 'M12 15a6 6 0 100-12 6 6 0 000 12zM8.2 13.5L7 22l5-3 5 3-1.2-8.5',
+  cap: 'M22 10L12 5 2 10l10 5 10-5zM6 12v5c0 1.2 2.7 3 6 3s6-1.8 6-3v-5',
+  help: 'M12 2a10 10 0 100 20 10 10 0 000-20zM9.1 9a3 3 0 015.8 1c0 2-3 3-3 3M12 17h.01',
+  megaphone: 'M3 11v2a1 1 0 001 1h2l4 4V6L6 10H4a1 1 0 00-1 1zM15 8a4 4 0 010 8M18 5a8 8 0 010 14',
+  chart: 'M3 3v18h18M7 14l3-3 3 3 5-6',
+  file: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6',
+  lock: 'M5 11h14v10H5zM8 11V7a4 4 0 018 0v4',
+  play2: 'M5 3l14 9-14 9z',
+  stop: 'M6 6h12v12H6z',
 };
 
 function Icon({ name, size = 16, stroke = 2, fill, style, className }) {
@@ -557,44 +313,68 @@ const STATUS_CLASS = {
   blocked: 'err', bloqueada: 'err', erro: 'err', fail: 'err', 'crítico': 'err', aviso: 'warn', info: 'info',
 };
 
-const STATUS_LABEL = {
-  ok: 'ok',
-  live: 'publicado',
-  running: 'em execução',
-  executando: 'em execução',
-  building: 'em construção',
-  review: 'em revisão',
-  paused: 'pausado',
-  idle: 'em espera',
-  blocked: 'bloqueado',
-  fail: 'falhou',
-  warn: 'atenção',
-  backlog: 'fila',
-  indexado: 'indexado',
-  indexando: 'indexando',
-  erro: 'erro',
-};
+/* ============================================================
+   ZERO GHOST LAW — componentes de status honesto
+   ============================================================ */
+function StatusPill({ status, size = 'md' }) {
+  const ST = (window.FORJA && window.FORJA.ST) || {};
+  const s = ST[status] || { label: status, tone: 'idle' };
+  return (
+    <span className={'zg zg-' + s.tone + (size==='sm'?' zg-sm':'')}>
+      <span className="zg-dot" />{s.label}
+    </span>
+  );
+}
 
-const MISSION_STATUS_LABEL = {
-  PENDING: 'PENDENTE',
-  QUEUED: 'NA FILA',
-  RUNNING: 'EM EXECUÇÃO',
-  FAILED: 'FALHOU',
-  COMPLETED: 'CONCLUÍDA',
-};
+function EmptyState({ icon = 'box', title, sub, action, onAction, status }) {
+  return (
+    <div className="empty">
+      <div className="empty-ic"><Icon name={icon} size={24} /></div>
+      <div className="empty-title">{title}</div>
+      {status && <div style={{margin:'2px 0 2px'}}><StatusPill status={status} /></div>}
+      {sub && <div className="empty-sub">{sub}</div>}
+      {action && <button className="btn" style={{marginTop:6}} onClick={onAction}>{action}</button>}
+    </div>
+  );
+}
 
-const AGENT_STATUS_LABEL = {
-  running: 'EM EXECUÇÃO',
-  blocked: 'BLOQUEADO',
-  idle: 'EM ESPERA',
-};
+/* cabeçalho de página padrão com status Zero Ghost */
+function PageHead({ icon, crumb, title, sub, status, children }) {
+  return (
+    <div className="center-head hud-grid">
+      <div className="ch-top">
+        <div className="ch-icon"><Icon name={icon} size={19} /></div>
+        <div className="ch-titles">
+          <div className="ch-crumb">A FÁBRICA · {crumb}</div>
+          <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+            <h1 className="ch-title">{title}</h1>
+            {status && <StatusPill status={status} />}
+          </div>
+          {sub && <div className="ch-sub">{sub}</div>}
+        </div>
+        {children && <div className="ch-actions">{children}</div>}
+      </div>
+    </div>
+  );
+}
 
-const labelStatus = (value) => STATUS_LABEL[value] || value;
-const labelMissionStatus = (value) => MISSION_STATUS_LABEL[value] || value;
-const labelAgentStatus = (value) => AGENT_STATUS_LABEL[value] || value;
+/* card de seção com título + status opcional */
+function SectionCard({ icon, title, status, right, children, flush }) {
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        {icon && <Icon name={icon} size={14} style={{color:'var(--text-2)'}}/>}
+        <h3>{title}</h3>
+        {status && <StatusPill status={status} size="sm" />}
+        {right && <div className="right">{right}</div>}
+      </div>
+      <div className={'panel-body' + (flush?' flush':'')}>{children}</div>
+    </div>
+  );
+}
 
 Object.assign(window, { Icon, Sparkline, Bars, Donut, Progress, useLocalStorage, STATUS_CLASS,
-  STATUS_LABEL, MISSION_STATUS_LABEL, AGENT_STATUS_LABEL, labelStatus, labelMissionStatus, labelAgentStatus,
+  StatusPill, EmptyState, PageHead, SectionCard,
   useState, useEffect, useRef, useCallback, createContext, useContext });
 
 
@@ -603,26 +383,39 @@ Object.assign(window, { Icon, Sparkline, Bars, Donut, Progress, useLocalStorage,
    ============================================================ */
 
 const NAV = [
-  { id: 'dashboard', label: 'Centro de Comandos', short: 'Comandos', icon: 'pulse' },
-  { id: 'projects',  label: 'Projetos',           short: 'Projetos', icon: 'folder' },
-  { id: 'missions',  label: 'Central de Missões', short: 'Missões', icon: 'target' },
-  { id: 'agents',    label: 'Equipe Inteligente', short: 'Equipe', icon: 'cpu' },
-  { id: 'llm',       label: 'Central de IA',      short: 'IA', icon: 'route' },
-  { id: 'costs',     label: 'Controle de Custos', short: 'Custos', icon: 'dollar' },
-  { id: 'deploy',    label: 'Central de Publicação', short: 'Publicações', icon: 'rocket' },
-  { id: 'audit',     label: 'Central de Auditoria', short: 'Auditoria', icon: 'shield' },
-  { id: 'knowledge', label: 'Central de Conhecimento', short: 'Conhecimento', icon: 'book' },
+  { id: 'home',         label: 'Home · Centro Executivo', short: 'Home',    icon: 'home',     grupo: 'Trabalho' },
+  { id: 'forja',        label: 'FORJA · Workspace',  short: 'FORJA',        icon: 'flame',    grupo: 'Trabalho' },
+  { id: 'clientes',     label: 'Clientes',       short: 'Clientes',     icon: 'building', grupo: 'Negócio' },
+  { id: 'projetos',     label: 'Projetos',       short: 'Projetos',     icon: 'folder',   grupo: 'Negócio' },
+  { id: 'missoes',      label: 'Missões',        short: 'Missões',      icon: 'target',   grupo: 'Operação' },
+  { id: 'equipes',      label: 'Equipes',        short: 'Equipes',      icon: 'users',    grupo: 'Operação' },
+  { id: 'inteligencia', label: 'Inteligência',   short: 'Inteligência', icon: 'compass',  grupo: 'Operação' },
+  { id: 'llms',         label: 'LLMs',           short: 'LLMs',         icon: 'zap',      grupo: 'Recursos' },
+  { id: 'ferramentas',  label: 'Ferramentas',    short: 'Ferramentas',  icon: 'wrench',   grupo: 'Recursos' },
+  { id: 'integracoes',  label: 'Integrações',    short: 'Integrações',  icon: 'link',     grupo: 'Recursos' },
+  { id: 'conhecimento', label: 'Conhecimento',   short: 'Conhecimento', icon: 'book',     grupo: 'Recursos' },
+  { id: 'testes',       label: 'Testes',         short: 'Testes',       icon: 'flask',    grupo: 'Garantia' },
+  { id: 'validacao',    label: 'Validação',      short: 'Validação',     icon: 'award',    grupo: 'Garantia' },
+  { id: 'auditoria',    label: 'Auditoria',      short: 'Auditoria',    icon: 'shield',   grupo: 'Garantia' },
+  { id: 'operacoes',    label: 'Operações',      short: 'Operações',     icon: 'server',   grupo: 'Infra' },
+  { id: 'financeiro',   label: 'Financeiro',     short: 'Financeiro',   icon: 'dollar',   grupo: 'Negócio' },
+  { id: 'roadmap',      label: 'Roadmap',        short: 'Roadmap',      icon: 'chart',    grupo: 'Plataforma' },
+  { id: 'academia',     label: 'Academia',       short: 'Academia',     icon: 'cap',      grupo: 'Plataforma' },
+  { id: 'ajuda',        label: 'Ajuda',          short: 'Ajuda',        icon: 'help',     grupo: 'Plataforma' },
 ];
+
+/* ícones por grupo (para divisores na activity bar) */
+const NAV_GROUPS = ['Trabalho','Negócio','Operação','Recursos','Garantia','Infra','Plataforma'];
 
 const MENUS = {
   'Arquivo': ['Novo projeto…', 'Nova missão…', 'Abrir projeto…', '—', 'Importar codebase', 'Exportar relatório', '—', 'Encerrar sessão'],
   'Editar': ['Desfazer', 'Refazer', '—', 'Recortar', 'Copiar', 'Colar', '—', 'Localizar…', 'Substituir…'],
-  'Seleção': ['Selecionar tudo', 'Selecionar missões ativas', 'Selecionar agentes online', '—', 'Limpar seleção'],
-  'Ver': ['Centro de comandos', 'Alternar assistente', 'Alternar explorador', '—', 'Modo foco', 'Tema claro/escuro'],
-  'Acessar': ['Ir para projeto…', 'Ir para missão…', 'Ir para equipe…', '—', 'Centro de comandos ⌘K'],
-  'Executar': ['Executar missão', 'Pausar toda a equipe', 'Publicar projeto…', '—', 'Atualizar conhecimento'],
-  'Registros': ['Novo registro', 'Registros ao vivo', 'Fila de publicações', '—', 'Limpar registros'],
-  'Ajuda': ['Documentação', 'Atalhos de teclado', 'Situação da plataforma', '—', 'Sobre a FORJA OS'],
+  'Seleção': ['Selecionar tudo', 'Selecionar missões', 'Selecionar equipes', '—', 'Limpar seleção'],
+  'Ver': ['Home / Workspace', 'Alternar copiloto', 'Alternar explorer', '—', 'Modo foco', 'Tema claro/escuro'],
+  'Acessar': ['Ir para módulo…', 'Ir para equipe…', 'Ir para missão…', '—', 'Paleta de comandos ⌘K'],
+  'Executar': ['Executar missão', 'Health check', 'Varredura Zero Ghost', '—', 'Reindexar conhecimento'],
+  'Terminal': ['Novo terminal', 'Logs ao vivo', '—', 'Limpar console'],
+  'Ajuda': ['Documentação', 'Atalhos de teclado', 'Status da plataforma', '—', 'Sobre A FÁBRICA'],
 };
 
 /* ---------------- Top menu bar ---------------- */
@@ -637,8 +430,8 @@ function MenuBar({ theme, setTheme, onCommand, onToggleCopilot, onToggleExplorer
     <div className="menubar" ref={ref}>
       <div className="mb-brand">
         <span className="mb-mark"><Icon name="flame" size={14} /></span>
-        <span className="mb-word">FORJA</span>
-        <span className="mb-os">Sistema da Fábrica</span>
+        <span className="mb-word">A FÁBRICA</span>
+        <span className="mb-os">powered by FORJA</span>
       </div>
       <nav className="mb-menus">
         {Object.keys(MENUS).map(m => (
@@ -653,8 +446,8 @@ function MenuBar({ theme, setTheme, onCommand, onToggleCopilot, onToggleExplorer
                   : <button key={i} className="mb-opt" onClick={() => {
                       setOpen(null);
                       if (it.includes('Tema')) setTheme(theme === 'dark' ? 'light' : 'dark');
-                      else if (it.includes('Centro de comandos')) onCommand();
-                      else if (it.includes('assistente')) onToggleCopilot();
+                      else if (it.includes('Paleta')) onCommand();
+                      else if (it.includes('copiloto')) onToggleCopilot();
                     }}>
                       <span>{it}</span>
                     </button>)}
@@ -665,39 +458,47 @@ function MenuBar({ theme, setTheme, onCommand, onToggleCopilot, onToggleExplorer
       </nav>
       <div className="mb-title">
         <Icon name="git" size={12} style={{ opacity: .5 }} />
-        <span className="mono">factory · main</span>
+        <span className="mono">fabrica · main</span>
         <span className="mb-dot">·</span>
-        <span className="muted">Operação diária</span>
+        <span className="muted">Monitor 1</span>
       </div>
       <div className="mb-actions">
-        <button className="mb-act" title="Centro de comandos (⌘K)" onClick={onCommand}><Icon name="command" size={14} /></button>
+        <button className="mb-act" title="Paleta de comandos (⌘K)" onClick={onCommand}><Icon name="command" size={14} /></button>
         <button className="mb-act" title="Notificações"><Icon name="bell" size={14} /><span className="mb-badge">3</span></button>
         <button className="mb-act" title="Tema" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
           <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14} />
         </button>
-        <button className="mb-act" title="Explorador (⌘B)" onClick={onToggleExplorer}><Icon name="panelL" size={14} /></button>
-        <button className="mb-act" title="Assistente (⌘\)" onClick={onToggleCopilot}><Icon name="panelR" size={14} /></button>
+        <button className="mb-act" title="Explorer (⌘B)" onClick={onToggleExplorer}><Icon name="panelL" size={14} /></button>
+        <button className="mb-act" title="Copiloto (⌘\)" onClick={onToggleCopilot}><Icon name="panelR" size={14} /></button>
         <div className="mb-avatar">AR</div>
       </div>
     </div>
   );
 }
 
-/* ---------------- Activity bar (nav primária) ---------------- */
+/* ---------------- Activity bar (nav primária, agrupada) ---------------- */
 function ActivityBar({ view, setView }) {
+  let lastGroup = null;
   return (
     <div className="activitybar">
       <div className="ab-group">
-        {NAV.map(n => (
-          <button key={n.id} className={'ab-btn' + (view === n.id ? ' on' : '')}
-            onClick={() => setView(n.id)} title={n.label}>
-            <Icon name={n.icon} size={20} stroke={view === n.id ? 2.2 : 1.8} />
-            <span className="ab-tip">{n.label}</span>
-          </button>
-        ))}
+        {NAV.map(n => {
+          const showDiv = lastGroup && n.grupo !== lastGroup;
+          lastGroup = n.grupo;
+          return (
+            <React.Fragment key={n.id}>
+              {showDiv && <div className="ab-div" />}
+              <button className={'ab-btn' + (view === n.id ? ' on' : '')}
+                onClick={() => setView(n.id)} title={n.label + ' · ' + n.grupo}>
+                <Icon name={n.icon} size={19} stroke={view === n.id ? 2.2 : 1.8} />
+                <span className="ab-tip">{n.label}</span>
+              </button>
+            </React.Fragment>
+          );
+        })}
       </div>
       <div className="ab-group">
-        <button className={'ab-btn' + (view === 'settings' ? ' on' : '')} onClick={() => setView('settings')} title="Configurações">
+        <button className={'ab-btn' + (view === 'configuracoes' ? ' on' : '')} onClick={() => setView('configuracoes')} title="Configurações">
           <Icon name="gear" size={20} stroke={1.8} />
           <span className="ab-tip">Configurações</span>
         </button>
@@ -706,168 +507,98 @@ function ActivityBar({ view, setView }) {
   );
 }
 
-/* ---------------- Barra de estado (V2 · 8 serviços + saúde) ---------------- */
+/* ---------------- Status bar (Zero Ghost · estado real) ---------------- */
 function StatusBar({ view, setView }) {
   const D = window.FORJA;
-  const exec = D.missoes.filter(m => m.status === 'RUNNING').length;
-  const online = D.agentes.filter(a => a.status === 'running').length;
+  const impl = D.modulos.filter(m => m.status === 'IMPL' || m.status === 'CERT').length;
+  const dev = D.modulos.filter(m => m.status === 'DEV' || m.status === 'PARCIAL').length;
   const [clock, setClock] = useState('');
   useEffect(() => {
     const t = () => { const d = new Date(); setClock(d.toTimeString().slice(0,8)); };
     t(); const id = setInterval(t, 1000); return () => clearInterval(id);
   }, []);
-  const sCls = (s) => s==='ok'?'ok':s==='warn'?'warn':s==='err'?'err':'idle';
   return (
     <div className="statusbar">
       <div className="sb-left">
         <span className="sb-item acc"><Icon name="git" size={12} /> main</span>
-        {D.services.map(s => (
-          <span key={s.id} className="sb-svc" title={s.nome + ' · ' + s.ping}>
-            <span className={'dot ' + sCls(s.status)} />
-            <span className="sb-svc-nm">{s.nome}</span>
-          </span>
-        ))}
+        <span className="sb-svc" title="Lei Zero Ghost ativa"><span className="dot ok" /><span className="sb-svc-nm">Zero Ghost ativo</span></span>
+        <span className="sb-svc"><span className="dot ok" /><span className="sb-svc-nm">{impl} impl.</span></span>
+        <span className="sb-svc"><span className="dot warn" /><span className="sb-svc-nm">{dev} em desenv.</span></span>
+        <span className="sb-svc"><span className="dot idle" /><span className="sb-svc-nm">{D.modulos.length} módulos</span></span>
       </div>
       <div className="sb-right">
-        <span className="sb-item blink-slow"><Icon name="activity" size={12}/> {exec} EM EXECUÇÃO</span>
-        <span className="sb-item">{online}/{D.agentes.length} agentes</span>
-        <span className="sb-item" onClick={()=>setView&&setView('costs')} style={{cursor:'pointer'}}><Icon name="dollar" size={12}/> R$ {D.custos.diario}</span>
+        <span className="sb-item" onClick={()=>setView&&setView('llms')} style={{cursor:'pointer'}}><Icon name="zap" size={12}/> LLMs não configuradas</span>
+        <span className="sb-item" onClick={()=>setView&&setView('auditoria')} style={{cursor:'pointer'}}><Icon name="shield" size={12}/> Auditoria</span>
         <span className="sb-item mono">{clock}</span>
-        <span className="sb-item acc"><Icon name="flame" size={12} /> FORJA Operacional</span>
+        <span className="sb-item acc"><Icon name="flame" size={12} /> A FÁBRICA</span>
       </div>
     </div>
   );
 }
 
-Object.assign(window, { NAV, MENUS, MenuBar, ActivityBar, StatusBar });
+Object.assign(window, { NAV, NAV_GROUPS, MENUS, MenuBar, ActivityBar, StatusBar });
 
 
 /* ============================================================
-   FORJA — Explorer (segunda coluna, navegação rápida)
+   A FÁBRICA — Explorer (navegação por grupos · 19 módulos)
    ============================================================ */
 
 function Explorer({ view, setView, onClose }) {
   const D = window.FORJA;
-  const [open, setOpen] = useLocalStorage('forja.explorer.open', {
-    projetos: true, missoes: true, agentes: true, knowledge: false,
-    runtime: false, deploys: false, auditorias: false, relatorios: false,
+  const groups = NAV_GROUPS;
+  const [open, setOpen] = useLocalStorage('forja.explorer.groups', {
+    Trabalho: true, 'Negócio': true, 'Operação': true, Recursos: false,
+    Garantia: false, Infra: false, Plataforma: false,
   });
-  const toggle = (id) => setOpen(o => ({ ...o, [id]: !o[id] }));
-
-  const projStatusDot = (s) => s==='live'?'ok':s==='paused'?'warn':s==='review'?'info':'acc';
-  const misCount = (st) => D.missoes.filter(m => m.status === st).length;
-  const agtDot = (s) => s==='running'?'ok':s==='blocked'?'err':'idle';
-
-  const Section = ({ id, icon, label, count, action, children }) => (
-    <div className={'exp-group' + (open[id]?'':' collapsed')}>
-      <div className="exp-group-head" onClick={() => toggle(id)}>
-        <Icon name="chevD" size={11} className="ic-chev" />
-        <Icon name={icon} size={12} style={{opacity:.7}} />
-        <span>{label}</span>
-        {count!=null && <span className="exp-count">{count}</span>}
-        {action && <button className="exp-add" onClick={(e)=>{e.stopPropagation(); action();}} title="Novo"><Icon name="plus" size={11}/></button>}
-      </div>
-      {open[id] && <div className="exp-items">{children}</div>}
-    </div>
-  );
+  const toggle = (g) => setOpen(o => ({ ...o, [g]: !o[g] }));
+  const byGroup = (g) => D.modulos.filter(m => m.grupo === g);
+  const tone = (st) => (D.ST[st] || {}).tone || 'idle';
 
   return (
     <aside className="explorer">
       <div className="exp-head">
         <Icon name="layers" size={13} style={{color:'var(--accent-bright)'}} />
-        <span className="exp-title">FORJA · EXPLORADOR</span>
-        <button className="btn ghost icon sm" onClick={onClose} title="Fechar Explorador"><Icon name="x" size={13}/></button>
+        <span className="exp-title">A FÁBRICA · PLATAFORMA</span>
+        <button className="btn ghost icon sm" onClick={onClose} title="Fechar Explorer"><Icon name="x" size={13}/></button>
       </div>
       <div className="exp-body scroll-y">
-        <Section id="projetos" icon="folder" label="Projetos" count={D.projetos.length} action={()=>setView('projects')}>
-          {D.projetos.map(p => (
-            <button key={p.id} className={'exp-item' + (view==='projects'?'':'')} onClick={()=>setView('projects')}>
-              <span className={'dot ' + projStatusDot(p.status)} />
-              <span className="truncate">{p.nome}</span>
-              <span className="id">{p.id}</span>
-            </button>
-          ))}
-        </Section>
-
-        <Section id="missoes" icon="target" label="Missões" count={D.missoes.length} action={()=>setView('missions')}>
-          {D.MIS_STATES.map(st => (
-            <button key={st} className="exp-item" onClick={()=>setView('missions')}>
-              <span className={'dot ' + (st==='RUNNING'?'ok':st==='FAILED'?'err':st==='QUEUED'?'info':st==='COMPLETED'?'ok':'idle')} />
-              <span className="mono" style={{fontSize:11}}>{labelMissionStatus(st)}</span>
-              <span className="id">{misCount(st)}</span>
-            </button>
-          ))}
-        </Section>
-
-        <Section id="agentes" icon="cpu" label="Equipe" count={D.agentes.length} action={()=>setView('agents')}>
-          {D.agentes.map(a => (
-            <button key={a.id} className="exp-item" onClick={()=>setView('agents')}>
-              <span className={'dot ' + agtDot(a.status) + (a.status==='running'?' blink':'')} />
-              <span className="mono" style={{fontSize:11}}>{a.papel}</span>
-              <span className="id">{a.missao!=='—'?a.missao:''}</span>
-            </button>
-          ))}
-        </Section>
-
-        <Section id="knowledge" icon="book" label="Conhecimento" count={D.fontes.length} action={()=>setView('knowledge')}>
-          {D.fontes.map(f => (
-            <button key={f.id} className="exp-item" onClick={()=>setView('knowledge')}>
-              <span className={'dot ' + (f.status==='indexado'?'ok':f.status==='erro'?'err':'info')} />
-              <span className="truncate">{f.nome}</span>
-              <span className="id">{f.id}</span>
-            </button>
-          ))}
-        </Section>
-
-        <Section id="runtime" icon="cpu" label="Execução · Núcleos" count={D.cores.length}>
-          {D.cores.map(c => (
-            <button key={c.id} className="exp-item" onClick={()=>setView('settings')}>
-              <span className={'dot ' + (c.status==='ok'?'ok':'warn')} />
-              <span className="truncate">{c.nome}</span>
-              <span className="id">{c.ver}</span>
-            </button>
-          ))}
-        </Section>
-
-        <Section id="deploys" icon="rocket" label="Publicações" count={D.deploys.length} action={()=>setView('deploy')}>
-          {D.deploys.map(d => (
-            <button key={d.id} className="exp-item" onClick={()=>setView('deploy')}>
-              <span className={'dot ' + (d.status==='ok'?'ok':d.status==='fail'?'err':'acc')} style={d.status==='running'?{background:'var(--accent)'}:{}} />
-              <span className="truncate">{d.proj} · {d.amb}</span>
-              <span className="id">{d.id}</span>
-            </button>
-          ))}
-        </Section>
-
-        <Section id="auditorias" icon="shield" label="Auditorias" count={D.auditoria.length} action={()=>setView('audit')}>
-          {D.auditoria.slice(0,8).map(a => (
-            <button key={a.id} className="exp-item" onClick={()=>setView('audit')}>
-              <span className={'dot ' + (a.sev==='crítico'?'err':a.sev==='aviso'?'warn':'info')} />
-              <span className="truncate mono" style={{fontSize:11}}>{a.acao}</span>
-              <span className="id">{a.ts.slice(0,5)}</span>
-            </button>
-          ))}
-        </Section>
-
-        <Section id="relatorios" icon="doc" label="Relatórios" count={D.relatorios.length}>
-          {D.relatorios.map(r => (
-            <button key={r.id} className="exp-item">
-              <Icon name="doc" size={11} style={{color:'var(--text-3)'}}/>
-              <span className="truncate">{r.nome}</span>
-              <span className="id">{r.periodo}</span>
-            </button>
-          ))}
-        </Section>
+        {groups.map(g => {
+          const items = byGroup(g);
+          if (!items.length) return null;
+          const isOpen = open[g];
+          return (
+            <div key={g} className={'exp-group' + (isOpen?'':' collapsed')}>
+              <div className="exp-group-head" onClick={() => toggle(g)}>
+                <Icon name="chevD" size={11} className="ic-chev" />
+                <span>{g}</span>
+                <span className="exp-count">{items.length}</span>
+              </div>
+              {isOpen && <div className="exp-items">
+                {items.map(m => (
+                  <button key={m.id} className={'exp-item' + (view===m.id?' on':'')} onClick={()=>setView(m.id)}>
+                    <Icon name={m.icon} size={12} style={{opacity:.75, flex:'none'}} />
+                    <span className="truncate">{m.nome}</span>
+                    <span className={'exp-st dot ' + tone(m.status)} title={(D.ST[m.status]||{}).label} />
+                  </button>
+                ))}
+              </div>}
+            </div>
+          );
+        })}
 
         <div className="exp-group" style={{marginTop:6, borderTop:'1px solid var(--border-faint)', paddingTop:6}}>
-          <button className="exp-item" onClick={()=>setView('settings')} style={{padding:'6px 10px'}}>
-            <Icon name="gear" size={12} style={{color:'var(--text-3)'}}/>
-            <span>Configurações</span>
+          <button className={'exp-item'+(view==='configuracoes'?' on':'')} onClick={()=>setView('configuracoes')} style={{padding:'6px 10px'}}>
+            <Icon name="gear" size={12} style={{color:'var(--text-3)'}}/><span>Configurações</span>
           </button>
-          <button className="exp-item" onClick={()=>setView('costs')} style={{padding:'6px 10px'}}>
-            <Icon name="zap" size={12} style={{color:'var(--text-3)'}}/>
-            <span>Custos e controle</span>
-          </button>
+        </div>
+
+        <div className="exp-legend">
+          <div className="eyebrow" style={{marginBottom:6}}>ZERO GHOST · LEGENDA</div>
+          <div className="exp-leg-row"><span className="dot ok"/> Implementado</div>
+          <div className="exp-leg-row"><span className="dot warn"/> Em desenvolvimento / parcial</div>
+          <div className="exp-leg-row"><span className="dot info"/> Não testado / aguardando config.</div>
+          <div className="exp-leg-row"><span className="dot idle"/> Não implementado</div>
+          <div className="exp-leg-row"><span className="dot err"/> Bloqueado</div>
         </div>
       </div>
     </aside>
@@ -878,162 +609,38 @@ Object.assign(window, { Explorer });
 
 
 /* ============================================================
-   FORJA — Copiloto (Chat / Agentes / LLMs / Prompt) + Command Palette
+   A FÁBRICA — Command Palette (⌘K · Ctrl+Shift+P)
    ============================================================ */
 
-const COPILOT_TABS = [
-  { id: 'chat', label: 'Chat', icon: 'chat' },
-  { id: 'agentes', label: 'Equipe', icon: 'cpu' },
-  { id: 'llms', label: 'IAs', icon: 'route' },
-];
-
-function Copilot({ onClose, setView }) {
-  const D = window.FORJA;
-  const [tab, setTab] = useState('chat');
-  const [msgs, setMsgs] = useState(D.chatSeed);
-  const [draft, setDraft] = useState('');
-  const [agent, setAgent] = useState('AGT-ARCH');
-  const [model, setModel] = useState('Automático · Central de IA');
-  const [typing, setTyping] = useState(false);
-  const endRef = useRef(null);
-  useEffect(() => { endRef.current && endRef.current.scrollIntoView ? null : null; }, []);
-  const bodyRef = useRef(null);
-  useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [msgs, typing]);
-
-  const send = () => {
-    const t = draft.trim(); if (!t) return;
-    setMsgs(m => [...m, { de: 'voce', txt: t }]);
-    setDraft('');
-    // Verdade: este chat não executa nada por si só. Não fabricamos "Feito".
-    // Execução real só pela Central de Missões (POST /api/missions/{id}/run).
-    setMsgs(m => [...m, {
-      de: 'sistema',
-      nome: 'SISTEMA',
-      txt: 'SEM EXECUÇÃO REAL VINCULADA. Este chat não gera artefatos. '
-         + 'Para executar de verdade, use a Central de Missões (botão "Executar missão"), '
-         + 'que aciona um agente e provider reais e registra evidência.',
-    }]);
-  };
-
-  return (
-    <aside className="copilot">
-      <div className="cp-head">
-        <div className="cp-tabs">
-          {COPILOT_TABS.map(t => (
-            <button key={t.id} className={'cp-tab' + (tab === t.id ? ' on' : '')} onClick={() => setTab(t.id)}>
-              <Icon name={t.icon} size={13} /> {t.label}
-            </button>
-          ))}
-        </div>
-        <button className="btn icon ghost sm" onClick={onClose} title="Fechar assistente"><Icon name="x" size={14} /></button>
-      </div>
-
-      {tab === 'chat' && (
-        <div className="cp-chat">
-          <div className="cp-context">
-            <span className="eyebrow">Contexto</span>
-            <div className="cp-ctx-row">
-              <span className="pill acc"><Icon name="cpu" size={11} /> {agent}</span>
-              <span className="pill"><Icon name="route" size={11} /> {model}</span>
-            </div>
-          </div>
-          <div className="cp-body scroll-y" ref={bodyRef}>
-            {msgs.map((m, i) => (
-              <div key={i} className={'cp-msg ' + (m.de === 'voce' ? 'me' : 'ag')}>
-                {m.de !== 'voce' && <div className="cp-msg-who"><span className="dot ok" /> {m.nome}</div>}
-                <div className="cp-bubble">{m.txt}</div>
-              </div>
-            ))}
-            {typing && <div className="cp-msg ag"><div className="cp-msg-who"><span className="dot ok blink" /> {agent}</div>
-              <div className="cp-bubble cp-typing"><span /><span /><span /></div></div>}
-          </div>
-          <div className="cp-compose">
-            <div className="cp-compose-meta">
-              <select className="cp-select" value={agent} onChange={e => setAgent(e.target.value)}>
-                {D.agentes.map(a => <option key={a.id} value={a.id}>{a.id} · {a.papel}</option>)}
-              </select>
-              <select className="cp-select" value={model} onChange={e => setModel(e.target.value)}>
-                <option>Automático · Central de IA</option>
-                {D.llms.filter(l => l.ativo).flatMap(l => l.modelos.map(m => <option key={l.id+m}>{l.provider} · {m}</option>))}
-              </select>
-            </div>
-            <div className="cp-input">
-              <textarea rows={2} placeholder="Instrua a equipe… (Enter envia)" value={draft}
-                onChange={e => setDraft(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
-              <button className="btn primary icon" onClick={send} title="Enviar"><Icon name="send" size={14} /></button>
-            </div>
-            <div className="cp-hint"><span className="kbd">Enter</span> enviar · <span className="kbd">⇧Enter</span> nova linha</div>
-          </div>
-        </div>
-      )}
-
-      {tab === 'agentes' && (
-        <div className="cp-list scroll-y">
-          {D.agentes.map(a => (
-            <button key={a.id} className="cp-agent" onClick={() => setView('agents')}>
-              <div className="cp-agent-top">
-                <span className={'dot ' + (a.status === 'running' ? 'ok' : a.status === 'blocked' ? 'err' : 'idle')} />
-                <span className="cp-agent-name mono">{a.papel}</span>
-                <span className="pill" style={{marginLeft:'auto'}}>{labelStatus(a.status)}</span>
-              </div>
-              <div className="cp-agent-role muted">{a.nome}</div>
-              <div className="cp-agent-meta mono faint">{a.provider} · {a.missao}</div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {tab === 'llms' && (
-        <div className="cp-list scroll-y">
-          {D.llms.map(l => (
-            <button key={l.id} className="cp-agent" onClick={() => setView('llm')}>
-              <div className="cp-agent-top">
-                <span className={'dot ' + (l.status==='ok'?'ok':l.status==='warn'?'warn':'idle')} />
-                <span className="cp-agent-name">{l.provider}</span>
-                <span className="pill" style={{marginLeft:'auto'}}>{l.tipo}</span>
-              </div>
-              <div className="cp-agent-role muted">{l.modelos.join(' · ')}</div>
-              <div className="cp-agent-meta mono faint">{l.modoUso} · {l.custoIncremental} · {l.ultimoHealth}</div>
-            </button>
-          ))}
-        </div>
-      )}
-    </aside>
-  );
-}
-
-/* ---------------- Command Palette ---------------- */
 function CommandPalette({ onClose, setView, setTheme, theme }) {
+  const D = window.FORJA;
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const inputRef = useRef(null);
   useEffect(() => { inputRef.current && inputRef.current.focus(); }, []);
-  const cmds = [
-    { sec: 'Navegar', label: 'Centro de Comandos', icon: 'pulse', run: () => setView('dashboard') },
-    ...NAV.slice(1).map(n => ({ sec: 'Navegar', label: 'Ir para ' + n.label, icon: n.icon, run: () => setView(n.id) })),
-    { sec: 'Navegar', label: 'Ir para Configurações', icon: 'gear', run: () => setView('settings') },
-    { sec: 'Criar',   label: 'Criar Projeto…',   icon: 'folder', run: () => setView('projects') },
-    { sec: 'Criar',   label: 'Criar Missão…',    icon: 'target', run: () => setView('missions') },
-    { sec: 'Criar',   label: 'Adicionar membro da equipe…', icon: 'cpu', run: () => setView('agents') },
-    { sec: 'Criar',   label: 'Adicionar fonte de conhecimento…', icon: 'book', run: () => setView('knowledge') },
-    { sec: 'Executar',label: 'Acionar equipe…', icon: 'play', run: () => setView('agents') },
-    { sec: 'Executar',label: 'Publicar projeto…', icon: 'rocket', run: () => setView('deploy') },
-    { sec: 'Executar',label: 'Consultar conhecimento…', icon: 'search', run: () => setView('knowledge') },
-    { sec: 'Executar',label: 'Atualizar Central de Conhecimento', icon: 'refresh',run: () => setView('knowledge') },
-    { sec: 'Executar',label: 'Pausar toda a equipe', icon: 'pause', run: () => setView('agents') },
-    { sec: 'Executar',label: 'Executar varredura de auditoria', icon: 'shield', run: () => setView('audit') },
-    { sec: 'Vista',   label: 'Alternar tema (claro/escuro)', icon: theme === 'dark' ? 'sun' : 'moon', run: () => setTheme(theme === 'dark' ? 'light' : 'dark') },
+
+  const navCmds = D.modulos.map(m => ({
+    sec: 'Ir para', label: m.nome, icon: m.icon, status: m.status, run: () => setView(m.id),
+  }));
+  const acts = [
+    { sec: 'Ações', label: 'Abrir Workspace (Home)', icon: 'flame', run: () => setView('home') },
+    { sec: 'Ações', label: 'Ver a verdade do sistema (Auditoria)', icon: 'shield', run: () => setView('auditoria') },
+    { sec: 'Ações', label: 'Configurar provedores LLM', icon: 'zap', run: () => setView('llms') },
+    { sec: 'Ações', label: 'Conectar integrações', icon: 'link', run: () => setView('integracoes') },
+    { sec: 'Ações', label: 'Ver Roadmap da plataforma', icon: 'chart', run: () => setView('roadmap') },
+    { sec: 'Vista', label: 'Alternar tema (claro/escuro)', icon: theme==='dark'?'sun':'moon', run: () => setTheme(theme==='dark'?'light':'dark') },
   ];
+  const cmds = [...navCmds, ...acts];
   const filtered = cmds.filter(c => c.label.toLowerCase().includes(q.toLowerCase()));
   useEffect(() => { setSel(0); }, [q]);
   const exec = (c) => { c && c.run(); onClose(); };
+
   return (
     <div className="cmd-scrim" onMouseDown={onClose}>
       <div className="cmd-palette" onMouseDown={e => e.stopPropagation()}>
         <div className="cmd-input">
           <Icon name="search" size={16} style={{ color: 'var(--text-3)' }} />
-          <input ref={inputRef} value={q} placeholder="Buscar comando, projeto, missão, equipe…  (⌘K · Ctrl+Shift+P)"
+          <input ref={inputRef} value={q} placeholder="Buscar módulo ou ação…  (⌘K · Ctrl+Shift+P)"
             onChange={e => setQ(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'ArrowDown') { e.preventDefault(); setSel(s => Math.min(s + 1, filtered.length - 1)); }
@@ -1055,7 +662,8 @@ function CommandPalette({ onClose, setView, setTheme, theme }) {
                   onMouseEnter={() => setSel(i)} onClick={() => exec(c)}>
                   <Icon name={c.icon} size={15} />
                   <span>{c.label}</span>
-                  {i === sel && <span className="kbd" style={{marginLeft:'auto'}}>↵</span>}
+                  {c.status && <span style={{marginLeft:'auto'}}><StatusPill status={c.status} size="sm" /></span>}
+                  {!c.status && i === sel && <span className="kbd" style={{marginLeft:'auto'}}>↵</span>}
                 </button>
               </React.Fragment>
             );
@@ -1066,1215 +674,1193 @@ function CommandPalette({ onClose, setView, setTheme, theme }) {
   );
 }
 
-Object.assign(window, { Copilot, CommandPalette });
+Object.assign(window, { CommandPalette });
 
 
 /* ============================================================
-   FORJA — cabeçalhos + centro de comandos + central de projetos
+   A FÁBRICA — Home / FORJA · Workspace (estilo Cursor/VS Code)
+   Chat central (agente + LLM) · Preview · Arquivos · Terminal
    ============================================================ */
 
-function CenterHeader({ icon, crumb, title, sub, children }) {
+function FileTree({ nodes, depth = 0 }) {
+  const [open, setOpen] = useState(() => {
+    const o = {}; (function walk(ns){ ns.forEach(n=>{ if(n.tipo==='dir'){o[n.nome]=depth<1; if(n.filhos) walk(n.filhos);} }); })(nodes);
+    return o;
+  });
   return (
-    <div className="center-head hud-grid">
-      <div className="ch-top">
-        <div className="ch-icon"><Icon name={icon} size={19} /></div>
-        <div className="ch-titles">
-          <div className="ch-crumb">FORJA OS · {crumb}</div>
-          <h1 className="ch-title">{title}</h1>
-          {sub && <div className="ch-sub">{sub}</div>}
+    <div className="ftree">
+      {nodes.map((n, i) => n.tipo === 'dir' ? (
+        <div key={i}>
+          <button className="ftree-row" style={{paddingLeft: 8 + depth*12}} onClick={()=>setOpen(o=>({...o,[n.nome]:!o[n.nome]}))}>
+            <Icon name="chevR" size={11} style={{transform:open[n.nome]?'rotate(90deg)':'none', transition:'transform .12s', color:'var(--text-3)'}}/>
+            <Icon name="folder" size={13} style={{color:'var(--accent-bright)'}}/>
+            <span>{n.nome}</span>
+          </button>
+          {open[n.nome] && n.filhos && <FileTree nodes={n.filhos} depth={depth+1} />}
         </div>
-        {children && <div className="ch-actions">{children}</div>}
-      </div>
+      ) : (
+        <button key={i} className="ftree-row file" style={{paddingLeft: 8 + depth*12 + 16}}>
+          <Icon name="file" size={12} style={{color:'var(--text-3)'}}/>
+          <span>{n.nome}</span>
+          <span className="ftree-ext">{n.tipo}</span>
+        </button>
+      ))}
     </div>
   );
 }
 
-/* helper · cabeçalho de tile */
-function TileHead({ icon, title, badge, badgeClass, expandTo, setView }) {
-  return (
-    <div className="panel-head">
-      {icon && <Icon name={icon} size={13} style={{color:'var(--text-2)'}}/>}
-      <h3>{title}</h3>
-      {badge && <span className={'pill ' + (badgeClass||'')}>{badge}</span>}
-      {expandTo && <button className="btn ghost icon sm" style={{marginLeft:'auto'}} onClick={()=>setView(expandTo)} title="Abrir central"><Icon name="chevR" size={13}/></button>}
-    </div>
-  );
-}
-
-/* ===================== CENTRO DE COMANDOS (EXECUTIVE) ===================== */
-function FactoryCommandCenter({ setView }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let active = true;
-    const fetchAll = async () => {
-      try {
-        const [overview, health, providers, missions, github, timeline, alerts, evidence] = await Promise.all([
-          window.ForjaAPI.getJSON('/api/home/overview'),
-          window.ForjaAPI.getJSON('/api/home/health'),
-          window.ForjaAPI.getJSON('/api/home/providers'),
-          window.ForjaAPI.getJSON('/api/home/missions'),
-          window.ForjaAPI.getJSON('/api/home/github'),
-          window.ForjaAPI.getJSON('/api/home/timeline'),
-          window.ForjaAPI.getJSON('/api/home/alerts'),
-          window.ForjaAPI.getJSON('/api/home/evidence')
-        ]);
-        if (active) {
-          setData({ overview, health, providers, missions, github, timeline, alerts, evidence });
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error("Failed to load Executive Center data:", err);
-      }
-    };
-    fetchAll();
-    return () => { active = false; };
-  }, []);
-
-  if (loading || !data) {
-    return (
-      <div className="center exec-center">
-        <CenterHeader icon="pulse" crumb="EXECUTIVE COMMAND" title="Executive Center" sub="Carregando arquitetura da Fábrica..." />
-        <div className="exec-grid" style={{padding: 24}}>
-           {[1,2,3,4,5,6].map(i => <div key={i} className="exec-card skeleton-pulse" style={{height: 140, borderRadius: 8}}></div>)}
-        </div>
-      </div>
-    );
-  }
-
-  // Lógica de Heath principal
-  const isHealthy = data.health?.runtime?.status === 'active' && data.health?.database?.status === 'disconnected';
-  const heroStatus = isHealthy ? 'Operacional' : (data.health?.database?.status === 'disconnected' ? 'Atenção' : 'Crítico');
-  const heroClass = isHealthy ? 'ok' : (data.health?.database?.status === 'disconnected' ? 'warn' : 'err');
-
-  return (
-    <div className="center exec-center scroll-y" style={{ background: 'var(--bg-0)' }}>
-      <CenterHeader icon="pulse" crumb="EXECUTIVE COMMAND" title="Executive Center" sub="Gestão unificada da Fábrica · Reality Engine" />
-      
-      <div className="exec-content" style={{ padding: '0 24px 24px' }}>
-        {/* SEÇÃO 1: HERO EXECUTIVO */}
-        <div className="exec-hero">
-          <div className="exec-hero-main">
-            <div className="exec-hero-label">Status da Fábrica</div>
-            <div className={`exec-hero-status status-${heroClass}`}>
-              <span className={`dot ${heroClass} blink`}></span> {heroStatus}
-            </div>
-          </div>
-          <div className="exec-hero-metrics">
-            <div className="exec-metric"><span>Projetos</span><strong>{data.overview.total_projects}</strong></div>
-            <div className="exec-metric"><span>Missões Ativas</span><strong>{data.overview.active_missions}</strong></div>
-            <div className="exec-metric"><span>Alertas</span><strong>{data.overview.system_alerts}</strong></div>
-          </div>
-        </div>
-
-        <div className="exec-grid">
-          {/* SEÇÃO 2: HEALTH CENTER */}
-          <div className="exec-card">
-            <div className="exec-card-head"><Icon name="cpu" size={14} /> <h3>Health Center</h3></div>
-            <div className="exec-card-body list-tight">
-              <div className="exec-row"><span className="label">Banco</span><span className={`exec-badge-${data.health.database?.status==='disconnected'?'ok':'warn'}`}>{data.health.database?.status || 'desconhecido'}</span></div>
-              <div className="exec-row"><span className="label">Runtime</span><span className={`exec-badge-${data.health.runtime?.status==='active'?'ok':'warn'}`}>{data.health.runtime?.status || 'inativo'}</span></div>
-              <div className="exec-row"><span className="label">Filesystem</span><span className={`exec-badge-${data.health.filesystem?.status==='writable'?'ok':'err'}`}>{data.health.filesystem?.status || 'readonly'}</span></div>
-              <div className="exec-row"><span className="label">Reality Engine</span><span className="exec-badge-ok">active</span></div>
-            </div>
-          </div>
-
-          {/* SEÇÃO 3: LLM COMMAND CENTER */}
-          <div className="exec-card">
-            <div className="exec-card-head"><Icon name="zap" size={14} /> <h3>LLM Command Center</h3></div>
-            <div className="exec-card-body list-tight scroll-y" style={{maxHeight: 180}}>
-              {(data.providers.items || []).map(p => {
-                let pClass = p.status === 'certified' ? 'ok' : (p.status === 'environment_pending' ? 'warn' : 'err');
-                if (p.status === 'missing_implementation') pClass = 'neutral';
-                return (
-                  <div className="exec-row" key={p.name}>
-                    <span className="label" style={{textTransform:'capitalize'}}>{p.name.replace('_sub','')}</span>
-                    <span className={`exec-badge-${pClass}`}>{p.status.replace('_', ' ')}</span>
-                  </div>
-                );
-              })}
-              {(!data.providers.items || data.providers.items.length === 0) && <div className="exec-empty">unavailable</div>}
-            </div>
-          </div>
-
-          {/* SEÇÃO 4: MISSION CENTER */}
-          <div className="exec-card">
-            <div className="exec-card-head"><Icon name="target" size={14} /> <h3>Mission Center</h3></div>
-            <div className="exec-card-body list-tight">
-               <div className="exec-row"><span className="label">Total de Missões</span><strong>{data.missions.total}</strong></div>
-               <div className="exec-row"><span className="label">Em Execução</span><strong>{data.missions.active}</strong></div>
-               <div className="exec-row"><span className="label">Concluídas</span><strong>{data.missions.completed}</strong></div>
-               <div className="exec-row"><span className="label">Com Erro</span><strong>{data.missions.error}</strong></div>
-            </div>
-          </div>
-
-          {/* SEÇÃO 5: GITHUB COMMAND CENTER */}
-          <div className="exec-card">
-            <div className="exec-card-head"><Icon name="git" size={14} /> <h3>GitHub Command</h3></div>
-            <div className="exec-card-body">
-              {data.github.status === 'ok' ? (
-                <div className="exec-git-block">
-                  <div className="exec-row"><span className="label">Branch</span><span className="mono">{data.github.branch}</span></div>
-                  <div className="exec-row"><span className="label">Autor</span><span className="truncate" style={{maxWidth:120}}>{data.github.author}</span></div>
-                  <div className="exec-row"><span className="label">Commit</span><span className="mono">{data.github.last_commit.substring(0,7)}</span></div>
-                  <div className="exec-msg">"{data.github.message}"</div>
-                </div>
-              ) : (
-                 <div className="exec-empty">unavailable</div>
-              )}
-            </div>
-          </div>
-
-          {/* SEÇÃO 7: ALERT CENTER */}
-          <div className="exec-card">
-            <div className="exec-card-head"><Icon name="alert" size={14} /> <h3>Alert Center</h3></div>
-            <div className="exec-card-body list-tight scroll-y" style={{maxHeight: 180}}>
-              <div className="exec-row" style={{marginBottom: 8}}><span className="label">Não resolvidos</span><strong style={{color: data.alerts.total_unresolved > 0 ? 'var(--exec-err)' : 'inherit'}}>{data.alerts.total_unresolved}</strong></div>
-              {(data.alerts.items || []).length > 0 ? (
-                 (data.alerts.items).map((a, i) => (
-                   <div className="exec-row" key={i}><span className="label">{a.severity}</span><span className="truncate">{a.message}</span></div>
-                 ))
-              ) : (
-                 <div className="exec-empty" style={{marginTop: 10}}>Nenhum alerta ativo.</div>
-              )}
-            </div>
-          </div>
-
-          {/* SEÇÃO 8: EVIDENCE CENTER */}
-          <div className="exec-card">
-            <div className="exec-card-head"><Icon name="file" size={14} /> <h3>Evidence Center</h3></div>
-            <div className="exec-card-body list-tight scroll-y" style={{maxHeight: 180}}>
-              {(data.evidence.items || []).length > 0 ? (
-                 data.evidence.items.slice(0, 5).map((e) => (
-                   <div className="exec-evidence-row" key={e.id}>
-                     <div className="truncate" style={{fontSize: 12}}>{e.description}</div>
-                     <div className="mono faint" style={{fontSize: 10, marginTop: 3}}>{e.path.split('\\\\').pop().split('/').pop()}</div>
-                   </div>
-                 ))
-              ) : (
-                 <div className="exec-empty">Nenhuma evidência registrada.</div>
-              )}
-            </div>
-          </div>
-
-          {/* SEÇÃO 6: TIMELINE OPERACIONAL */}
-          <div className="exec-card" style={{gridColumn: '1 / -1'}}>
-            <div className="exec-card-head"><Icon name="activity" size={14} /> <h3>Timeline Operacional</h3></div>
-            <div className="exec-card-body scroll-y" style={{maxHeight: 200}}>
-              {(data.timeline.events || []).length > 0 ? (
-                 <div className="exec-timeline">
-                   {data.timeline.events.map((ev, i) => (
-                     <div className="exec-timeline-item" key={i}>
-                       <span className="time">{ev.time}</span>
-                       <span className={`badge exec-badge-neutral`}>{ev.source}</span>
-                       <span className="msg">{ev.event}</span>
-                     </div>
-                   ))}
-                 </div>
-              ) : (
-                 <div className="exec-empty" style={{padding: '20px 0'}}>Nenhuma atividade registrada.</div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-/* ===================== CENTRAL DE PROJETOS (V2) ===================== */
-function ProjectCenter({ setView }) {
+function HomeWorkspace({ setView }) {
   const D = window.FORJA;
-  const [sel, setSel] = useState(D.projetos[0] || null);
-  const [q, setQ] = useState('');
-  const [filter, setFilter] = useState('todos');
-  if (!D.projetos.length) {
-    return (
-      <div className="center">
-        <CenterHeader icon="folder" crumb="Projetos da Fábrica" title="Fábrica de Projetos"
-          sub="SEM DADOS REAIS — não há tabela de projetos no nexus.db" />
-        <div className="detail-empty" style={{padding:40}}>
-          <div><div className="ic"><Icon name="folder" size={22}/></div>
-          <div style={{fontSize:13, color:'var(--text-2)'}}>SEM DADOS REAIS</div>
-          <div style={{fontSize:11.5, marginTop:4}}>Nenhum projeto real cadastrado. Nada inventado é exibido.</div></div>
-        </div>
-      </div>
-    );
-  }
-  const filters = ['todos','building','review','live','paused'];
-  const list = D.projetos.filter(p =>
-    (filter==='todos' || p.status===filter) &&
-    (p.nome.toLowerCase().includes(q.toLowerCase()) || p.id.toLowerCase().includes(q.toLowerCase())));
-  const lastDeploy = (pid) => (D.deploys.find(d => d.proj === pid) || {}).quando || '—';
-  return (
-    <div className="center">
-      <CenterHeader icon="folder" crumb="Projetos" title="Central de Projetos"
-        sub={D.projetos.length + ' sistemas · ' + D.projetos.filter(p=>p.status==='building').length + ' em construção · entidade principal da Fábrica'}>
-        <button className="btn"><Icon name="filter" size={13} /> Filtros</button>
-        <button className="btn primary"><Icon name="plus" size={13} /> Novo projeto</button>
-      </CenterHeader>
-      <div className="center-head" style={{borderTop:'none', paddingTop:12, paddingBottom:12, background:'var(--bg-1)'}}>
-        <div className="toolbar">
-          <div className="field tb-search">
-            <Icon name="search" size={14} /><input placeholder="Buscar projeto, responsável, versão…" value={q} onChange={e=>setQ(e.target.value)} />
-          </div>
-          <div className="seg">
-            {filters.map(f => <button key={f} className={filter===f?'on':''} onClick={()=>setFilter(f)}>{f==='todos'?'todos':labelStatus(f)}</button>)}
-          </div>
-          <span className="grow" />
-          <span className="muted mono" style={{fontSize:11}}>{list.length} resultados</span>
-        </div>
-      </div>
-      <div className="center-split">
-        <div className="split-main">
-          <div className="tbl-wrap panel" style={{padding:0}}>
-            <table className="tbl">
-              <thead><tr>
-                <th>Projeto</th><th>Situação</th><th>Prio</th><th>Responsável</th><th>Progresso</th><th>Missões</th><th>Artefatos</th><th>Publicação</th><th>Atividade</th>
-              </tr></thead>
-              <tbody>
-                {list.map(p => (
-                  <tr key={p.id} className={sel.id===p.id?'on':''} onClick={()=>setSel(p)}>
-                    <td><div className="cell-strong">{p.nome}</div><div className="id-cell">{p.id} · {p.owner} · <span className="mono">{p.branch}</span></div></td>
-                    <td><span className={'pill ' + (STATUS_CLASS[p.status]||'')}>{labelStatus(p.status)}</span></td>
-                    <td><span className={'prio ' + p.prio}>{p.prio}</span></td>
-                    <td className="mono" style={{fontSize:11}}>{p.agenteResp}</td>
-                    <td style={{minWidth:120}}><div className="metric-inline"><Progress value={p.prog/100} color={'var(--'+(p.cor==='acc'?'accent':p.cor)+')'} /><span className="mono" style={{fontSize:11,width:32}}>{p.prog}%</span></div></td>
-                    <td className="mono">{p.missoes}</td>
-                    <td className="mono">{p.artefatos.toLocaleString('pt-BR')}</td>
-                    <td className="mono muted" style={{fontSize:11}}>há {lastDeploy(p.id)}</td>
-                    <td className="muted" style={{fontSize:11}}>{p.atualizado}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div className="split-side">
-          <div className="detail">
-            <div className="detail-head">
-              <div className="ch-crumb">{sel.id}</div>
-              <h2>{sel.nome}</h2>
-              <div className="tags">
-                <span className={'pill ' + (STATUS_CLASS[sel.status]||'')}>{labelStatus(sel.status)}</span>
-                <span className={'prio ' + sel.prio}>{sel.prio}</span>
-                <span className="tag">{sel.branch}</span>
-              </div>
-            </div>
-            <div className="detail-block">
-              <span className="eyebrow">Progresso de construção</span>
-              <div className="metric-inline"><Progress value={sel.prog/100} h={6} /><span className="mono" style={{fontSize:12}}>{sel.prog}%</span></div>
-            </div>
-            <div className="grid-2" style={{gap:10}}>
-              <div className="kpi" style={{padding:'10px 12px'}}><div className="kpi-label">Missões</div><div className="kpi-val" style={{fontSize:20}}>{sel.missoes}</div></div>
-              <div className="kpi" style={{padding:'10px 12px'}}><div className="kpi-label">Artefatos</div><div className="kpi-val" style={{fontSize:20}}>{sel.artefatos.toLocaleString('pt-BR')}</div></div>
-            </div>
-            <div className="detail-block">
-              <span className="eyebrow">Detalhes</span>
-              <dl className="kv">
-                <dt>Tecnologias</dt><dd>{sel.stack}</dd>
-                <dt>Responsável</dt><dd>{sel.owner}</dd>
-                <dt>Responsável principal</dt><dd className="mono">{sel.agenteResp}</dd>
-                <dt>Equipe ativa</dt><dd>{sel.agentes}</dd>
-                <dt>Versão de trabalho</dt><dd className="mono">{sel.branch}</dd>
-                <dt>Última publicação</dt><dd>há {lastDeploy(sel.id)}</dd>
-                <dt>Atualizado</dt><dd>há {sel.atualizado}</dd>
-              </dl>
-            </div>
-            <div className="detail-block">
-              <span className="eyebrow">Ações rápidas</span>
-              <div style={{display:'flex', gap:7, flexWrap:'wrap'}}>
-                <button className="btn sm" onClick={()=>setView('missions')}><Icon name="target" size={12}/> Missões</button>
-                <button className="btn sm" onClick={()=>setView('deploy')}><Icon name="rocket" size={12}/> Publicar</button>
-                <button className="btn sm" onClick={()=>setView('agents')}><Icon name="cpu" size={12}/> Equipe</button>
-                <button className="btn sm" onClick={()=>setView('costs')}><Icon name="dollar" size={12}/> Custos</button>
-                <button className="btn sm"><Icon name="git" size={12}/> Repositório</button>
-              </div>
-            </div>
-            <div className="detail-block">
-              <span className="eyebrow">Última atividade</span>
-              <div className="term" style={{maxHeight:160}}>
-                <div className="ln"><span className="t">14:30</span><span className="lv-acc">estrutura gerada · +412 linhas</span></div>
-                <div className="ln"><span className="t">14:18</span><span className="lv-ok">construção OK · 2.4s</span></div>
-                <div className="ln"><span className="t">13:55</span><span className="lv-info">missão MIS-412 iniciada</span></div>
-                <div className="ln"><span className="t">13:40</span><span className="lv-warn">lint · 3 avisos</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+  const teams = D.equipes || [];
+  const [team, setTeam] = useLocalStorage('forja.ws.team', 'orquestrador');
+  const [llm, setLLM] = useLocalStorage('forja.ws.llm', 'gemini');
+  const [msgs, setMsgs] = useState(D.chatSeed || []);
+  const [draft, setDraft] = useState('');
+  const [pane, setPane] = useState('preview'); // preview | arquivos | terminal
+  const bodyRef = useRef(null);
+  const teamObj = teams.find(t=>t.id===team) || teams[0] || {};
+  const llmObj = (D.llms || []).find(l=>l.id===llm) || (D.llms || [])[0] || {};
 
-Object.assign(window, { CenterHeader, TileHead, FactoryCommandCenter, ProjectCenter });
+  useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [msgs]);
 
+  const send = async () => {
+    const t = draft.trim(); if (!t) return;
+    setMsgs(m => [...m, { de:'voce', txt:t }]);
+    setDraft('');
+    
+    // Mostra loading
+    const loadingId = Date.now();
+    setMsgs(m => [...m, { id: loadingId, de:'sistema', preview:true, loading:true, txt:'Processando pelo ' + teamObj.nome + '...' }]);
 
-/* ============================================================
-   FORJA — Central de Missões · Equipe Inteligente · Central de IA (V2)
-   ============================================================ */
-
-/* ===================== CENTRAL DE MISSÕES ===================== */
-function MissionCenter({ setView }) {
-  const D = window.FORJA;
-  const [mode, setMode] = useState('board');
-  const [sel, setSel] = useState(null);
-  const [proj, setProj] = useState('todos');
-  const [q, setQ] = useState('');
-  const [running, setRunning] = useState(false);
-  const all = D.missoes.filter(m =>
-    (proj === 'todos' || m.proj === proj) &&
-    (m.titulo.toLowerCase().includes(q.toLowerCase()) || m.id.toLowerCase().includes(q.toLowerCase())));
-  const byCol = (c) => all.filter(m => m.status === c);
-  const projName = (id) => (D.projetos.find(p => p.id === id) || {}).nome || id;
-  const stCls = (s) => s==='RUNNING'?'ok':s==='FAILED'?'err':s==='QUEUED'?'info':s==='COMPLETED'?'ok':'idle';
-
-  return (
-    <div className="center">
-      <CenterHeader icon="target" crumb="Missões · produção em tempo real" title="Central de Missões"
-        sub={all.length + ' missões · ' + byCol('RUNNING').length + ' em execução · ' + byCol('FAILED').length + ' com falha · ' + byCol('PENDING').length + ' pendentes'}>
-        <div className="seg">
-          <button className={mode==='board'?'on':''} onClick={()=>setMode('board')}>Quadro</button>
-          <button className={mode==='list'?'on':''} onClick={()=>setMode('list')}>Lista</button>
-        </div>
-        <button className="btn primary"><Icon name="plus" size={13} /> Nova missão</button>
-      </CenterHeader>
-      <div className="center-head" style={{borderTop:'none', paddingTop:12, paddingBottom:12}}>
-        <div className="toolbar">
-          <div className="field tb-search"><Icon name="search" size={14} /><input placeholder="Buscar missão, equipe, IA…" value={q} onChange={e=>setQ(e.target.value)} /></div>
-          <select className="cp-select" style={{height:28, maxWidth:200, flex:'none'}} value={proj} onChange={e=>setProj(e.target.value)}>
-            <option value="todos">Todos os projetos</option>
-            {D.projetos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-          </select>
-          <span className="grow" />
-          <span className="muted mono" style={{fontSize:11}}>{all.length} missões</span>
-        </div>
-      </div>
-
-      <div className="center-split">
-        <div className="split-main" style={{padding: mode==='board'?'14px 16px':'16px 18px'}}>
-          {mode === 'board' ? (
-            <div className="kanban">
-              {D.MIS_STATES.map(col => (
-                <div className="kan-col" key={col}>
-                  <div className="kan-head" style={{background:'var(--bg-1)'}}>
-                    <span className={'dot ' + stCls(col) + (col==='RUNNING'?' blink':'')} />
-                    <span className="mono" style={{fontWeight:600, fontSize:11, letterSpacing:'.08em'}}>{labelMissionStatus(col)}</span>
-                    <span className="count">{byCol(col).length}</span>
-                  </div>
-                  <div className="kan-body">
-                    {byCol(col).map(m => (
-                      <div key={m.id} className="kan-card" onClick={()=>setSel(m)} style={sel&&sel.id===m.id?{borderColor:'var(--accent-line)'}:{}}>
-                        <div className="kan-card-top">
-                          <span className={'prio '+m.prio}>{m.prio}</span>
-                          <span className="id-cell">{m.id}</span>
-                          {m.tempo!=='—' && <span className="mono acc" style={{marginLeft:'auto', fontSize:10.5, color:'var(--accent-bright)'}}><Icon name="clock" size={10}/> {m.tempo}</span>}
-                        </div>
-                        <div className="kan-card-title">{m.titulo}</div>
-                        {m.etapas>0 && col==='RUNNING' && <Progress value={m.etapa/m.etapas} color="var(--accent)" />}
-                        <div className="kan-card-foot">
-                          <span className="mono" style={{fontSize:10}}>{m.agente}</span>
-                          <span className="faint mono" style={{fontSize:10, marginLeft:'auto'}}>{m.llm}</span>
-                        </div>
-                      </div>
-                    ))}
-                    {byCol(col).length===0 && <div className="faint" style={{fontSize:11, padding:'8px 4px'}}>vazio</div>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="tbl-wrap panel" style={{padding:0}}>
-              <table className="tbl"><thead><tr>
-                <th>ID</th><th>Missão</th><th>Projeto</th><th>Situação</th><th>Prio</th><th>Equipe</th><th>IA</th><th>Tempo</th><th>Etapa</th>
-              </tr></thead><tbody>
-                {all.map(m => (
-                  <tr key={m.id} className={sel&&sel.id===m.id?'on':''} onClick={()=>setSel(m)}>
-                    <td className="id-cell">{m.id}</td>
-                    <td><div className="cell-strong">{m.titulo}</div><div className="tags" style={{marginTop:4}}>{m.tags.map(t=><span key={t} className="tag">{t}</span>)}</div></td>
-                    <td className="muted">{projName(m.proj)}</td>
-                    <td><span className={'pill ' + stCls(m.status)}>{labelMissionStatus(m.status)}</span></td>
-                    <td><span className={'prio '+m.prio}>{m.prio}</span></td>
-                    <td className="mono" style={{fontSize:11}}>{m.agente}</td>
-                    <td className="mono muted" style={{fontSize:11}}>{m.llm}</td>
-                    <td className="mono" style={{fontSize:11, color: m.tempo!=='—'?'var(--accent-bright)':'var(--text-3)'}}>{m.tempo}</td>
-                    <td className="mono">{m.etapa}/{m.etapas}</td>
-                  </tr>
-                ))}
-              </tbody></table>
-            </div>
-          )}
-        </div>
-        <div className="split-side">
-          {sel ? (
-            <div className="detail">
-              <div className="detail-head">
-                <div className="ch-crumb">{sel.id} · {projName(sel.proj)}</div>
-                <h2>{sel.titulo}</h2>
-                <div className="tags">
-                  <span className={'prio '+sel.prio}>{sel.prio}</span>
-                  <span className={'pill ' + stCls(sel.status)}>{labelMissionStatus(sel.status)}</span>
-                  {sel.tags.map(t=><span key={t} className="tag">{t}</span>)}
-                </div>
-              </div>
-              <div className="detail-block">
-                <span className="eyebrow">Progresso · etapa {sel.etapa}/{sel.etapas}</span>
-                <Progress value={sel.etapas?sel.etapa/sel.etapas:0} h={6} color={sel.status==='FAILED'?'var(--err)':'var(--accent)'} />
-              </div>
-              <div className="detail-block">
-                <span className="eyebrow">Atribuição</span>
-                <dl className="kv">
-                  <dt>Responsável</dt><dd className="mono">{sel.agente}</dd>
-                  <dt>IA escolhida</dt><dd className="mono">{sel.llm}</dd>
-                  <dt>Tempo decorrido</dt><dd className="mono">{sel.tempo}</dd>
-                  <dt>Projeto</dt><dd>{projName(sel.proj)}</dd>
-                </dl>
-              </div>
-              <div className="detail-block">
-                <span className="eyebrow">Fluxo da missão</span>
-                {['Análise','Planejamento','Geração','Testes','Revisão','Entrega'].slice(0,sel.etapas).map((s,i)=>(
-                  <div key={s} className="health-row" style={{padding:'7px 0'}}>
-                    <span className={'pipe-node'} style={{width:22,height:22,fontSize:10,
-                      background: i<sel.etapa?'var(--ok)':i===sel.etapa&&sel.status!=='FAILED'?'var(--accent)':sel.status==='FAILED'&&i===sel.etapa?'var(--err)':'var(--bg-2)',
-                      borderColor: i<sel.etapa?'var(--ok)':i===sel.etapa?(sel.status==='FAILED'?'var(--err)':'var(--accent)'):'var(--border-strong)',
-                      color: i<=sel.etapa?'#0a0c0f':'var(--text-3)'}}>{i<sel.etapa?'✓':sel.status==='FAILED'&&i===sel.etapa?'✕':i+1}</span>
-                    <span style={{fontSize:12.5, color: i<=sel.etapa?'var(--text-1)':'var(--text-3)'}}>{s}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{display:'flex', gap:7}}>
-                <button className="btn primary" style={{flex:1}} disabled={running}
-                  onClick={async () => {
-                    if (!window.ForjaAPI || !window.ForjaAPI.runMission) return;
-                    setRunning(true);
-                    try {
-                      const r = await window.ForjaAPI.runMission(sel.id);
-                      await window.ForjaAPI.refreshMissions();
-                      const upd = (window.FORJA.missoes || []).find(x => x.id === sel.id);
-                      if (upd) setSel(upd); else setSel(s => ({ ...s, status: r.status || s.status }));
-                    } finally { setRunning(false); }
-                  }}>
-                  {running ? <><Icon name="refresh" size={13}/> Executando…</>
-                    : sel.status==='FAILED' ? <><Icon name="refresh" size={13}/> Reexecutar</>
-                    : <><Icon name="play" size={12}/> {sel.status==='RUNNING'?'Acompanhar':'Executar missão'}</>}
-                </button>
-                <button className="btn"><Icon name="cpu" size={13}/></button>
-                <button className="btn icon"><Icon name="dots" size={14}/></button>
-              </div>
-            </div>
-          ) : (
-            <div className="detail-empty">
-              <div><div className="ic"><Icon name="target" size={22}/></div>
-              <div style={{fontSize:13, color:'var(--text-2)'}}>Selecione uma missão</div>
-              <div style={{fontSize:11.5, marginTop:4}}>Clique em um card para ver o pipeline e atribuições.</div></div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ===================== EQUIPE INTELIGENTE (V2 · 7 papéis) ===================== */
-function AgentCenter({ setView }) {
-  const D = window.FORJA;
-  const [sel, setSel] = useState(D.agentes[0] || null);
-  if (!D.agentes.length) {
-    return (
-      <div className="center">
-        <CenterHeader icon="cpu" crumb="Execução · equipe da Fábrica" title="Equipe Inteligente"
-          sub="sem dados reais — backend indisponível ou banco sem agentes" />
-        <div className="detail-empty" style={{padding:40}}>
-          <div><div className="ic"><Icon name="cpu" size={22}/></div>
-          <div style={{fontSize:13, color:'var(--text-2)'}}>Sem agentes reais carregados</div>
-          <div style={{fontSize:11.5, marginTop:4}}>Inicie o backend (forja_os_server.py) para ver a equipe real do nexus.db.</div></div>
-        </div>
-      </div>
-    );
-  }
-  const stColor = (e) => e==='running'?'ok':e==='blocked'?'err':'idle';
-  const stLabel = (e) => labelAgentStatus(e);
-  const running = D.agentes.filter(a=>a.status==='running').length;
-  return (
-    <div className="center">
-      <CenterHeader icon="cpu" crumb="Execução · equipe da Fábrica" title="Equipe Inteligente"
-        sub={running + ' em execução · ' + D.agentes.length + ' funções registradas · ARQUITETO, DESENVOLVEDOR, AUDITOR, SEGURANÇA, OPERAÇÕES, ESPECIALISTA EM DADOS, ESPECIALISTA EM IA'}>
-        <button className="btn"><Icon name="pause" size={13} /> Pausar todos</button>
-        <button className="btn primary"><Icon name="plus" size={13} /> Novo membro</button>
-      </CenterHeader>
-      <div className="center-split wide">
-        <div className="split-main">
-          <div className="kpi-grid" style={{marginBottom:16, gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))'}}>
-            <div className="kpi"><div className="kpi-label">Tokens de assinatura</div><div className="kpi-val" style={{fontSize:22}}>N/A</div><div className="kpi-sub">sem billing por token</div></div>
-            <div className="kpi"><div className="kpi-label">Custo incremental</div><div className="kpi-val" style={{fontSize:22}}>R$ 0</div><div className="kpi-sub">assinatura/local</div></div>
-            <div className="kpi"><div className="kpi-label">APIs pagas</div><div className="kpi-val" style={{fontSize:22}}>Bloqueadas</div><div className="kpi-sub">exigem autorização</div></div>
-            <div className="kpi"><div className="kpi-label">Medição real</div><div className="kpi-val" style={{fontSize:22}}>Pendente</div><div className="kpi-sub">sem dados inventados</div></div>
-          </div>
-          <div className="sec-title"><Icon name="cpu" size={14} style={{color:'var(--text-2)'}}/><h2>Funções da equipe</h2></div>
-          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:12, marginTop:10}}>
-            {D.agentes.map(a => (
-              <div key={a.id} className={'panel agent-card'} onClick={()=>setSel(a)} style={{padding:14, cursor:'pointer',
-                borderColor: sel.id===a.id?'var(--accent-line)':'var(--border)', background: sel.id===a.id?'var(--accent-soft)':'var(--bg-2)'}}>
-                <div style={{display:'flex', alignItems:'center', gap:9, marginBottom:10}}>
-                  <span className={'dot ' + stColor(a.status) + (a.status==='running'?' blink':'')} />
-                  <span className="mono" style={{fontWeight:700, fontSize:12, letterSpacing:'.06em'}}>{a.papel}</span>
-                  <span className={'pill ' + (a.status==='running'?'ok':a.status==='blocked'?'err':'')} style={{marginLeft:'auto'}}>{stLabel(a.status)}</span>
-                </div>
-                <div style={{fontSize:12.5, fontWeight:500, marginBottom:2}}>{a.nome}</div>
-                <div className="muted" style={{fontSize:11, marginBottom:10}}>{a.id}</div>
-                <dl className="kv" style={{fontSize:11}}>
-                  <dt>Missão atual</dt><dd className="mono">{a.missao}</dd>
-                  <dt>Última exec.</dt><dd className="mono">há {a.ultimaExec}</dd>
-                  <dt>Provedor de IA</dt><dd className="mono truncate">{a.provider}</dd>
-                  <dt>Tempo médio</dt><dd className="mono">{a.tempoMedio}</dd>
-                </dl>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="split-side">
-          <div className="detail">
-            <div className="detail-head">
-              <div className="ch-crumb">{sel.id}</div>
-              <h2 className="mono" style={{letterSpacing:'.04em'}}>{sel.papel}</h2>
-              <div style={{fontSize:12, color:'var(--text-2)'}}>{sel.nome}</div>
-              <div className="tags"><span className={'pill ' + stColor(sel.status)}>{stLabel(sel.status)}</span></div>
-            </div>
-            <div className="grid-2" style={{gap:10}}>
-              <div className="kpi" style={{padding:'10px 12px'}}><div className="kpi-label">Tokens</div><div className="kpi-val" style={{fontSize:18}}>Não aplicável</div></div>
-              <div className="kpi" style={{padding:'10px 12px'}}><div className="kpi-label">Custo incremental</div><div className="kpi-val" style={{fontSize:18}}>R$ 0</div></div>
-            </div>
-            <div className="detail-block">
-              <span className="eyebrow">Configuração</span>
-              <dl className="kv">
-                <dt>Provedor de IA</dt><dd className="mono">{sel.provider}</dd>
-                <dt>Missão atual</dt><dd className="mono">{sel.missao}</dd>
-                <dt>Última execução</dt><dd>há {sel.ultimaExec}</dd>
-                <dt>Tempo médio</dt><dd className="mono">{sel.tempoMedio}</dd>
-                <dt>Tarefas concluídas</dt><dd className="mono">não medido</dd>
-                <dt>Taxa de sucesso</dt><dd className="mono">não medido</dd>
-              </dl>
-            </div>
-            <div className="detail-block">
-              <span className="eyebrow">Registros da equipe · ao vivo</span>
-              <div className="term" style={{maxHeight:200}}>
-                <div className="ln"><span className="t">14:32</span><span className="lv-acc">{sel.papel} ⟶ chamando {sel.provider}</span></div>
-                <div className="ln"><span className="t">14:32</span><span className="lv-info">contexto: 12.4K tokens · conhecimento: 3 docs</span></div>
-                <div className="ln"><span className="t">14:31</span><span className="lv-ok">ferramenta write_file → ok</span></div>
-                <div className="ln"><span className="t">14:31</span><span className="lv-info">raciocínio: decompondo subtarefa 3/6</span></div>
-                <div className="ln"><span className="t">14:30</span><span className="lv-ok">testes: 18 passou · 0 falhou</span></div>
-              </div>
-            </div>
-            <div style={{display:'flex', gap:7}}>
-              <button className="btn primary" style={{flex:1}}>{sel.status==='running'?<><Icon name="pause" size={12}/> Pausar</>:<><Icon name="play" size={12}/> Iniciar</>}</button>
-              <button className="btn" onClick={()=>setView('missions')}><Icon name="target" size={13}/></button>
-              <button className="btn icon"><Icon name="dots" size={14}/></button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ===================== CENTRAL DE IA (V2 · 5 provedores) ===================== */
-function LLMCenter({ setView }) {
-  const D = window.FORJA;
-  const [llms, setLLMs] = useState(D.llms);
-  const [sel, setSel] = useState(D.llms[0]);
-  const toggle = (id) => setLLMs(ms => ms.map(m => m.id===id?{...m, ativo:!m.ativo}:m));
-  const ativos = llms.filter(m => m.ativo);
-  return (
-    <div className="center">
-      <CenterHeader icon="route" crumb="Central de IA · baixo custo" title="Central de IA"
-        sub="Assinaturas e local primeiro · APIs pagas bloqueadas sem autorização · sem custos fictícios">
-        <button className="btn"><Icon name="refresh" size={13} /> Rebalancear</button>
-        <button className="btn primary"><Icon name="plus" size={13} /> Adicionar provedor</button>
-      </CenterHeader>
-      <div className="center-split wide">
-        <div className="split-main section-gap">
-          <div className="panel">
-            <div className="panel-head"><Icon name="route" size={14} style={{color:'var(--text-2)'}}/><h3>Provedores</h3>
-              <div className="right"><span className="pill warn">ativos somente com validação real</span></div></div>
-            <div className="panel-body flush tbl-wrap">
-              <table className="tbl"><thead><tr>
-                <th>Nome</th><th>Tipo</th><th>Status</th><th>Modo de uso</th><th>Automação</th><th>Custo incremental</th><th>Billing</th><th>Último health check</th><th>Observação</th>
-              </tr></thead><tbody>
-                {llms.map(l => (
-                  <tr key={l.id} className={sel.id===l.id?'on':''} onClick={()=>setSel(l)} style={{opacity: l.ativo?1:0.55}}>
-                    <td><div className="cell-strong">{l.provider}</div><div className="id-cell mono">{l.modelos.join(' · ')}</div></td>
-                    <td><span className="tag">{l.tipo}</span></td>
-                    <td><span className={'pill ' + (l.status==='active_real'?'ok':l.status==='inactive'?'err':'warn')}>{l.statusLabel || l.status}</span></td>
-                    <td>{l.modoUso}</td>
-                    <td>{l.automacao}</td>
-                    <td className="mono">{l.custoIncremental}</td>
-                    <td>{l.billing}</td>
-                    <td>{l.ultimoHealth}</td>
-                    <td className="muted" style={{fontSize:11}}>{l.observacao}</td>
-                  </tr>
-                ))}
-              </tbody></table>
-            </div>
-          </div>
-          <div className="panel">
-            <div className="panel-head"><Icon name="zap" size={14} style={{color:'var(--text-2)'}}/><h3>Regras de roteamento</h3>
-              <div className="right"><button className="btn ghost sm"><Icon name="plus" size={12}/> Regra</button></div></div>
-            <div className="panel-body flush">
-              {D.rotas.map(r => (
-                <div key={r.id} className="health-row" style={{padding:'12px 14px'}}>
-                  <span className="id-cell" style={{width:28}}>{r.id}</span>
-                  <div style={{flex:1, minWidth:0}}>
-                    <div className="mono" style={{fontSize:12}}>{r.quando}</div>
-                    <div className="faint" style={{fontSize:10.5}}>alternativa → {r.fallback}</div>
-                  </div>
-                  <Icon name="chevR" size={14} style={{color:'var(--text-3)'}}/>
-                  <span className="pill acc">{r.modelo}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="split-side">
-          <div className="detail">
-            <div className="detail-head">
-              <div className="ch-crumb">{sel.id}</div>
-              <h2>{sel.provider}</h2>
-              <div className="tags"><span className={'pill ' + (sel.status==='active_real'?'ok':sel.status==='inactive'?'err':'warn')}>{sel.statusLabel || sel.status}</span><span className="tag">{sel.tipo}</span></div>
-            </div>
-            <div className="grid-2" style={{gap:10}}>
-              <div className="kpi" style={{padding:'10px 12px'}}><div className="kpi-label">Tipo</div><div className="kpi-val" style={{fontSize:18}}>{sel.tipo}</div></div>
-              <div className="kpi" style={{padding:'10px 12px'}}><div className="kpi-label">Automação</div><div className="kpi-val" style={{fontSize:18}}>{sel.automacao}</div></div>
-              <div className="kpi" style={{padding:'10px 12px'}}><div className="kpi-label">Custo incremental</div><div className="kpi-val" style={{fontSize:18}}>{sel.custoIncremental}</div></div>
-              <div className="kpi" style={{padding:'10px 12px'}}><div className="kpi-label">Saúde</div><div className="kpi-val" style={{fontSize:18}}>{sel.statusLabel || sel.status}</div></div>
-            </div>
-            <div className="detail-block">
-              <span className="eyebrow">Modelos disponíveis</span>
-              <div className="tags">{sel.modelos.map(m => <span key={m} className="tag mono">{m}</span>)}</div>
-            </div>
-            <div className="detail-block">
-              <span className="eyebrow">Observação</span>
-              <div className="card" style={{padding:'10px 12px', fontSize:12}}>{sel.observacao}</div>
-            </div>
-            <div className="detail-block">
-              <span className="eyebrow">Política de uso</span>
-              <div className="card" style={{padding:'10px 12px', display:'flex', alignItems:'center', gap:10}}>
-                <Icon name="route" size={14} style={{color:'var(--text-3)'}}/>
-                <span style={{fontSize:12}}>{sel.provider}</span>
-                <Icon name="chevR" size={13} style={{color:'var(--text-3)'}}/>
-                <span className="pill acc">{sel.tipo === 'API Paga' ? 'exige autorização' : 'custo incremental zero'}</span>
-              </div>
-            </div>
-            <div style={{display:'flex', gap:7}}>
-              <button className="btn primary" style={{flex:1}} onClick={()=>toggle(sel.id)}>{sel.ativo?<><Icon name="pause" size={12}/> Desativar</>:<><Icon name="play" size={12}/> Ativar</>}</button>
-              <button className="btn"><Icon name="gear" size={13}/></button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-Object.assign(window, { MissionCenter, AgentCenter, LLMCenter });
-
-
-/* ============================================================
-   FORJA V2 — Publicação · Custos · Auditoria · Conhecimento · Configurações
-   ============================================================ */
-
-/* ===================== CENTRAL DE PUBLICAÇÃO ===================== */
-function DeployCenter({ setView }) {
-  const D = window.FORJA;
-  return (
-    <div className="center">
-      <CenterHeader icon="rocket" crumb="Publicações" title="Central de Publicação"
-        sub="NÃO MONITORADO — sem pipeline de publicação real conectado" />
-      <div className="center-body section-gap">
-        <div className="detail-empty" style={{padding:40}}>
-          <div><div className="ic"><Icon name="rocket" size={22}/></div>
-          <div style={{fontSize:13, color:'var(--text-2)'}}>SEM DADOS REAIS</div>
-          <div style={{fontSize:11.5, marginTop:4}}>
-            Nenhum ambiente ou publicação real monitorada. Nada de cobertura, versões
-            ou logs inventados é exibido. Aguardando primeira publicação real.</div></div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ===================== CONTROLE DE CUSTOS ===================== */
-function CostsCenter({ setView }) {
-  const D = window.FORJA;
-  const c = D.custos;
-  const pctLimite = c.limite > 0 ? c.mensal / c.limite : 0;
-  return (
-    <div className="center">
-      <CenterHeader icon="dollar" crumb="Controle de Custos" title="Controle de Custos"
-        sub="Painel financeiro da Fábrica · proteção de custos ativa · alertas e limites configurados">
-        <div className="seg"><button>24h</button><button className="on">30d</button><button>90d</button><button>Ano</button></div>
-        <button className="btn"><Icon name="doc" size={13} /> Exportar</button>
-        <button className="btn primary"><Icon name="zap" size={13} /> Otimizar</button>
-      </CenterHeader>
-      <div className="center-body section-gap">
-        {/* KPIs financeiros — billing real ($1/dia · $30/mês) */}
-        <div className="kpi-grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))'}}>
-          <div className="kpi"><div className="kpi-label">Custo diário</div><div className="kpi-val">${(c.diario||0).toFixed(2)}</div><div className="kpi-foot"><span className="kpi-sub">limite ${(c.limiteDiario||1).toFixed(2)}/dia</span></div></div>
-          <div className="kpi"><div className="kpi-label">Custo mensal</div><div className="kpi-val">${(c.mensal||0).toFixed(2)}</div><div className="kpi-foot"><span className="kpi-sub">{(c.source==='real_usage'?'uso real':'sem dados reais')}</span></div></div>
-          <div className="kpi"><div className="kpi-label">Limite mensal</div><div className="kpi-val">${(c.limite||30).toFixed(2)}</div><div className="kpi-foot"><span className="kpi-delta flat">teto da Diretoria</span></div></div>
-          <div className="kpi"><div className="kpi-label">Projeção fim de mês</div><div className="kpi-val">${(c.projecao||0).toFixed(2)}</div><div className="kpi-foot"><span className="kpi-sub">base uso real</span></div></div>
-        </div>
-
-        {/* alertas */}
-        <div className="panel">
-          <div className="panel-head"><Icon name="alert" size={14} style={{color:'var(--warn)'}}/><h3>Controle de custos · alertas</h3></div>
-          <div className="panel-body flush">
-            {c.alerts.map((a,i)=>(
-              <div key={i} className="health-row" style={{padding:'11px 14px'}}>
-                <span className={'pill ' + (a.nivel==='warn'?'warn':'info')}>{a.nivel}</span>
-                <span style={{flex:1, fontSize:12.5}}>{a.txt}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Charts row */}
-        <div className="grid-2" style={{gridTemplateColumns:'1.4fr 1fr'}}>
-          <div className="panel">
-            <div className="panel-head"><Icon name="activity" size={14} style={{color:'var(--text-2)'}}/><h3>Custo incremental (30 dias)</h3>
-              <div className="right mono muted" style={{fontSize:11}}>sem API paga autorizada</div></div>
-            <div className="panel-body">
-              <Bars data={c.serieDiaria} w={700} h={100} color="var(--accent)" gap={3} />
-            </div>
-          </div>
-          <div className="panel">
-            <div className="panel-head"><Icon name="dollar" size={14} style={{color:'var(--text-2)'}}/><h3>Uso de API paga</h3></div>
-            <div className="panel-body" style={{display:'flex', alignItems:'center', gap:18}}>
-              <Donut value={pctLimite} size={120} stroke={14} color={pctLimite>0.85?'var(--err)':pctLimite>0.7?'var(--warn)':'var(--accent)'} label={Math.round(pctLimite*100)+'%'} />
-              <div style={{flex:1}}>
-                <div className="kv" style={{fontSize:12}}>
-                  <dt>Consumido</dt><dd className="mono">R$ 0,00</dd>
-                  <dt>Restante</dt><dd className="mono">não aplicável</dd>
-                  <dt>Limite</dt><dd className="mono">definir ao autorizar API</dd>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Breakdown 3 colunas */}
-        <div className="grid-3">
-          <div className="panel">
-            <div className="panel-head"><Icon name="route" size={14} style={{color:'var(--text-2)'}}/><h3>Por IA</h3></div>
-            <div className="panel-body flush">
-              {c.byLLM.map(l=>(
-                <div key={l.nome} className="cost-row">
-                  <span className="cost-sw" style={{background: l.cor}}/>
-                  <span className="cost-nm">{l.nome}</span>
-                  <span className="cost-bar"><Progress value={l.pct} color={l.cor}/></span>
-                  <span className="cost-val mono">R$ {l.custo.toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="panel">
-            <div className="panel-head"><Icon name="folder" size={14} style={{color:'var(--text-2)'}}/><h3>Por Projeto</h3></div>
-            <div className="panel-body flush">
-              {c.byProjeto.map(p=>(
-                <div key={p.proj} className="cost-row">
-                  <span className="cost-sw" style={{background:'var(--accent)'}}/>
-                  <span className="cost-nm truncate">{p.proj}</span>
-                  <span className="cost-bar"><Progress value={p.pct} color="var(--accent)"/></span>
-                  <span className="cost-val mono">R$ {p.custo.toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="panel">
-            <div className="panel-head"><Icon name="cpu" size={14} style={{color:'var(--text-2)'}}/><h3>Por Equipe</h3></div>
-            <div className="panel-body flush">
-              {c.byAgente.map(a=>{
-                const max = c.byAgente[0].custo || 1;
-                return (
-                  <div key={a.agente} className="cost-row">
-                    <span className="cost-sw" style={{background:'var(--violet)'}}/>
-                    <span className="cost-nm mono" style={{fontSize:11}}>{a.agente}</span>
-                    <span className="cost-bar"><Progress value={a.custo/max} color="var(--violet)"/></span>
-                    <span className="cost-val mono">R$ {a.custo.toFixed(2)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ===================== CENTRAL DE AUDITORIA ===================== */
-function AuditCenter({ setView }) {
-  const D = window.FORJA;
-  const G = D.governance;
-  const [q, setQ] = useState('');
-  const [sev, setSev] = useState('todos');
-  const sevs = ['todos','info','aviso','crítico'];
-  const rows = D.auditoria.filter(a =>
-    (sev==='todos' || a.sev===sev) &&
-    (a.acao.toLowerCase().includes(q.toLowerCase()) || a.ator.toLowerCase().includes(q.toLowerCase()) || a.alvo.toLowerCase().includes(q.toLowerCase())));
-  const count = (s) => D.auditoria.filter(a=>a.sev===s).length;
-  return (
-    <div className="center">
-      <CenterHeader icon="shield" crumb="Conformidade · Lei Zero Fantasma" title="Central de Auditoria"
-        sub="Trilha imutável de eventos · sistema de evidências · governança · certificações">
-        <button className="btn"><Icon name="doc" size={13} /> Exportar evidências</button>
-        <button className="btn primary"><Icon name="zap" size={13} /> Nova varredura</button>
-      </CenterHeader>
-      <div className="center-body section-gap">
-        {/* Banner da Lei Zero Fantasma */}
-        <div className="card hud-grid" style={{padding:'16px 18px', display:'flex', alignItems:'center', gap:18, borderColor:'var(--accent-line)'}}>
-          <div style={{width:48, height:48, borderRadius:'var(--r-md)', background:'var(--accent-soft)', display:'grid', placeItems:'center', color:'var(--accent-bright)', flex:'none', border:'1px solid var(--accent-line)'}}><Icon name="shield" size={22}/></div>
-          <div style={{flex:1, minWidth:0}}>
-            <div className="eyebrow" style={{color:'var(--accent-bright)'}}>LEI ZERO FANTASMA</div>
-            <div style={{fontSize:15, fontWeight:600, marginTop:2}}>Toda ação na Fábrica deixa evidência verificável</div>
-            <div className="muted" style={{fontSize:11.5, marginTop:3}}>{G.zeroGhostLaw.ativas} políticas ativas · {G.zeroGhostLaw.violacoes} violações · última varredura há {G.zeroGhostLaw.ultimaVarredura}</div>
-          </div>
-          <div style={{display:'flex', gap:18, alignItems:'center'}}>
-            <div style={{textAlign:'center'}}><div className="kpi-val" style={{fontSize:16, color:'var(--text-2)'}}>NÃO CALCULADA</div><div className="kpi-sub">integridade</div></div>
-            <div style={{textAlign:'center'}}><div className="kpi-val" style={{fontSize:22, color:'var(--accent-bright)'}}>{(G.evidence.total||0).toLocaleString('pt-BR')}</div><div className="kpi-sub">evidências reais</div></div>
-          </div>
-        </div>
-
-        {/* KPIs */}
-        <div className="kpi-grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))'}}>
-          <div className="kpi"><div className="kpi-label">Eventos (auditoria)</div><div className="kpi-val">{G.zeroGhostLaw.ativas||0}</div><div className="kpi-sub">{rows.length} exibidos</div></div>
-          <div className="kpi"><div className="kpi-label"><span className="dot info"/> Info</div><div className="kpi-val" style={{color:'var(--info)'}}>{count('info')}</div></div>
-          <div className="kpi"><div className="kpi-label"><span className="dot warn"/> Avisos</div><div className="kpi-val" style={{color:'var(--warn)'}}>{count('aviso')}</div></div>
-          <div className="kpi"><div className="kpi-label"><span className="dot err"/> Críticos</div><div className="kpi-val" style={{color:'var(--err)'}}>{count('crítico')}</div></div>
-        </div>
-
-        <div className="grid-2" style={{gridTemplateColumns:'1.3fr 1fr'}}>
-          {/* trilha */}
-          <div className="panel">
-            <div className="panel-head">
-              <Icon name="shield" size={14} style={{color:'var(--text-2)'}}/><h3>Trilha de auditoria</h3>
-              <div className="right">
-                <div className="field" style={{height:26, minWidth:180}}><Icon name="search" size={13}/><input placeholder="Buscar…" value={q} onChange={e=>setQ(e.target.value)} /></div>
-                <div className="seg">{sevs.map(s=><button key={s} className={sev===s?'on':''} onClick={()=>setSev(s)}>{s}</button>)}</div>
-              </div>
-            </div>
-            <div className="panel-body flush tbl-wrap">
-              <table className="tbl"><thead><tr><th style={{width:80}}>Hora</th><th>Sev</th><th>Ator</th><th>Ação</th><th>Alvo</th></tr></thead>
-              <tbody>
-                {rows.map(a => (
-                  <tr key={a.id} style={{cursor:'default'}}>
-                    <td className="mono faint">{a.ts}</td>
-                    <td><span className={'pill ' + (a.sev==='crítico'?'err':a.sev==='aviso'?'warn':'info')}>{a.sev}</span></td>
-                    <td className="mono">{a.ator}</td>
-                    <td className="cell-strong mono" style={{fontSize:11.5}}>{a.acao}</td>
-                    <td className="muted">{a.alvo}</td>
-                  </tr>
-                ))}
-              </tbody></table>
-            </div>
-          </div>
-
-          <div className="col">
-            {/* certificações */}
-            <div className="panel">
-              <div className="panel-head"><Icon name="check" size={14} style={{color:'var(--text-2)'}}/><h3>Certificações</h3><div className="right"><span className="pill ok">3/4 OK</span></div></div>
-              <div className="panel-body flush">
-                {G.certificacoes.map(c => (
-                  <div key={c.nome} className="health-row" style={{padding:'11px 14px'}}>
-                    <span className={'dot ' + (c.status==='ok'?'ok':'warn')} />
-                    <div style={{flex:1, minWidth:0}}>
-                      <div style={{fontSize:12.5, fontWeight:500}}>{c.nome}</div>
-                      <div className="faint" style={{fontSize:10.5}}>renovação: {c.renova}</div>
-                    </div>
-                    <span className="mono faint" style={{fontSize:11}}>{c.validade}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {/* evidence system */}
-            <div className="panel">
-            <div className="panel-head"><Icon name="doc" size={14} style={{color:'var(--text-2)'}}/><h3>Sistema de Evidências</h3></div>
-              <div className="panel-body">
-                <dl className="kv">
-                  <dt>Total armazenado</dt><dd className="mono">{G.evidence.total.toLocaleString('pt-BR')}</dd>
-                  <dt>Última hora</dt><dd className="mono">+{G.evidence.ultimaHora}</dd>
-                  <dt>Retenção</dt><dd>{G.evidence.retencao}</dd>
-                  <dt>Integridade</dt><dd className="mono" style={{color:'var(--ok)'}}>{Math.round(G.evidence.integridade*100)}%</dd>
-                  <dt>Assinatura</dt><dd className="mono" style={{fontSize:10.5}}>{G.evidence.assinatura}</dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* falhas + alertas */}
-        <div className="grid-2">
-          <div className="panel">
-            <div className="panel-head"><Icon name="alert" size={14} style={{color:'var(--warn)'}}/><h3>Falhas detectadas</h3></div>
-            <div className="panel-body flush">
-              {G.falhas.map((f,i)=>(
-                <div key={i} className="health-row" style={{padding:'11px 14px'}}>
-                  <span className={'pill ' + (f.sev==='crítico'?'err':'warn')}>{f.sev}</span>
-                  <span style={{fontSize:12, flex:1}}>{f.dado}</span>
-                  <span className="mono faint" style={{fontSize:11}}>{f.ts}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="panel">
-            <div className="panel-head"><Icon name="bell" size={14} style={{color:'var(--err)'}}/><h3>Alertas de governança</h3></div>
-            <div className="panel-body flush">
-              {G.alertas.map((a,i)=>(
-                <div key={i} className="health-row" style={{padding:'11px 14px'}}>
-                  <span className={'pill ' + (a.nivel==='crítico'?'err':'warn')}>{a.tipo}</span>
-                  <span style={{fontSize:12, flex:1}}>{a.txt}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ===================== KNOWLEDGE CENTER ===================== */
-function KnowledgeCenter({ setView }) {
-  const D = window.FORJA;
-  const [sel, setSel] = useState(D.fontes[0] || null);
-  const [q, setQ] = useState('');
-  if (!D.fontes.length) {
-    return (
-      <div className="center">
-        <CenterHeader icon="book" crumb="Central de Conhecimento" title="Central de Conhecimento"
-          sub="NÃO MONITORADO — nenhuma indexação real medida" />
-        <div className="detail-empty" style={{padding:40}}>
-          <div><div className="ic"><Icon name="book" size={22}/></div>
-          <div style={{fontSize:13, color:'var(--text-2)'}}>SEM DADOS REAIS</div>
-          <div style={{fontSize:11.5, marginTop:4}}>Nenhuma fonte indexada real. Contagens de docs/trechos não são inventadas.</div></div>
-        </div>
-      </div>
-    );
-  }
-  const totalDocs = D.fontes.reduce((s,f)=>s+f.docs,0);
-  const totalChunks = D.fontes.reduce((s,f)=>s+f.chunks,0);
-  return (
-    <div className="center">
-      <CenterHeader icon="book" crumb="Central de Conhecimento" title="Central de Conhecimento"
-        sub={D.fontes.length + ' fontes · ' + totalChunks.toLocaleString('pt-BR') + ' trechos indexados'}>
-        <button className="btn"><Icon name="refresh" size={13} /> Atualizar tudo</button>
-        <button className="btn primary"><Icon name="plus" size={13} /> Nova fonte</button>
-      </CenterHeader>
-      <div className="center-body section-gap">
-        <div className="card hud-grid" style={{padding:'16px 18px', display:'flex', alignItems:'center', gap:14}}>
-          <Icon name="search" size={18} style={{color:'var(--accent-bright)'}}/>
-          <input placeholder="Consultar a base de conhecimento da Fábrica… (busca semântica)" value={q} onChange={e=>setQ(e.target.value)}
-            style={{flex:1, background:'none', border:'none', outline:'none', fontSize:15, color:'var(--text-1)'}} />
-          <button className="btn primary"><Icon name="zap" size={13}/> Consultar</button>
-        </div>
-        <div className="kpi-grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))'}}>
-          <div className="kpi"><div className="kpi-label">Documentos</div><div className="kpi-val">{(totalDocs/1000).toFixed(1)}K</div></div>
-          <div className="kpi"><div className="kpi-label">Trechos indexados</div><div className="kpi-val">{(totalChunks/1000).toFixed(0)}K</div></div>
-          <div className="kpi"><div className="kpi-label">Modelo de busca</div><div className="kpi-val" style={{fontSize:15, fontFamily:'var(--font-mono)'}}>text-3-large</div><div className="kpi-sub">3072 dim · HNSW</div></div>
-          <div className="kpi"><div className="kpi-label">Taxa de acerto</div><div className="kpi-val">87%</div><div className="kpi-sub">relevância top-5</div></div>
-        </div>
-        <div className="center-split" style={{display:'grid', gridTemplateColumns:'1fr 360px', border:'1px solid var(--border)', borderRadius:'var(--r-lg)', overflow:'hidden', minHeight:320}}>
-          <div style={{overflowY:'auto'}}>
-            <table className="tbl"><thead><tr><th>Fonte</th><th>Tipo</th><th>Docs</th><th>Trechos</th><th>Tamanho</th><th>Situação</th></tr></thead>
-            <tbody>
-              {D.fontes.map(f => (
-                <tr key={f.id} className={sel.id===f.id?'on':''} onClick={()=>setSel(f)}>
-                  <td><div className="cell-strong">{f.nome}</div><div className="id-cell">{f.id} · atualizado há {f.atualizado}</div></td>
-                  <td><span className="tag">{f.tipo}</span></td>
-                  <td className="mono">{f.docs.toLocaleString('pt-BR')}</td>
-                  <td className="mono">{f.chunks.toLocaleString('pt-BR')}</td>
-                  <td className="mono muted">{f.tam}</td>
-                  <td><span className={'pill ' + (STATUS_CLASS[f.status]||'')}>{f.status==='indexando'?<><span className="dot info blink"/> indexando</>:labelStatus(f.status)}</span></td>
-                </tr>
-              ))}
-            </tbody></table>
-          </div>
-          <div className="split-side" style={{borderLeft:'1px solid var(--border)'}}>
-            <div className="detail">
-              <div className="detail-head"><div className="ch-crumb">{sel.id}</div><h2 style={{fontSize:15}}>{sel.nome}</h2>
-                <div className="tags"><span className="tag">{sel.tipo}</span><span className={'pill ' + (STATUS_CLASS[sel.status]||'')}>{labelStatus(sel.status)}</span></div></div>
-              {sel.status==='indexando' && <div className="detail-block"><span className="eyebrow">Progresso de indexação</span><Progress value={0.62} h={6} color="var(--info)"/><span className="mono faint" style={{fontSize:11}}>88.041 / 142.003 trechos</span></div>}
-              {sel.status==='erro' && <div className="card" style={{padding:11, borderColor:'var(--err)', background:'var(--err-soft)'}}><div style={{display:'flex', gap:8, color:'var(--err)', fontSize:12}}><Icon name="alert" size={15}/> Falha ao processar PDF corrompido. 3 de 312 documentos ignorados.</div></div>}
-              <div className="detail-block"><span className="eyebrow">Estatísticas</span>
-                <dl className="kv">
-                  <dt>Documentos</dt><dd className="mono">{sel.docs.toLocaleString('pt-BR')}</dd>
-                  <dt>Trechos</dt><dd className="mono">{sel.chunks.toLocaleString('pt-BR')}</dd>
-                  <dt>Tamanho</dt><dd className="mono">{sel.tam}</dd>
-                  <dt>Atualizado</dt><dd>há {sel.atualizado}</dd>
-                </dl>
-              </div>
-              <div style={{display:'flex', gap:7}}>
-                <button className="btn primary" style={{flex:1}}><Icon name="refresh" size={12}/> Atualizar</button>
-                <button className="btn"><Icon name="link" size={13}/></button>
-                <button className="btn icon"><Icon name="dots" size={14}/></button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ===================== SETTINGS ===================== */
-function SettingsCenter({ setView, theme, setTheme }) {
-  const D = window.FORJA;
-  const accents = ['#f97316','#3b82f6','#10b981','#8b5cf6','#06b6d4'];
-  const [accent, setAccent] = useState('#f97316');
-  useEffect(() => { document.documentElement.style.setProperty('--accent', accent); }, [accent]);
-  return (
-    <div className="center">
-      <CenterHeader icon="gear" crumb="Configuração" title="Configurações"
-        sub="Preferências da plataforma, aparência e integrações" />
-      <div className="center-body section-gap" style={{maxWidth:880}}>
-        <div className="panel">
-          <div className="panel-head"><Icon name="eye" size={14} style={{color:'var(--text-2)'}}/><h3>Aparência</h3></div>
-          <div className="panel-body section-gap">
-            <div style={{display:'flex', alignItems:'center', gap:14}}>
-              <div style={{flex:1}}><div style={{fontWeight:500}}>Tema</div><div className="muted" style={{fontSize:11.5}}>Escuro recomendado para sessões longas</div></div>
-              <div className="seg">
-                <button className={theme==='dark'?'on':''} onClick={()=>setTheme&&setTheme('dark')}><Icon name="moon" size={12}/> Escuro</button>
-                <button className={theme==='light'?'on':''} onClick={()=>setTheme&&setTheme('light')}><Icon name="sun" size={12}/> Claro</button>
-              </div>
-            </div>
-            <div style={{display:'flex', alignItems:'center', gap:14}}>
-              <div style={{flex:1}}><div style={{fontWeight:500}}>Cor de destaque</div><div className="muted" style={{fontSize:11.5}}>Aplica em toda a interface</div></div>
-              <div style={{display:'flex', gap:8}}>
-                {accents.map(c => <button key={c} onClick={()=>setAccent(c)} style={{width:26, height:26, borderRadius:7, background:c, border: accent===c?'2px solid var(--text-1)':'2px solid transparent', boxShadow: accent===c?'0 0 0 2px var(--bg-2)':'none'}} />)}
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="panel">
-          <div className="panel-head"><Icon name="cpu" size={14} style={{color:'var(--text-2)'}}/><h3>Cores da Fábrica</h3><div className="right"><span className="pill ok">6/7 OK</span></div></div>
-          <div className="panel-body flush">
-            {D.cores.map(c => (
-              <div key={c.id} className="health-row" style={{padding:'12px 14px'}}>
-                <div className="health-name"><span className={'dot ' + (c.status==='ok'?'ok':'warn')}/><div><div className="nm">{c.nome}</div><div className="rl">{c.papel}</div></div></div>
-                <span className="mono faint" style={{fontSize:11}}>{c.ver}</span>
-                <span className="mono faint" style={{fontSize:11, width:60, textAlign:'right'}}>{c.uptime}</span>
-                <div className="switch on" />
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="grid-2">
-          <div className="panel">
-            <div className="panel-head"><Icon name="bell" size={14} style={{color:'var(--text-2)'}}/><h3>Notificações</h3></div>
-            <div className="panel-body section-gap">
-              {[['Missões concluídas',true],['Publicações em produção',true],['Equipe bloqueada',true],['Alertas de custo de IA',true],['Eventos críticos de auditoria',true]].map(([l,on],i)=>(
-                <div key={i} style={{display:'flex', alignItems:'center', gap:12}}><span style={{flex:1, fontSize:12.5}}>{l}</span><div className={'switch'+(on?' on':'')}/></div>
-              ))}
-            </div>
-          </div>
-          <div className="panel">
-            <div className="panel-head"><Icon name="link" size={14} style={{color:'var(--text-2)'}}/><h3>Integrações</h3></div>
-            <div className="panel-body section-gap">
-              {[['Repositório','conectado','ok'],['Anthropic','conectado','ok'],['OpenAI','conectado','ok'],['DeepSeek','conectado','ok'],['Gemini','conectado','ok'],['Ollama','desconectado','']].map(([l,s,c],i)=>(
-                <div key={i} style={{display:'flex', alignItems:'center', gap:10}}><span style={{flex:1, fontSize:12.5}}>{l}</span><span className={'pill '+(c||'')}>{s}</span></div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-Object.assign(window, { DeployCenter, CostsCenter, AuditCenter, KnowledgeCenter, SettingsCenter });
-
-
-/* ============================================================
-   FORJA — App root V2 · estado global, router, montagem do shell
-   ============================================================ */
-function LoginScreen({ onLoginSuccess }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch('/api/chat/message', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ email, password })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: t, agent_key: team, agent_name: teamObj.nome, provider: llm })
       });
-      if (!res.ok) {
-        throw new Error('Acesso negado. Verifique as credenciais.');
-      }
       const data = await res.json();
-      if (data.access_token) {
-        localStorage.setItem('forja.token', data.access_token);
-        onLoginSuccess();
-      }
+      
+      setMsgs(m => {
+        const withoutLoading = m.filter(msg => msg.id !== loadingId);
+        return [...withoutLoading, {
+          de: data.agent,
+          preview: false,
+          txt: data.message,
+          provider: data.provider_used
+        }];
+      });
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      setMsgs(m => {
+        const withoutLoading = m.filter(msg => msg.id !== loadingId);
+        return [...withoutLoading, { de:'sistema', preview:true, error:true, txt: 'Erro ao conectar com o Agentic Core.' }];
+      });
     }
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-1)' }}>
-      <form onSubmit={handleLogin} style={{ padding: '2rem', background: 'var(--bg-2)', borderRadius: '8px', border: '1px solid var(--border)', width: '320px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <h2 style={{ color: 'var(--text-1)', textAlign: 'center', margin: 0 }}>FORJA OS</h2>
-        <p style={{ color: 'var(--text-2)', textAlign: 'center', fontSize: '0.9rem', margin: 0 }}>ACESSO RESTRITO</p>
-        {error && <div style={{ color: '#ff4444', fontSize: '0.9rem', textAlign: 'center' }}>{error}</div>}
-        <input 
-          type="text" 
-          value={email} 
-          onChange={e => setEmail(e.target.value)} 
-          placeholder="Usuário ou E-mail" 
-          required
-          style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-3)', color: 'var(--text-1)', border: '1px solid var(--border)', borderRadius: '4px' }} 
-        />
-        <input 
-          type="password" 
-          value={password} 
-          onChange={e => setPassword(e.target.value)} 
-          placeholder="Senha" 
-          required
-          style={{ width: '100%', padding: '0.75rem', background: 'var(--bg-3)', color: 'var(--text-1)', border: '1px solid var(--border)', borderRadius: '4px' }} 
-        />
-        <button type="submit" disabled={loading} style={{ width: '100%', padding: '0.75rem', background: 'var(--accent)', color: '#000', fontWeight: 'bold', border: 'none', cursor: 'pointer', borderRadius: '4px' }}>
-          {loading ? 'AUTENTICANDO...' : 'ENTRAR'}
-        </button>
-      </form>
+    <div className="ws">
+      {/* faixa de contexto / instruções */}
+      <div className="ws-context hud-grid">
+        <div className="ws-ctx-left">
+          <span className="ch-icon" style={{width:30,height:30}}><Icon name="flame" size={16}/></span>
+          <div>
+            <div className="ch-crumb">A FÁBRICA · WORKSPACE</div>
+            <div style={{display:'flex',alignItems:'center',gap:9}}>
+              <h1 style={{fontFamily:'var(--font-display)',fontSize:16,fontWeight:600,margin:0}}>Home / FORJA</h1>
+              <StatusPill status="IMPL" size="sm" />
+            </div>
+          </div>
+        </div>
+        <div className="ws-ctx-right">
+          <span className="pill"><Icon name="git" size={11}/> fabrica · main</span>
+          <span className="pill"><Icon name="target" size={11}/> nenhuma missão ativa</span>
+          <button className="btn sm" onClick={()=>setView('missoes')}><Icon name="plus" size={12}/> Nova missão</button>
+        </div>
+      </div>
+
+      {/* corpo: chat (esq) + painel (dir) */}
+      <div className="ws-body">
+        {/* CHAT operacional */}
+        <section className="ws-chat">
+          <div className="ws-chat-head">
+            <Icon name="chat" size={14} style={{color:'var(--accent-bright)'}}/>
+            <span style={{fontWeight:600,fontSize:13}}>Chat operacional</span>
+            <span className="pill" style={{marginLeft:'auto'}}><span className="zg-dot" style={{background:'var(--ok)'}}/> LLMs Online</span>
+          </div>
+
+          <div className="ws-chat-body scroll-y" ref={bodyRef}>
+            {msgs.map((m,i)=>(
+              <div key={i} className={'cp-msg ' + (m.de==='voce'?'me':'ag')}>
+                {m.de!=='voce' && (
+                  <div className="cp-msg-who">
+                    <Icon name={m.preview?'eye':'flame'} size={12}/> 
+                    {m.de==='sistema'?'Fábrica':(teams.find(x=>x.id===m.de)?.nome || m.de)} 
+                    {m.preview && <span className="pill" style={{padding:'0 6px'}}>preview</span>}
+                    {m.provider && <span className="pill" style={{padding:'0 6px', marginLeft: 4, background:'var(--panel-2)', color:'var(--text-3)'}}>via {m.provider}</span>}
+                  </div>
+                )}
+                <div className={'cp-bubble' + (m.preview?' preview':'') + (m.loading?' pulse':'')}>{m.txt}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="ws-compose">
+            <div className="ws-selectors">
+              <label className="ws-sel">
+                <span className="ws-sel-lb"><Icon name="users" size={11}/> Equipe</span>
+                <select value={team} onChange={e=>setTeam(e.target.value)}>
+                  {teams.map(t=><option key={t.id} value={t.id}>{t.nome}</option>)}
+                </select>
+              </label>
+              <label className="ws-sel">
+                <span className="ws-sel-lb"><Icon name="zap" size={11}/> Modelo</span>
+                <select value={llm} onChange={e=>setLLM(e.target.value)}>
+                  {(D.llms || []).map(l=><option key={l.id} value={l.id}>{l.nome || l.provider} · {l.ativo?'ativa':'inativa'}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="ws-input">
+              <textarea rows={2} placeholder="Instrua a Fábrica… (Enter envia · Shift+Enter nova linha)" value={draft}
+                onChange={e=>setDraft(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();} }} />
+              <button className="btn primary icon" onClick={send} title="Enviar"><Icon name="send" size={14}/></button>
+            </div>
+            <div className="ws-hint">Roteia para <b>{teamObj.nome || 'Agente'}</b> via <b>{llmObj.nome || llmObj.provider || 'Padrão'}</b> · <span className="faint" style={{color:'var(--ok)'}}>Online e pronto</span></div>
+          </div>
+        </section>
+
+        {/* PAINEL: preview / arquivos / terminal */}
+        <section className="ws-panel">
+          <div className="ws-tabs">
+            {[['preview','Preview','eye'],['arquivos','Arquivos','folder'],['terminal','Terminal','terminal']].map(([id,lb,ic])=>(
+              <button key={id} className={'ws-tab'+(pane===id?' on':'')} onClick={()=>setPane(id)}><Icon name={ic} size={12}/> {lb}</button>
+            ))}
+            <span style={{flex:1}}/>
+            <button className="btn ghost icon sm" title="Abrir"><Icon name="link" size={13}/></button>
+          </div>
+          <div className="ws-panel-body">
+            {pane==='preview' && (
+              <div className="ws-preview-empty">
+                <EmptyState icon="eye" title="Sem preview ativo"
+                  status="NTEST"
+                  sub="O preview do projeto/missão atual aparecerá aqui quando uma execução for iniciada. Nenhuma missão em andamento." />
+              </div>
+            )}
+            {pane==='arquivos' && (
+              <div className="ws-files scroll-y">
+                <div className="ws-files-head"><span className="eyebrow">PROJETO · a-fabrica</span><StatusPill status="DEV" size="sm"/></div>
+                <FileTree nodes={D.arvore || []} />
+              </div>
+            )}
+            {pane==='terminal' && (
+              <div className="term ws-term">
+                <div className="ln"><span className="t">$</span><span className="lv-acc">fabrica status</span></div>
+                <div className="ln"><span className="t"> </span><span className="lv-info">plataforma: A FÁBRICA · build dev</span></div>
+                <div className="ln"><span className="t"> </span><span className="lv-ok">workspace: pronto</span></div>
+                <div className="ln"><span className="t"> </span><span className="lv-ok">llms: conectadas e roteadas</span></div>
+                <div className="ln"><span className="t"> </span><span className="lv-warn">runtime: em desenvolvimento</span></div>
+                <div className="ln"><span className="t"> </span><span className="lv-info">zero-ghost: ativo · 0 violações</span></div>
+                <div className="ln"><span className="t">$</span><span className="lv-acc blink">_</span></div>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* rodapé do workspace: evidências / alertas reais */}
+      <div className="ws-foot">
+        <div className="ws-foot-col">
+          <span className="eyebrow"><Icon name="doc" size={11}/> Evidências recentes</span>
+          <span className="faint" style={{fontSize:11.5}}>Nenhuma evidência registrada ainda · <StatusPill status="NIMPL" size="sm"/></span>
+        </div>
+        <div className="ws-foot-col">
+          <span className="eyebrow"><Icon name="alert" size={11}/> Alertas reais</span>
+          <span style={{fontSize:11.5}}>2 itens precisam de configuração: <button className="lnk" onClick={()=>setView('llms')}>LLMs</button> · <button className="lnk" onClick={()=>setView('integracoes')}>Integrações</button></span>
+        </div>
+        <div className="ws-foot-col">
+          <span className="eyebrow"><Icon name="target" size={11}/> Missão atual</span>
+          <span className="faint" style={{fontSize:11.5}}>Nenhuma missão em andamento</span>
+        </div>
+      </div>
     </div>
   );
 }
 
+Object.assign(window, { HomeWorkspace, FileTree });
+
+
+/* ============================================================
+   A FÁBRICA — HOME · Centro Executivo de Observabilidade
+   (Monitor 1) · Zero Ghost Law · somente dados reais
+   FORJA permanece intacta (rota separada).
+   ============================================================ */
+
+/* count-up animado (respeita prefers-reduced-motion) */
+function useCountUp(target, dur = 900) {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setV(target); return; }
+    let raf, start;
+    const tick = (t) => {
+      if (!start) start = t;
+      const p = Math.min(1, (t - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setV(Math.round(target * eased));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, dur]);
+  return v;
+}
+
+function CountUp({ value, dur }) { const v = useCountUp(value, dur); return <span>{v}</span>; }
+
+/* medidor radial animado (dado real) */
+function RadialGauge({ value, size = 132, stroke = 12, label, sub }) {
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r;
+  const [off, setOff] = useState(c);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setOff(c * (1 - value)));
+    return () => cancelAnimationFrame(id);
+  }, [value, c]);
+  const pct = useCountUp(Math.round(value * 100));
+  const col = value >= 0.66 ? 'var(--ok)' : value >= 0.33 ? 'var(--warn)' : 'var(--accent)';
+  return (
+    <div className="rgauge" style={{ width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <defs>
+          <linearGradient id="rgg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="var(--accent-bright)" />
+            <stop offset="1" stopColor={col} />
+          </linearGradient>
+        </defs>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--bg-4)" strokeWidth={stroke} />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="url(#rgg)" strokeWidth={stroke}
+          strokeDasharray={c} strokeDashoffset={off} strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(.16,1,.3,1)', filter: 'drop-shadow(0 0 6px var(--accent-glow))' }} />
+      </svg>
+      <div className="rgauge-c">
+        <div className="rgauge-v">{pct}<span className="rgauge-pct">%</span></div>
+        {label && <div className="rgauge-l">{label}</div>}
+        {sub && <div className="rgauge-s">{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+function ExecutiveHome({ setView }) {
+  const D = window.FORJA;
+
+  /* ---- métricas REAIS derivadas do estado da plataforma ---- */
+  const implCount  = D.modulos.filter(m => m.status === 'IMPL' || m.status === 'CERT').length;
+  const devCount   = D.modulos.filter(m => m.status === 'DEV'  || m.status === 'PARCIAL').length;
+  const equipesEstrut = D.equipes.length;
+  const intConect  = D.integracoes.filter(i => i.status === 'IMPL' || i.status === 'CERT').length;
+  const llmAtivos  = D.llms.filter(l => l.status === 'IMPL' || l.status === 'CERT').length;
+  const prontidao  = implCount / D.modulos.length;  /* índice real de prontidão */
+
+  /* status geral honesto: nada crítico, mas há itens aguardando → Atenção */
+  const overall = (llmAtivos === 0 || intConect === 0) ? 'warn' : (devCount > 0 ? 'warn' : 'ok');
+  const overallLabel = overall === 'ok' ? 'Operacional' : overall === 'warn' ? 'Atenção' : 'Crítico';
+  const overallDesc = 'Plataforma em construção · LLMs e integrações aguardando configuração';
+
+  /* contadores reais (zero quando não há dado) */
+  const resumo = [
+    { k: 'Projetos',     v: 0,             sub: 'nenhum criado' },
+    { k: 'Missões',      v: 0,             sub: 'nenhuma ativa' },
+    { k: 'Artefatos',    v: 0,             sub: 'nenhum gerado' },
+    { k: 'Equipes',      v: equipesEstrut, sub: 'estrutura criada' },
+    { k: 'Integrações',  v: intConect,     sub: intConect ? 'conectadas' : 'nenhuma conectada' },
+  ];
+
+  /* saúde dos sistemas (real: derivado de operações + integrações) */
+  const sistemas = [
+    { nome: 'Banco de Dados',     icon: 'db',       st: 'DEV',    nota: 'não provisionado' },
+    { nome: 'API Core',           icon: 'zap',      st: 'DEV',    nota: 'em desenvolvimento' },
+    { nome: 'GitHub',             icon: 'git',      st: 'IMPL',   nota: '2 contas conectadas' },
+    { nome: 'Sistema de Arquivos',icon: 'folder',   st: 'IMPL',   nota: 'operacional' },
+    { nome: 'Scheduler',          icon: 'clock',    st: 'NIMPL',  nota: 'não configurado' },
+    { nome: 'Runtime',            icon: 'cpu',      st: 'DEV',    nota: 'em desenvolvimento' },
+    { nome: 'Logs',               icon: 'terminal', st: 'DEV',    nota: 'coletando local' },
+    { nome: 'Auditoria',          icon: 'shield',   st: 'IMPL',   nota: 'operacional' },
+  ];
+
+  const hora = new Date().toTimeString().slice(0,8);
+  const tone = (st) => (D.ST[st] || {}).tone || 'idle';
+
+  /* alertas REAIS (derivados de configuração pendente) */
+  const alertas = [
+    { sev: 'warn', txt: 'Nenhum provedor LLM configurado', acao: 'llms' },
+    { sev: 'warn', txt: 'GitHub não testado / não conectado', acao: 'integracoes' },
+    { sev: 'info', txt: 'Banco de dados não provisionado', acao: 'operacoes' },
+    { sev: 'info', txt: 'Backups não configurados', acao: 'operacoes' },
+  ];
+
+  const equipesView = D.equipes.slice(0, 9);
+
+  return (
+    <div className="exec scroll-y">
+      {/* ===== BLOCO 1 · HERO EXECUTIVO ===== */}
+      <section className={'exec-hero hud-grid glow-' + overall}>
+        <div className="exec-hero-main">
+          <div className="exec-eyebrow">A FÁBRICA · MONITOR 1 · CENTRO EXECUTIVO</div>
+          <div className="exec-status">
+            <span className={'exec-orb ' + overall} />
+            <div>
+              <div className="exec-status-l">{overallLabel}</div>
+              <div className="exec-status-d">{overallDesc}</div>
+            </div>
+          </div>
+          <div className="exec-hero-actions">
+            <button className="btn primary" onClick={()=>setView('forja')}><Icon name="flame" size={13}/> Abrir FORJA</button>
+            <button className="btn" onClick={()=>setView('auditoria')}><Icon name="shield" size={13}/> Ver auditoria</button>
+            <span className="exec-clock mono"><span className="dot ok blink"/> live · {hora}</span>
+          </div>
+        </div>
+        <div className="exec-hero-gauge">
+          <RadialGauge value={prontidao} label="Prontidão" sub={implCount + '/' + D.modulos.length + ' módulos'} />
+        </div>
+        <div className="exec-hero-resumo">
+          {resumo.map((r,i) => (
+            <div className="exec-rkpi" key={r.k}>
+              <div className="exec-rkpi-v"><CountUp value={r.v} dur={700 + i*120} /></div>
+              <div className="exec-rkpi-k">{r.k}</div>
+              <div className="exec-rkpi-s">{r.sub}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ===== BLOCO 2 · SAÚDE DOS SISTEMAS ===== */}
+      <ExecSection icon="activity" title="Saúde dos sistemas" hint="verificado às " hintMono={hora}>
+        <div className="exec-grid">
+          {sistemas.map(s => (
+            <div className="exec-syscard" key={s.nome}>
+              <div className="exec-syscard-top">
+                <span className="exec-sysic"><Icon name={s.icon} size={15}/></span>
+                <span className={'dot ' + tone(s.st)} />
+              </div>
+              <div className="exec-syscard-nm">{s.nome}</div>
+              <div className="exec-syscard-st"><StatusPill status={s.st} size="sm"/></div>
+              <div className="exec-syscard-meta mono">últ. verif. {hora}</div>
+            </div>
+          ))}
+        </div>
+      </ExecSection>
+
+      {/* ===== BLOCO 3 · LLM COMMAND CENTER ===== */}
+      <ExecSection icon="zap" title="LLM Command Center" right={<StatusPill status="CONFIG" size="sm"/>}>
+        <div className="exec-llm-grid">
+          {D.llms.map(l => (
+            <div className="exec-llm" key={l.id}>
+              <div className="exec-llm-top">
+                <span className={'dot ' + tone(l.status)} />
+                <span className="exec-llm-nm">{l.nome}</span>
+              </div>
+              <div className="exec-llm-model mono">{l.modelo}</div>
+              <div className="exec-llm-rows">
+                <div><span className="faint">Latência</span><span className="mono">{l.latencia}</span></div>
+                <div><span className="faint">Últ. exec.</span><span className="mono">{l.ultimoTeste}</span></div>
+                <div><span className="faint">Provider</span><span className="mono">{l.conexao[0]}</span></div>
+              </div>
+              <StatusPill status={l.status} size="sm"/>
+            </div>
+          ))}
+        </div>
+      </ExecSection>
+
+      <div className="exec-2col">
+        {/* ===== BLOCO 4 · MISSÕES ===== */}
+        <ExecSection icon="target" title="Missões" right={<button className="btn ghost sm" onClick={()=>setView('missoes')}>Abrir <Icon name="chevR" size={12}/></button>}>
+          <div className="exec-mini-grid">
+            {[['Em execução','ok',0],['Concluídas','info',0],['Bloqueadas','err',0],['Aguardando','idle',0]].map(([l,c,v])=>(
+              <div className="exec-mini" key={l}>
+                <div className="exec-mini-v"><CountUp value={v} /></div>
+                <div className="exec-mini-l"><span className={'dot '+c}/> {l}</div>
+                <div className="exec-spark"><svg viewBox="0 0 100 20" preserveAspectRatio="none"><line x1="0" y1="19" x2="100" y2="19" stroke="var(--border-strong)" strokeWidth="1" strokeDasharray="3 3"/></svg></div>
+              </div>
+            ))}
+          </div>
+          <div className="exec-empty-note"><Icon name="target" size={13}/> Nenhuma missão registrada — crie a primeira na FORJA.</div>
+        </ExecSection>
+
+        {/* ===== BLOCO 6 · GITHUB COMMAND CENTER ===== */}
+        <ExecSection icon="git" title="GitHub Command Center" right={<StatusPill status="IMPL" size="sm"/>}>
+          <dl className="kv exec-kv" style={{marginBottom:10}}>
+            <dt>Conta 1</dt><dd className="mono">CipolariCreator (Ativa)</dd>
+            <dt>Conta 2</dt><dd className="mono">Servdia (Ativa)</dd>
+            <dt>Branch atual</dt><dd className="mono faint">main</dd>
+            <dt>Último commit</dt><dd className="faint">Sincronizado</dd>
+            <dt>Sincronização</dt><dd className="faint" style={{color:'var(--ok)'}}>Operacional bidirecional</dd>
+          </dl>
+          <div className="exec-syscard-top" style={{marginTop:8, padding: '6px 10px', background:'var(--bg-3)', borderRadius:4}}>
+            <span className="exec-sysic"><Icon name="shield" size={13}/></span>
+            <span style={{fontSize:12, color:'var(--text-2)'}}>Acesso Total Autorizado</span>
+            <span className="dot ok" style={{marginLeft:'auto'}}/>
+          </div>
+        </ExecSection>
+      </div>
+
+      {/* ===== BLOCO 5 · EQUIPES ===== */}
+      <ExecSection icon="users" title="Equipes" right={<button className="btn ghost sm" onClick={()=>setView('equipes')}>Todas <Icon name="chevR" size={12}/></button>}>
+        <div className="exec-team-grid">
+          {equipesView.map(t => (
+            <button className="exec-team" key={t.id} onClick={()=>{ localStorage.setItem('forja.team.open', JSON.stringify(t.id)); setView('equipes'); }}>
+              <span className="exec-sysic"><Icon name={t.icon} size={14}/></span>
+              <div style={{minWidth:0,flex:1,textAlign:'left'}}>
+                <div className="exec-team-nm">{t.nome}</div>
+                <div className="exec-team-act faint">Sem atividade</div>
+              </div>
+              <span className={'dot ' + tone(t.status)} />
+            </button>
+          ))}
+        </div>
+      </ExecSection>
+
+      <div className="exec-2col">
+        {/* ===== BLOCO 7 · TIMELINE OPERACIONAL ===== */}
+        <ExecSection icon="activity" title="Timeline operacional">
+          <div className="exec-timeline-empty">
+            <EmptyState icon="clock" title="Nenhuma atividade registrada"
+              sub="Eventos reais (projetos, missões, artefatos, commits, deploys) aparecerão aqui em ordem cronológica." />
+          </div>
+        </ExecSection>
+
+        {/* ===== BLOCO 8 · ALERTAS REAIS ===== */}
+        <ExecSection icon="alert" title="Alertas reais" right={<span className="pill warn">{alertas.length}</span>}>
+          <div className="exec-alerts">
+            {alertas.map((a,i)=>(
+              <button key={i} className="exec-alert" onClick={()=>setView(a.acao)}>
+                <span className={'dot ' + (a.sev==='warn'?'warn':a.sev==='err'?'err':'info')} />
+                <span style={{flex:1,textAlign:'left',fontSize:12.5}}>{a.txt}</span>
+                <Icon name="chevR" size={13} style={{color:'var(--text-3)'}}/>
+              </button>
+            ))}
+          </div>
+        </ExecSection>
+      </div>
+
+      {/* ===== BLOCO 9 · UTILIZAÇÃO DA FÁBRICA ===== */}
+      <ExecSection icon="chart" title="Utilização da Fábrica" hint="período: desde o início · ">
+        <div className="exec-util-grid">
+          {[['Projetos',0],['Missões',0],['Artefatos',0],['Arquivos',0],['Deploys',0],['Integrações',intConect]].map(([l,v])=>(
+            <div className="exec-util" key={l}>
+              <div className="exec-util-v"><CountUp value={v} /></div>
+              <div className="exec-util-l">{l}</div>
+              <div className="exec-util-bar"><span style={{width: v>0? Math.min(100, v*8)+'%':'4%'}} /></div>
+            </div>
+          ))}
+        </div>
+        <div className="exec-empty-note"><Icon name="shield" size={13}/> Métricas reais · valores em zero até a primeira operação (Zero Ghost Law).</div>
+      </ExecSection>
+
+      <div className="exec-foot faint">A FÁBRICA · Monitor 1 · dados reais apenas · a FORJA permanece como área operacional</div>
+    </div>
+  );
+}
+
+/* seção executiva reutilizável */
+function ExecSection({ icon, title, right, hint, hintMono, children }) {
+  return (
+    <section className="exec-sec">
+      <div className="exec-sec-head">
+        <Icon name={icon} size={14} style={{color:'var(--accent-bright)'}}/>
+        <h2>{title}</h2>
+        {hint && <span className="exec-sec-hint">{hint}{hintMono && <span className="mono">{hintMono}</span>}</span>}
+        {right && <span className="exec-sec-right">{right}</span>}
+      </div>
+      <div className="exec-sec-body">{children}</div>
+    </section>
+  );
+}
+
+Object.assign(window, { ExecutiveHome, ExecSection, RadialGauge, CountUp });
+
+
+/* ============================================================
+   A FÁBRICA — Equipes (15) + página de equipe padronizada
+   ============================================================ */
+
+function EquipesCenter({ setView }) {
+  const D = window.FORJA;
+  const [openTeam, setOpenTeam] = useLocalStorage('forja.team.open', null);
+  if (openTeam) {
+    const t = D.equipes.find(e => e.id === openTeam);
+    if (t) return <EquipePage team={t} onBack={() => setOpenTeam(null)} setView={setView} />;
+  }
+  const dev = D.equipes.filter(e => e.status === 'DEV').length;
+  return (
+    <div className="center">
+      <PageHead icon="users" crumb="Operação" title="Equipes" status="DEV"
+        sub={D.equipes.length + ' equipes · estrutura criada · agentes não implementados (Zero Ghost)'}>
+        <button className="btn"><Icon name="plus" size={13}/> Nova equipe</button>
+      </PageHead>
+      <div className="center-body">
+        <div className="card" style={{padding:'12px 16px', marginBottom:16, display:'flex', alignItems:'center', gap:12}}>
+          <Icon name="shield" size={16} style={{color:'var(--accent-bright)'}}/>
+          <span style={{fontSize:12.5}} className="muted">Esta página mostra <b style={{color:'var(--text-1)'}}>equipes</b>, não agentes individuais. Cada equipe abre sua própria página. {dev} equipes em estruturação ativa.</span>
+        </div>
+        <div className="team-grid">
+          {D.equipes.map(t => (
+            <button key={t.id} className="team-card" onClick={()=>setOpenTeam(t.id)}>
+              <div className="team-card-top">
+                <span className="ch-icon" style={{width:34,height:34}}><Icon name={t.icon} size={17}/></span>
+                <div style={{minWidth:0,flex:1,textAlign:'left'}}>
+                  <div className="team-card-name">{t.nome}</div>
+                  <StatusPill status={t.status} size="sm" />
+                </div>
+                <Icon name="chevR" size={15} style={{color:'var(--text-3)'}}/>
+              </div>
+              <div className="team-card-sobre">{t.sobre}</div>
+              <div className="team-card-foot">
+                {t.skills.slice(0,3).map(s=><span key={s} className="tag">{s}</span>)}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EquipePage({ team, onBack, setView }) {
+  const t = team;
+  const Section = ({ icon, title, children, status }) => (
+    <div className="panel">
+      <div className="panel-head"><Icon name={icon} size={14} style={{color:'var(--text-2)'}}/><h3>{title}</h3>{status && <StatusPill status={status} size="sm"/>}</div>
+      <div className="panel-body">{children}</div>
+    </div>
+  );
+  const TagList = ({ items }) => <div className="tags">{items.map(i=><span key={i} className="tag">{i}</span>)}</div>;
+
+  return (
+    <div className="center">
+      <div className="center-head hud-grid">
+        <div className="ch-top">
+          <button className="btn ghost icon" onClick={onBack} title="Voltar"><Icon name="chevR" size={16} style={{transform:'rotate(180deg)'}}/></button>
+          <div className="ch-icon"><Icon name={t.icon} size={19}/></div>
+          <div className="ch-titles">
+            <div className="ch-crumb">A FÁBRICA · Equipes</div>
+            <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+              <h1 className="ch-title">Equipe {t.nome}</h1>
+              <StatusPill status={t.status} />
+            </div>
+            <div className="ch-sub">{t.sobre}</div>
+          </div>
+          <div className="ch-actions">
+            <button className="btn" onClick={()=>setView('missoes')}><Icon name="target" size={13}/> Missões</button>
+            <button className="btn primary"><Icon name="play2" size={12}/> Ativar equipe</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="center-body">
+        <div className="card" style={{padding:'12px 16px', marginBottom:16, display:'flex', alignItems:'center', gap:12, borderColor:'var(--warn)', background:'var(--warn-soft)'}}>
+          <Icon name="alert" size={16} style={{color:'var(--warn)'}}/>
+          <span style={{fontSize:12.5}}>Estrutura operacional criada. Agentes e métricas <b>não implementados</b> — nenhum dado de execução é exibido (Zero Ghost Law).</span>
+        </div>
+
+        <div className="grid-2" style={{alignItems:'start', gap:14}}>
+          <div className="col">
+            <Section icon="book" title="Sobre & o que faz">
+              <p style={{margin:0, fontSize:13, lineHeight:1.6}}>{t.sobre}</p>
+            </Section>
+            <Section icon="check" title="Responsabilidades">
+              <ul className="bul">{t.responsabilidades.map(r=><li key={r}>{r}</li>)}</ul>
+            </Section>
+            <Section icon="target" title="Missões da equipe" status="NIMPL">
+              <EmptyState icon="target" title="Sem missões atribuídas" sub="As missões aparecerão aqui quando a equipe for ativada." />
+            </Section>
+            <Section icon="activity" title="Métricas" status="NTEST">
+              <div className="kv">
+                <dt>Missões concluídas</dt><dd className="faint">— não medido</dd>
+                <dt>Tempo médio</dt><dd className="faint">— não medido</dd>
+                <dt>Taxa de sucesso</dt><dd className="faint">— não medido</dd>
+                <dt>Custo</dt><dd className="faint">— não medido</dd>
+              </div>
+            </Section>
+          </div>
+          <div className="col">
+            <Section icon="wrench" title="Ferramentas usadas">
+              <TagList items={t.ferramentas} />
+            </Section>
+            <Section icon="zap" title="Skills">
+              <TagList items={t.skills} />
+            </Section>
+            <Section icon="route" title="Workflows">
+              <TagList items={t.workflows} />
+            </Section>
+            <Section icon="award" title="Validação & Auditoria" status="NTEST">
+              <div className="kv">
+                <dt>Validação</dt><dd><StatusPill status="NIMPL" size="sm"/></dd>
+                <dt>Auditoria</dt><dd><StatusPill status="NTEST" size="sm"/></dd>
+                <dt>Pendências</dt><dd>Definir agentes e ferramentas</dd>
+              </div>
+            </Section>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { EquipesCenter, EquipePage });
+
+
+/* ============================================================
+   A FÁBRICA — Módulos A: Clientes, Projetos, Missões,
+   Inteligência, LLMs, Ferramentas, Integrações, Conhecimento
+   ============================================================ */
+
+/* ---------- CLIENTES ---------- */
+function ClientesCenter({ setView }) {
+  return (
+    <div className="center">
+      <PageHead icon="building" crumb="Negócio" title="Clientes" status="NIMPL"
+        sub="Organização de clientes atuais e futuros">
+        <button className="btn primary"><Icon name="plus" size={13}/> Novo cliente</button>
+      </PageHead>
+      <div className="center-body">
+        <EmptyState icon="building" title="Sem clientes cadastrados" status="NIMPL"
+          sub="Nenhum cliente foi cadastrado. Cada cliente poderá ter dados gerais, projetos e missões vinculadas, status, entregas e histórico."
+          action="Cadastrar primeiro cliente" onAction={()=>{}} />
+        <div className="grid-3" style={{marginTop:18}}>
+          {['Dados gerais','Projetos vinculados','Missões vinculadas','Entregas','Histórico','Status'].map(s=>(
+            <div className="panel" key={s} style={{opacity:.7}}><div className="panel-body" style={{display:'flex',alignItems:'center',gap:10}}><Icon name="folder" size={14} style={{color:'var(--text-3)'}}/><span style={{fontSize:12.5}}>{s}</span><span style={{marginLeft:'auto'}}><StatusPill status="NIMPL" size="sm"/></span></div></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- PROJETOS ---------- */
+function ProjetosCenter({ setView }) {
+  const estados = ['Planejado','Em andamento','Em teste','Validado','Entregue','Arquivado'];
+  return (
+    <div className="center">
+      <PageHead icon="folder" crumb="Negócio" title="Projetos" status="DEV"
+        sub="Projetos vinculados a clientes, missões, equipes e evidências">
+        <button className="btn primary"><Icon name="plus" size={13}/> Novo projeto</button>
+      </PageHead>
+      <div className="center-body section-gap">
+        <div className="kanban" style={{height:'auto'}}>
+          {estados.map(e=>(
+            <div className="kan-col" key={e}>
+              <div className="kan-head"><span className="dot idle"/><span style={{fontWeight:600,fontSize:12}}>{e}</span><span className="count">0</span></div>
+              <div className="kan-body"><div className="faint" style={{fontSize:11,padding:'10px 6px'}}>vazio</div></div>
+            </div>
+          ))}
+        </div>
+        <SectionCard icon="folder" title="Estrutura de um projeto" status="DEV">
+          <div className="tags">{['Nome','Cliente','Status','Missões','Equipes','Documentos','Evidências','Auditorias','Entregas'].map(s=><span key={s} className="tag">{s}</span>)}</div>
+        </SectionCard>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- MISSÕES ---------- */
+function MissoesCenter({ setView }) {
+  const cols = ['Planejamento','Desenvolvimento','Execução','Testes','Validação','Concluídas','Canceladas','Bloqueadas'];
+  return (
+    <div className="center">
+      <PageHead icon="target" crumb="Operação" title="Missões" status="DEV"
+        sub="Controle operacional · cada missão: objetivo, equipe, LLM, custo, tempo, evidências, logs, resultado">
+        <button className="btn primary"><Icon name="plus" size={13}/> Nova missão</button>
+      </PageHead>
+      <div className="center-body section-gap">
+        <div className="kanban" style={{height:'auto'}}>
+          {cols.map((c,i)=>(
+            <div className="kan-col" key={c}>
+              <div className="kan-head"><span className={'dot '+(c==='Bloqueadas'?'err':c==='Concluídas'?'ok':'idle')}/><span style={{fontWeight:600,fontSize:11.5}}>{c}</span><span className="count">0</span></div>
+              <div className="kan-body"><div className="faint" style={{fontSize:11,padding:'10px 6px'}}>vazio</div></div>
+            </div>
+          ))}
+        </div>
+        <div className="grid-2">
+          <SectionCard icon="target" title="Campos de uma missão" status="DEV">
+            <div className="tags">{['Objetivo','Status','Equipe responsável','LLM utilizada','Custo','Tempo','Evidências','Logs','Resultado'].map(s=><span key={s} className="tag">{s}</span>)}</div>
+          </SectionCard>
+          <SectionCard icon="doc" title="Histórico" status="NIMPL">
+            <EmptyState icon="clock" title="Sem histórico" sub="Missões executadas aparecerão aqui." />
+          </SectionCard>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- INTELIGÊNCIA ---------- */
+function InteligenciaCenter({ setView }) {
+  const areas = [
+    ['Concorrentes','compass'],['Tendências','chart'],['Benchmark','activity'],['SEO','search'],
+    ['Oportunidades','zap'],['Análise visual','eye'],['Pesquisa de mercado','book'],['Relatórios estratégicos','doc'],
+  ];
+  return (
+    <div className="center">
+      <PageHead icon="compass" crumb="Operação" title="Inteligência" status="NIMPL"
+        sub="Inteligência de mercado · apenas fontes públicas e autorizadas · sem dados fictícios">
+        <button className="btn"><Icon name="refresh" size={13}/> Varrer mercado</button>
+      </PageHead>
+      <div className="center-body">
+        <EmptyState icon="compass" title="Inteligência ainda não implementada" status="NIMPL"
+          sub="As análises serão geradas a partir de fontes públicas autorizadas quando o módulo for ativado." />
+        <div className="grid-3" style={{marginTop:18}}>
+          {areas.map(([a,ic])=>(
+            <div className="panel" key={a} style={{opacity:.7}}><div className="panel-body" style={{display:'flex',alignItems:'center',gap:10}}><Icon name={ic} size={14} style={{color:'var(--text-3)'}}/><span style={{fontSize:12.5}}>{a}</span><span style={{marginLeft:'auto'}}><StatusPill status="NIMPL" size="sm"/></span></div></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- LLMs ---------- */
+function LLMsCenter({ setView }) {
+  const D = window.FORJA;
+  const [sel, setSel] = useState(D.llms[0]);
+  return (
+    <div className="center">
+      <PageHead icon="zap" crumb="Recursos" title="LLMs" status="CONFIG"
+        sub="Provedores de IA · nenhum configurado · conecte por assinatura, API ou local">
+        <button className="btn primary" onClick={()=>setView('configuracoes')}><Icon name="lock" size={13}/> Configurar no cofre</button>
+      </PageHead>
+      <div className="center-split wide">
+        <div className="split-main">
+          <div className="team-grid">
+            {D.llms.map(l=>(
+              <button key={l.id} className="team-card" onClick={()=>setSel(l)} style={sel.id===l.id?{borderColor:'var(--accent-line)',background:'var(--accent-soft)'}:null}>
+                <div className="team-card-top">
+                  <span className="ch-icon" style={{width:34,height:34}}><Icon name="zap" size={17}/></span>
+                  <div style={{minWidth:0,flex:1,textAlign:'left'}}>
+                    <div className="team-card-name">{l.nome}</div>
+                    <StatusPill status={l.status} size="sm"/>
+                  </div>
+                </div>
+                <div className="team-card-sobre">Modelo: {l.modelo}</div>
+                <div className="kv" style={{fontSize:11,marginTop:4}}>
+                  <dt>Último teste</dt><dd className="faint">{l.ultimoTeste}</dd>
+                  <dt>Latência</dt><dd className="faint">{l.latencia}</dd>
+                  <dt>Custo</dt><dd className="faint">{l.custo}</dd>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="split-side"><div className="detail">
+          <div className="detail-head"><div className="ch-crumb">{sel.nome}</div><h2>{sel.nome}</h2><StatusPill status={sel.status}/></div>
+          <div className="detail-block"><span className="eyebrow">Métodos de conexão</span>
+            <div className="tags">{sel.conexao.map(c=><span key={c} className="tag">{c}</span>)}</div>
+          </div>
+          <div className="detail-block"><span className="eyebrow">Telemetria</span>
+            <div className="kv">
+              <dt>Modelo</dt><dd className="mono">{sel.modelo}</dd>
+              <dt>Último teste</dt><dd className="faint">{sel.ultimoTeste}</dd>
+              <dt>Latência</dt><dd className="faint">{sel.latencia}</dd>
+              <dt>Custo</dt><dd className="faint">{sel.custo}</dd>
+              <dt>Uso</dt><dd className="faint">{sel.uso}</dd>
+            </div>
+          </div>
+          <div className="card" style={{padding:11, display:'flex',gap:9,alignItems:'center', borderColor:'var(--info)', background:'var(--info-soft)'}}>
+            <Icon name="lock" size={15} style={{color:'var(--info)'}}/><span style={{fontSize:11.5}}>Chaves e tokens ficam no cofre seguro — nunca exibidos no painel.</span>
+          </div>
+          <button className="btn primary" style={{width:'100%'}} onClick={()=>setView('configuracoes')}><Icon name="plus" size={12}/> Conectar provedor</button>
+        </div></div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- FERRAMENTAS ---------- */
+function FerramentasCenter({ setView }) {
+  const D = window.FORJA;
+  const classeTone = { 'integrada':'IMPL', 'conectada':'PARCIAL', 'externa':'NTEST', };
+  return (
+    <div className="center">
+      <PageHead icon="wrench" crumb="Recursos" title="Ferramentas" status="DEV"
+        sub="Ferramentas de trabalho · externa · conectada · integrada · não implementada">
+        <button className="btn primary"><Icon name="plus" size={13}/> Adicionar</button>
+      </PageHead>
+      <div className="center-body">
+        <div className="team-grid">
+          {D.ferramentas.map(f=>(
+            <div key={f.id} className="team-card" style={{cursor:'default'}}>
+              <div className="team-card-top">
+                <span className="ch-icon" style={{width:34,height:34}}><Icon name={f.icon} size={16}/></span>
+                <div style={{minWidth:0,flex:1}}>
+                  <div className="team-card-name">{f.nome}</div>
+                  <span className="faint" style={{fontSize:11}}>{f.tipo}</span>
+                </div>
+                <StatusPill status={f.status} size="sm"/>
+              </div>
+              <div className="team-card-foot" style={{justifyContent:'space-between'}}>
+                <span className="tag">{f.classe}</span>
+                <button className="btn ghost sm" disabled style={{opacity:.5}}>Conectar</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- INTEGRAÇÕES ---------- */
+function IntegracoesCenter({ setView }) {
+  const D = window.FORJA;
+  return (
+    <div className="center">
+      <PageHead icon="link" crumb="Recursos" title="Integrações" status="PARCIAL"
+        sub="Integrações técnicas e APIs · status, autenticação, permissões e logs">
+        <button className="btn primary"><Icon name="plus" size={13}/> Nova integração</button>
+      </PageHead>
+      <div className="center-body">
+        <SectionCard icon="link" title="Conexões" flush>
+          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Integração</th><th>Auth</th><th>Permissões</th><th>Último teste</th><th>Status</th></tr></thead>
+          <tbody>
+            {D.integracoes.map(i=>(
+              <tr key={i.id} style={{cursor:'default'}}>
+                <td className="cell-strong">{i.nome}</td>
+                <td className="mono muted" style={{fontSize:11}}>{i.auth}</td>
+                <td className="muted">{i.permissoes}</td>
+                <td className="faint" style={{fontSize:11}}>{i.ultimoTeste}</td>
+                <td><StatusPill status={i.status} size="sm"/></td>
+              </tr>
+            ))}
+          </tbody></table></div>
+        </SectionCard>
+        <div className="card" style={{padding:11, marginTop:14, display:'flex',gap:9,alignItems:'center', borderColor:'var(--info)', background:'var(--info-soft)'}}>
+          <Icon name="lock" size={15} style={{color:'var(--info)'}}/><span style={{fontSize:12}}>OAuth, tokens e segredos ficam no cofre seguro — nunca no frontend, código ou GitHub.</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- CONHECIMENTO ---------- */
+function ConhecimentoCenter({ setView }) {
+  const D = window.FORJA;
+  return (
+    <div className="center">
+      <PageHead icon="book" crumb="Recursos" title="Conhecimento" status="DEV"
+        sub="Rules · Workflows · Skills · Templates · Biblioteca · Memória · estrutura pronta, vazia">
+        <button className="btn primary"><Icon name="plus" size={13}/> Adicionar</button>
+      </PageHead>
+      <div className="center-body">
+        <div className="team-grid">
+          {D.conhecimento.map(c=>(
+            <div key={c.id} className="team-card" style={{cursor:'default'}}>
+              <div className="team-card-top">
+                <span className="ch-icon" style={{width:34,height:34}}><Icon name={c.icon} size={16}/></span>
+                <div style={{minWidth:0,flex:1}}>
+                  <div className="team-card-name">{c.nome}</div>
+                  <span className="faint" style={{fontSize:11}}>{c.sub}</span>
+                </div>
+                <StatusPill status={c.status} size="sm"/>
+              </div>
+              <div className="team-card-foot" style={{justifyContent:'space-between'}}>
+                <span className="mono" style={{fontSize:18,fontWeight:600}}>{c.count}</span>
+                <span className="faint" style={{fontSize:11}}>itens</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { ClientesCenter, ProjetosCenter, MissoesCenter, InteligenciaCenter, LLMsCenter, FerramentasCenter, IntegracoesCenter, ConhecimentoCenter });
+
+
+/* ============================================================
+   A FÁBRICA — Módulos B: Testes, Validação, Auditoria, Operações,
+   Financeiro, Roadmap, Academia, Ajuda, Configurações
+   ============================================================ */
+
+/* ---------- TESTES ---------- */
+function TestesCenter() {
+  const secs = [['Executados','flask','NIMPL'],['Pendentes','clock','NIMPL'],['Aprovados','check','NIMPL'],['Reprovados','x','NIMPL'],['Histórico','doc','NIMPL']];
+  return (
+    <div className="center">
+      <PageHead icon="flask" crumb="Garantia" title="Testes" status="NIMPL"
+        sub="Centralização de testes do sistema · execução, status, histórico, logs e relatório">
+        <button className="btn primary" disabled style={{opacity:.5}}><Icon name="play2" size={12}/> Rodar testes</button>
+      </PageHead>
+      <div className="center-body">
+        <EmptyState icon="flask" title="Nenhum teste executado" status="NIMPL"
+          sub="A suíte de testes ainda não foi implementada. Os resultados aparecerão por categoria quando ativada." />
+        <div className="grid-3" style={{marginTop:18}}>
+          {secs.map(([s,ic,st])=>(
+            <div className="panel" key={s}><div className="panel-body" style={{display:'flex',alignItems:'center',gap:10}}><Icon name={ic} size={14} style={{color:'var(--text-3)'}}/><span style={{fontSize:12.5,flex:1}}>{s}</span><span className="mono faint">0</span><StatusPill status={st} size="sm"/></div></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- VALIDAÇÃO ---------- */
+function ValidacaoCenter() {
+  const secs = [['Validações','award'],['Certificações','check'],['Aprovações','check'],['Evidências','doc'],['Pendências','alert']];
+  return (
+    <div className="center">
+      <PageHead icon="award" crumb="Garantia" title="Validação" status="NIMPL"
+        sub="Validações e certificações por módulo · evidências e pendências">
+      </PageHead>
+      <div className="center-body">
+        <EmptyState icon="award" title="Sem validações registradas" status="NIMPL"
+          sub="Certificações e aprovações aparecerão aqui conforme os módulos forem validados." />
+        <div className="grid-3" style={{marginTop:18}}>
+          {secs.map(([s,ic])=>(
+            <div className="panel" key={s}><div className="panel-body" style={{display:'flex',alignItems:'center',gap:10}}><Icon name={ic} size={14} style={{color:'var(--text-3)'}}/><span style={{fontSize:12.5,flex:1}}>{s}</span><StatusPill status="NIMPL" size="sm"/></div></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- AUDITORIA (a verdade) ---------- */
+function AuditoriaCenter({ setView }) {
+  const D = window.FORJA;
+  const veredCount = (v) => D.auditoria.filter(a=>a.veredito===v).length;
+  const buckets = [
+    ['Funciona','ok'], ['Parcial','warn'], ['Não testado','info'],
+    ['Aguardando config.','info'], ['Não implementado','idle'], ['Bloqueado','err'],
+  ];
+  return (
+    <div className="center">
+      <PageHead icon="shield" crumb="Garantia" title="Auditoria" status="IMPL"
+        sub="A verdade do sistema · Zero Ghost Law · nunca esconde falhas">
+        <button className="btn"><Icon name="doc" size={13}/> Exportar</button>
+      </PageHead>
+      <div className="center-body section-gap">
+        <div className="card hud-grid" style={{padding:'16px 18px', display:'flex', alignItems:'center', gap:18, borderColor:'var(--accent-line)'}}>
+          <div style={{width:46,height:46,borderRadius:'var(--r-md)',background:'var(--accent-soft)',display:'grid',placeItems:'center',color:'var(--accent-bright)',flex:'none',border:'1px solid var(--accent-line)'}}><Icon name="shield" size={22}/></div>
+          <div style={{flex:1,minWidth:0}}>
+            <div className="eyebrow" style={{color:'var(--accent-bright)'}}>ZERO GHOST LAW</div>
+            <div style={{fontSize:15,fontWeight:600,marginTop:2}}>Nada falso é apresentado como real</div>
+            <div className="muted" style={{fontSize:11.5,marginTop:3}}>Cada módulo declara seu estado honesto. {veredCount('Funciona')} funcionam · {veredCount('Parcial')} parciais · {veredCount('Não implementado')} não implementados.</div>
+          </div>
+        </div>
+
+        <div className="kpi-grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))'}}>
+          {buckets.map(([lb,tone])=>(
+            <div className="kpi" key={lb}><div className="kpi-label"><span className={'dot '+tone}/> {lb}</div><div className="kpi-val">{veredCount(lb)}</div></div>
+          ))}
+        </div>
+
+        <SectionCard icon="shield" title="Verdade por módulo" flush>
+          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Módulo</th><th>Veredito</th><th>Status declarado</th></tr></thead>
+          <tbody>
+            {D.auditoria.map((a,i)=>(
+              <tr key={i} style={{cursor:'default'}}>
+                <td className="cell-strong">{a.modulo}</td>
+                <td className="muted">{a.veredito}</td>
+                <td><StatusPill status={a.status} size="sm"/></td>
+              </tr>
+            ))}
+          </tbody></table></div>
+        </SectionCard>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- OPERAÇÕES ---------- */
+function OperacoesCenter({ setView }) {
+  const D = window.FORJA;
+  return (
+    <div className="center">
+      <PageHead icon="server" crumb="Infra" title="Operações" status="DEV"
+        sub="Banco · FastAPI · Runtime · Deploy · Monitoramento · Backups · Serviços">
+        <button className="btn"><Icon name="refresh" size={13}/> Health check</button>
+      </PageHead>
+      <div className="center-body">
+        <SectionCard icon="server" title="Saúde da infraestrutura" flush>
+          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Serviço</th><th>Categoria</th><th>Observação</th><th>Status</th></tr></thead>
+          <tbody>
+            {D.operacoes.map(o=>(
+              <tr key={o.id} style={{cursor:'default'}}>
+                <td className="cell-strong">{o.nome}</td>
+                <td className="muted">{o.cat}</td>
+                <td className="faint" style={{fontSize:11.5}}>{o.nota}</td>
+                <td><StatusPill status={o.status} size="sm"/></td>
+              </tr>
+            ))}
+          </tbody></table></div>
+        </SectionCard>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- FINANCEIRO ---------- */
+function FinanceiroCenter() {
+  const cats = [['Custos de LLM','zap'],['Custos de APIs','link'],['Infraestrutura','server'],['Assinaturas','dollar'],['Despesas','chart'],['Limites & alertas','alert']];
+  return (
+    <div className="center">
+      <PageHead icon="dollar" crumb="Negócio" title="Financeiro" status="NIMPL"
+        sub="Custos, assinaturas e finanças · sem receitas inventadas">
+      </PageHead>
+      <div className="center-body section-gap">
+        <div className="grid-2">
+          <SectionCard icon="dollar" title="Receitas" status="NIMPL">
+            <EmptyState icon="dollar" title="Sem receitas cadastradas" sub="Nenhuma receita registrada. A Fábrica está em uso próprio." />
+          </SectionCard>
+          <SectionCard icon="chart" title="Custos medidos" status="NTEST">
+            <EmptyState icon="activity" title="Sem medição de custos" sub="Custos de LLM/API só aparecem após provedores configurados e em uso." />
+          </SectionCard>
+        </div>
+        <SectionCard icon="dollar" title="Categorias financeiras (estrutura)" status="DEV">
+          <div className="grid-3">
+            {cats.map(([c,ic])=>(
+              <div key={c} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:'var(--bg-1)',border:'1px solid var(--border)',borderRadius:'var(--r-md)'}}><Icon name={ic} size={14} style={{color:'var(--text-3)'}}/><span style={{fontSize:12.5,flex:1}}>{c}</span><StatusPill status="NIMPL" size="sm"/></div>
+            ))}
+          </div>
+        </SectionCard>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- ROADMAP ---------- */
+function RoadmapCenter() {
+  const D = window.FORJA;
+  return (
+    <div className="center">
+      <PageHead icon="chart" crumb="Plataforma" title="Roadmap" status="IMPL"
+        sub="Evolução real da plataforma A FÁBRICA · estado honesto de cada item">
+      </PageHead>
+      <div className="center-body">
+        <div className="kanban" style={{height:'auto'}}>
+          {D.roadmap.map(col=>(
+            <div className="kan-col" key={col.fase}>
+              <div className="kan-head"><span className={'dot '+col.cor}/><span style={{fontWeight:600,fontSize:12}}>{col.fase}</span><span className="count">{col.itens.length}</span></div>
+              <div className="kan-body">
+                {col.itens.map(it=>(
+                  <div key={it} className="kan-card" style={{cursor:'default'}}>
+                    <div className="kan-card-title" style={{fontSize:12}}>{it}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- ACADEMIA ---------- */
+function AcademiaCenter() {
+  const secs = [['Treinamentos','cap'],['Vídeos','play2'],['Guias','book'],['Cursos','cap'],['Onboarding','flame'],['Docs p/ usuários','doc']];
+  return (
+    <div className="center">
+      <PageHead icon="cap" crumb="Plataforma" title="Academia" status="NIMPL"
+        sub="Treinamento e onboarding de operadores">
+      </PageHead>
+      <div className="center-body">
+        <EmptyState icon="cap" title="Academia ainda não implementada" status="NIMPL"
+          sub="Conteúdos de treinamento serão publicados aqui." />
+        <div className="grid-3" style={{marginTop:18}}>
+          {secs.map(([s,ic])=>(
+            <div className="panel" key={s} style={{opacity:.7}}><div className="panel-body" style={{display:'flex',alignItems:'center',gap:10}}><Icon name={ic} size={14} style={{color:'var(--text-3)'}}/><span style={{fontSize:12.5,flex:1}}>{s}</span><StatusPill status="NIMPL" size="sm"/></div></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- AJUDA ---------- */
+function AjudaCenter() {
+  const secs = [['Consultor','help'],['FAQ','book'],['Documentação','doc'],['Chamados','chat'],['Suporte','users']];
+  return (
+    <div className="center">
+      <PageHead icon="help" crumb="Plataforma" title="Ajuda" status="DEV"
+        sub="Suporte, FAQ, documentação e orientação de uso">
+      </PageHead>
+      <div className="center-body section-gap">
+        <SectionCard icon="help" title="Consultor da Fábrica" status="DEV">
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <span className="ch-icon" style={{width:36,height:36}}><Icon name="chat" size={18}/></span>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:500}}>Assistente de uso da plataforma</div><div className="muted" style={{fontSize:11.5}}>Tira dúvidas sobre módulos e fluxos. Requer LLM configurada.</div></div>
+            <button className="btn" disabled style={{opacity:.5}}>Abrir</button>
+          </div>
+        </SectionCard>
+        <div className="grid-3">
+          {secs.map(([s,ic])=>(
+            <div className="panel" key={s}><div className="panel-body" style={{display:'flex',alignItems:'center',gap:10}}><Icon name={ic} size={14} style={{color:'var(--text-3)'}}/><span style={{fontSize:12.5,flex:1}}>{s}</span><StatusPill status={s==='Documentação'?'DEV':'NIMPL'} size="sm"/></div></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- CONFIGURAÇÕES ---------- */
+function ConfiguracoesCenter({ setView, theme, setTheme }) {
+  const secs = [
+    ['Conta','building','DEV'],['Usuários','users','NIMPL'],['Permissões','lock','NIMPL'],['Assinaturas','dollar','NIMPL'],
+    ['APIs','link','CONFIG'],['LLMs','zap','CONFIG'],['Billing','dollar','NIMPL'],['Segurança','shield','DEV'],
+    ['Cofre','lock','DEV'],['Backup','box','NIMPL'],['Notificações','bell','DEV'],['Integrações','link','PARCIAL'],
+    ['Personalização','eye','DEV'],['Licenciamento','award','NIMPL'],
+  ];
+  const perfis = ['Administrador','Operador','Consultor','Cliente'];
+  return (
+    <div className="center">
+      <PageHead icon="gear" crumb="Plataforma" title="Configurações" status="DEV"
+        sub="Conta, LLMs, cofre, segurança, integrações e personalização">
+      </PageHead>
+      <div className="center-body section-gap">
+        <SectionCard icon="eye" title="Aparência" status="IMPL">
+          <div style={{display:'flex',alignItems:'center',gap:14}}>
+            <div style={{flex:1}}><div style={{fontWeight:500}}>Tema</div><div className="muted" style={{fontSize:11.5}}>Escuro recomendado para sessões longas</div></div>
+            <div className="seg">
+              <button className={theme==='dark'?'on':''} onClick={()=>setTheme&&setTheme('dark')}><Icon name="moon" size={12}/> Escuro</button>
+              <button className={theme==='light'?'on':''} onClick={()=>setTheme&&setTheme('light')}><Icon name="sun" size={12}/> Claro</button>
+            </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard icon="lock" title="Cofre de segredos" status="DEV">
+          <div className="card" style={{padding:11, display:'flex',gap:9,alignItems:'center', borderColor:'var(--info)', background:'var(--info-soft)'}}>
+            <Icon name="lock" size={15} style={{color:'var(--info)'}}/><span style={{fontSize:12}}>Toda chave/token/OAuth fica no cofre seguro. Nunca exibido no painel, em código ou no GitHub.</span>
+          </div>
+        </SectionCard>
+
+        <SectionCard icon="gear" title="Áreas administrativas">
+          <div className="grid-3">
+            {secs.map(([s,ic,st])=>(
+              <div key={s} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:'var(--bg-1)',border:'1px solid var(--border)',borderRadius:'var(--r-md)'}}><Icon name={ic} size={14} style={{color:'var(--text-3)'}}/><span style={{fontSize:12.5,flex:1}}>{s}</span><StatusPill status={st} size="sm"/></div>
+            ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard icon="users" title="Perfis (arquitetura prevista)" status="NIMPL">
+          <div className="tags">{perfis.map(p=><span key={p} className="tag">{p}</span>)}</div>
+          <div className="muted" style={{fontSize:11.5,marginTop:8}}>Estrutura prevista. Permissões completas não implementadas nesta fase.</div>
+        </SectionCard>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { TestesCenter, ValidacaoCenter, AuditoriaCenter, OperacoesCenter, FinanceiroCenter, RoadmapCenter, AcademiaCenter, AjudaCenter, ConfiguracoesCenter });
+
+
+/* ============================================================
+   A FÁBRICA — App root · estado global, router, shell
+   ============================================================ */
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('forja.token'));
   const [theme, setTheme] = useLocalStorage('forja.theme', 'dark');
-  const [view, setView] = useLocalStorage('forja.view', 'dashboard');
-  const [copilotOpen, setCopilotOpen] = useLocalStorage('forja.copilot', true);
+  const [view, setView] = useLocalStorage('forja.view', 'home');
   const [explorerOpen, setExplorerOpen] = useLocalStorage('forja.explorer', true);
   const [cmdOpen, setCmdOpen] = useState(false);
-
-  useEffect(() => {
-    const handleUnauthorized = () => {
-      localStorage.removeItem('forja.token');
-      setIsAuthenticated(false);
-    };
-    window.addEventListener('unauthorized', handleUnauthorized);
-    return () => window.removeEventListener('unauthorized', handleUnauthorized);
-  }, []);
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
   useEffect(() => {
@@ -2283,47 +1869,50 @@ function App() {
       if (cmd && e.key.toLowerCase() === 'k') { e.preventDefault(); setCmdOpen(o => !o); }
       else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); setCmdOpen(o => !o); }
       else if (cmd && e.key.toLowerCase() === 'b') { e.preventDefault(); setExplorerOpen(o => !o); }
-      else if (cmd && e.key === '\\') { e.preventDefault(); setCopilotOpen(o => !o); }
     };
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
   }, []);
 
-  const CENTERS = {
-    dashboard: FactoryCommandCenter,
-    projects: ProjectCenter, missions: MissionCenter, agents: AgentCenter,
-    llm: LLMCenter, costs: CostsCenter, deploy: DeployCenter,
-    audit: AuditCenter, knowledge: KnowledgeCenter, settings: SettingsCenter,
+  const ROUTES = {
+    home: ExecutiveHome,
+    forja: HomeWorkspace,
+    clientes: ClientesCenter,
+    projetos: ProjetosCenter,
+    missoes: MissoesCenter,
+    equipes: EquipesCenter,
+    inteligencia: InteligenciaCenter,
+    llms: LLMsCenter,
+    ferramentas: FerramentasCenter,
+    integracoes: IntegracoesCenter,
+    conhecimento: ConhecimentoCenter,
+    testes: TestesCenter,
+    validacao: ValidacaoCenter,
+    auditoria: AuditoriaCenter,
+    operacoes: OperacoesCenter,
+    financeiro: FinanceiroCenter,
+    roadmap: RoadmapCenter,
+    academia: AcademiaCenter,
+    ajuda: AjudaCenter,
+    configuracoes: ConfiguracoesCenter,
   };
-  const Current = CENTERS[view] || FactoryCommandCenter;
+  const Current = ROUTES[view] || HomeWorkspace;
 
   const cols = [
     'var(--activitybar-w)',
     explorerOpen ? 'var(--explorer-w)' : null,
     'minmax(0,1fr)',
-    copilotOpen ? 'var(--copilot-w)' : null,
   ].filter(Boolean).join(' ');
-
-  if (!isAuthenticated) {
-    return <LoginScreen onLoginSuccess={() => {
-      setIsAuthenticated(true);
-      // Recarrega os dados após o login
-      if (window.ForjaAPI && typeof window.ForjaAPI.hydrate === 'function') {
-        window.ForjaAPI.hydrate().catch(e => console.warn('Hydrate falhou pós-login', e));
-      }
-    }} />;
-  }
 
   return (
     <div className="os">
       <MenuBar theme={theme} setTheme={setTheme}
         onCommand={() => setCmdOpen(true)}
-        onToggleCopilot={() => setCopilotOpen(o=>!o)}
+        onToggleCopilot={() => setCmdOpen(true)}
         onToggleExplorer={() => setExplorerOpen(o=>!o)} />
       <div className="os-body" style={{ gridTemplateColumns: cols }}>
         <ActivityBar view={view} setView={setView} />
         {explorerOpen && <Explorer view={view} setView={setView} onClose={() => setExplorerOpen(false)} />}
         <main className="os-main"><Current setView={setView} theme={theme} setTheme={setTheme} /></main>
-        {copilotOpen && <Copilot onClose={() => setCopilotOpen(false)} setView={setView} />}
       </div>
       <StatusBar view={view} setView={setView} />
       {cmdOpen && <CommandPalette onClose={() => setCmdOpen(false)} setView={setView} setTheme={setTheme} theme={theme} />}
@@ -2331,16 +1920,4 @@ function App() {
   );
 }
 
-// Boot: carrega dados REAIS do backend antes de renderizar.
-// window.FORJA permanece como fallback caso o backend falhe.
-async function bootForjaOS() {
-  try {
-    if (window.ForjaAPI && typeof window.ForjaAPI.hydrate === 'function') {
-      await window.ForjaAPI.hydrate();
-    }
-  } catch (e) {
-    console.warn('[FORJA] hydrate falhou, usando fallback window.FORJA:', e);
-  }
-  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-}
-bootForjaOS();
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);

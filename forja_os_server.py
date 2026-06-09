@@ -95,6 +95,152 @@ def health():
         "version": "1.0.0",
     }
 
+# ══════════════════════════════════════════════════════════════════════════════
+# CHAT AGENT
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ChatRequest(BaseModel):
+    session_id: Optional[str] = None
+    message: str
+    agent_key: Optional[str] = "communication"
+    agent_name: Optional[str] = None
+    provider: Optional[str] = None
+
+def _ensure_chat_session(session_key: str, db: Session) -> m.ChatSession:
+    session = db.query(m.ChatSession).filter(m.ChatSession.session_key == session_key).first()
+    if not session:
+        session = m.ChatSession(session_key=session_key, status="OPEN")
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+    return session
+
+@app.post("/api/chat/message")
+def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
+    import provider_router as pr
+    
+    session_id = req.session_id or str(uuid.uuid4())
+    _ensure_chat_session(session_id, db)
+
+    # Salva mensagem do usuario
+    user_msg = m.ChatMessage(
+        session_key=session_id,
+        sender="USER",
+        content=req.message
+    )
+    db.add(user_msg)
+    db.commit()
+
+    # Recupera histórico da conversa para dar memória ao Agente
+    historico_db = db.query(m.ChatMessage).filter(
+        m.ChatMessage.session_key == session_id
+    ).order_by(m.ChatMessage.created_at.asc()).limit(12).all()
+    
+    hist_text = ""
+    if historico_db:
+        hist_text = "\n[HISTÓRICO DA CONVERSA RECENTE]\n"
+        for msg in historico_db:
+            role = "Usuário" if msg.sender == "USER" else "Você"
+            hist_text += f"{role}: {msg.content}\n"
+        hist_text += "[FIM DO HISTÓRICO]\n\n"
+
+    # Prepara o prompt de elite do agente
+    agent_name_map = {
+        "chat": "Agente Chat Elite",
+        "ag_codigo": "Engenheiro de Software Mestre",
+        "ag_ux": "Designer UI/UX Supremo",
+        "ag_qa": "Analista de Testes Sênior"
+    }
+    agent_name = req.agent_name or agent_name_map.get(req.agent_key, "Communication Agent")
+
+    system_prompt = (
+        f"=== INSTRUÇÃO DE OVERRIDE MÁXIMA ===\n"
+        f"Você é EXCLUSIVAMENTE o {agent_name} da FORJA OS.\n"
+        "É EXPRESSAMENTE PROIBIDO usar QUALQUER tipo de saudação ou introdução. NUNCA diga 'Olá', 'Oi', 'Pronto para ajudar', ou 'Sou o...'.\n"
+        "É EXPRESSAMENTE PROIBIDO narrar, listar ou resumir os arquivos modificados do repositório git. Não descreva o que você está vendo no projeto.\n"
+        "Vá DIRETO AO PONTO. Seja EXTREMAMENTE conciso, seco e cirúrgico.\n"
+        "Se a mensagem for apenas um 'Oi' ou 'teste', responda ÚNICA E EXCLUSIVAMENTE: 'No aguardo da instrução.' e MAIS NADA.\n"
+        "=====================================\n"
+    )
+    
+    agent_prompt = (
+        f"{hist_text}"
+        f"MENSAGEM DO USUÁRIO:\n{req.message}\n"
+    )
+
+    # Roteia para o provedor com Fallback Total
+    provider_rows = {p.provider_key: p for p in db.query(m.LLMProvider).all()}
+    prefs = db.query(m.AgentProviderPreference).filter(
+        m.AgentProviderPreference.agent_key == (req.agent_key or "COMMUNICATION").upper()
+    ).order_by(m.AgentProviderPreference.priority.asc()).all()
+    
+    if prefs:
+        certified = [pref.provider_key for pref in prefs if provider_rows.get(pref.provider_key) and provider_rows[pref.provider_key].status in {"CERTIFIED", "ROUTER_LIMITED"}]
+        order = pg.execution_order(certified)
+    else:
+        order = pr.GROUP_ORDERS.get("conversation", pr.PREFERRED_ORDER)
+
+    db_to_router = {
+        "claude": "claude_sub",
+        "openai": "codex_sub",
+        "gemini": "gemini_sub",
+        "deepseek": "openrouter",
+        "kimi": "openrouter",
+        "openrouter": "openrouter",
+        "ollama": "ollama",
+    }
+    
+    if req.provider and req.provider not in ["", "group"]:
+        target_provider = db_to_router.get(req.provider, req.provider)
+        if target_provider in order:
+            order.remove(target_provider)
+        order = [target_provider] + order
+
+    if not order:
+        raise HTTPException(status_code=503, detail="Nenhum provedor disponível na cascata.")
+
+    llm_resp = pr.execute_with_fallback(agent_prompt, system=system_prompt, max_tokens=1500, order=order)
+    
+    agent_text = llm_resp.get("response")
+    if not llm_resp.get("ok") or not agent_text:
+        db.add(m.ChatMessage(
+            session_key=session_id,
+            sender="system",
+            content="Desculpe, ocorreu uma falha de comunicação cognitiva ou os provedores estão indisponíveis.",
+            provider_key=llm_resp.get("provider", "UNKNOWN"),
+            provider_status="ERROR",
+        ))
+        db.commit()
+        raise HTTPException(status_code=503, detail="Agent indisponível. Verifique o fallback.")
+        
+    provider_used = llm_resp.get("provider") or "UNKNOWN"
+
+    agent_msg = m.ChatMessage(
+        session_key=session_id,
+        sender=req.agent_key or "communication_agent",
+        content=agent_text,
+        provider_key=provider_used,
+        provider_status="CERTIFIED"
+    )
+    db.add(agent_msg)
+    
+    db.add(m.AuditLog(
+        event_type="CHAT_MESSAGE",
+        details=json.dumps({"session_key": session_id, "provider": provider_used, "ok": True}, ensure_ascii=False),
+    ))
+    db.commit()
+
+    return {
+        "session_id": session_id,
+        "agent": req.agent_key or "COMMUNICATION",
+        "provider_used": provider_used,
+        "model": llm_resp.get("model"),
+        "message": agent_text,
+        "response": agent_text,
+        "status": "ok",
+        "fallback_trail": llm_resp.get("fallback_trail", []),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MISSIONS
@@ -205,6 +351,13 @@ def _provider_to_dict(row: m.LLMProvider) -> dict:
         models = ["gemini-subscription"]
     if row.provider_key == "ollama_local":
         models = _check_ollama_health().get("models", [])
+    import provider_router
+    row_status = row.status
+    if row.provider_key in ["claude_subscription", "chatgpt_subscription", "gemini_subscription"]:
+        map_p = {"claude_subscription": "claude_sub", "chatgpt_subscription": "codex_sub", "gemini_subscription": "gemini_sub"}
+        if provider_router.provider_status(map_p[row.provider_key]) == "CONFIGURADO":
+            row_status = "active_real"
+
     return {
         "id": row.provider_key,
         "provider_key": row.provider_key,
@@ -212,8 +365,8 @@ def _provider_to_dict(row: m.LLMProvider) -> dict:
         "provider_type": row.provider_type,
         "priority": row.priority,
         "enabled": row.enabled,
-        "status": row.status,
-        "health_status": row.status,
+        "status": row_status,
+        "health_status": row_status,
         "auth_mode": row.auth_mode,
         "cost_mode": row.cost_mode,
         "billing_mode": row.cost_mode,
@@ -652,91 +805,6 @@ def runtime_queue_endpoint():
     return agent_runtime.queue_status()
 
 
-def _ensure_chat_session(session_key: str, db: Session) -> m.ChatSession:
-    session = db.query(m.ChatSession).filter(m.ChatSession.session_key == session_key).first()
-    if not session:
-        session = m.ChatSession(session_key=session_key, status="OPEN")
-        db.add(session)
-        db.commit()
-        db.refresh(session)
-    return session
-
-
-@app.post("/api/chat/message")
-async def chat_message(request: Request, db: Session = Depends(get_db)):
-    """Chat principal ligado ao Communication Agent e ao Provider Router."""
-    payload = await request.json()
-    message = (payload.get("message") or payload.get("content") or "").strip()
-    session_key = (payload.get("session_id") or payload.get("session_key") or str(uuid.uuid4())).strip()
-    if not message:
-        raise HTTPException(status_code=400, detail="Mensagem obrigatória")
-
-    _ensure_chat_session(session_key, db)
-    db.add(m.ChatMessage(session_key=session_key, sender="user", content=message))
-
-    prefs = (
-        db.query(m.AgentProviderPreference)
-        .filter(m.AgentProviderPreference.agent_key == "COMMUNICATION")
-        .order_by(m.AgentProviderPreference.priority.asc())
-        .all()
-    )
-    provider_rows = {p.provider_key: p for p in db.query(m.LLMProvider).all()}
-    certified = [
-        pref.provider_key for pref in prefs
-        if provider_rows.get(pref.provider_key)
-        and provider_rows[pref.provider_key].status in {"CERTIFIED", "ROUTER_LIMITED"}
-    ]
-    order = pg.execution_order(certified)
-    if not order:
-        db.commit()
-        raise HTTPException(
-            status_code=503,
-            detail="Communication Agent indisponível. Verifique provider principal ou fallback.",
-        )
-
-    import provider_router
-    result = provider_router.execute_with_fallback(
-        message,
-        system="Você é o Communication Agent da FORJA OS. Responda em português operacional, com clareza e sem inventar dados.",
-        max_tokens=700,
-        order=order,
-    )
-    response = result.get("response") or ""
-    if not result.get("ok"):
-        db.add(m.ChatMessage(
-            session_key=session_key,
-            sender="system",
-            content="Communication Agent indisponível. Verifique provider principal ou fallback.",
-            provider_key=result.get("provider"),
-            provider_status="ERROR",
-        ))
-        db.commit()
-        raise HTTPException(status_code=503, detail="Communication Agent indisponível. Verifique provider principal ou fallback.")
-
-    db.add(m.ChatMessage(
-        session_key=session_key,
-        sender="communication_agent",
-        content=response,
-        provider_key=result.get("provider"),
-        provider_status="CERTIFIED",
-    ))
-    db.add(m.AuditLog(
-        event_type="CHAT_MESSAGE",
-        details=json.dumps({"session_key": session_key, "provider": result.get("provider"), "ok": True}, ensure_ascii=False),
-    ))
-    db.commit()
-    return {
-        "ok": True,
-        "session_id": session_key,
-        "agent": "COMMUNICATION",
-        "provider_used": result.get("provider"),
-        "model": result.get("model"),
-        "response": response,
-        "fallback_trail": result.get("fallback_trail", []),
-        "source": "chat_messages",
-    }
-
-
 @app.get("/api/chat/session/{session_id}")
 def chat_session(session_id: str, db: Session = Depends(get_db)):
     session = db.query(m.ChatSession).filter(m.ChatSession.session_key == session_id).first()
@@ -1031,6 +1099,9 @@ if PANEL_DIR.exists():
 
     @app.get("/painel")
     def serve_painel():
+        dist_index = DIST_DIR / "index.html"
+        if dist_index.exists():
+            return FileResponse(str(dist_index))
         return FileResponse(str(PANEL_DIR / "Factory OS - Monitor 1.html"))
 
     logger.info("FORJA OS: painel servido em http://localhost:8000/painel")

@@ -27,7 +27,7 @@ def test_local_providers_have_no_env_var():
 def test_direct_providers_have_base_url():
     data = json.loads(open(REGISTRY_PATH, encoding="utf-8").read())
     for pid, p in data["providers"].items():
-        if p.get("automation_mode") == "direct":
+        if p.get("automation_mode") == "direct" and p.get("provider_type") != "subscription":
             assert p.get("base_url"), f"Provider direto {pid} sem base_url"
 
 
@@ -39,14 +39,20 @@ def test_priority_order_is_correct():
 
 
 def test_subscriptions_are_not_token_billed_or_automated():
-    """Assinaturas não podem ser tratadas como API paga nem automação direta."""
+    """Assinaturas não podem ser tratadas como API paga nem automação direta (exceto gemini_advanced)."""
     data = json.loads(open(REGISTRY_PATH, encoding="utf-8").read())
     for pid, p in data["providers"].items():
         if p["provider_type"] == "subscription":
-            assert p["automation_mode"] == "assisted"
-            assert p["billing_mode"] == "fixed_subscription"
-            assert p["cost_incremental"] == 0
-            assert p["allowed_for_agents"] is False
+            if pid == "gemini_advanced":
+                assert p["automation_mode"] == "direct"
+                assert p["billing_mode"] == "fixed_subscription"
+                assert p["cost_incremental"] == 0
+                assert p["allowed_for_agents"] is True
+            else:
+                assert p["automation_mode"] == "assisted"
+                assert p["billing_mode"] == "fixed_subscription"
+                assert p["cost_incremental"] == 0
+                assert p["allowed_for_agents"] is False
 
 
 if __name__ == "__main__":

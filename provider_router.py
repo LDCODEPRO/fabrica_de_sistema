@@ -54,12 +54,12 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
 # 2. codex_sub   — ChatGPT Plus via Codex CLI (active_real, gpt-5.5)
 # 3. claude_sub  — Claude Pro (headless disabled — falhará e passa ao próximo)
 # 4. ollama      — local (active_real: qwen3:8b, llama3, llama3.2 disponíveis)
-PREFERRED_ORDER = ["ollama", "gemini_sub", "codex_sub", "claude_sub"]
+PREFERRED_ORDER = ["claude_sub", "codex_sub", "gemini_sub", "openrouter", "ollama"]
 
 GROUP_ORDERS = {
     "conversation": ["claude_sub", "codex_sub", "gemini_sub", "openrouter", "ollama"],
-    "engineering": ["codex_sub", "claude_sub", "openrouter", "gemini_sub", "ollama"],
-    "low_cost": ["ollama", "openrouter", "gemini_sub", "codex_sub", "claude_sub"],
+    "engineering": ["claude_sub", "codex_sub", "gemini_sub", "openrouter", "ollama"],
+    "low_cost": ["gemini_sub", "openrouter", "ollama", "codex_sub", "claude_sub"],
 }
 
 # Providers de ASSINATURA via CLI oficial (custo incremental R$ 0, sem API key)
@@ -70,10 +70,10 @@ SUBSCRIPTION_CLIS = {
 }
 
 PROVIDER_CONFIG = {
-    # Assinaturas via CLI (sem env/url — usam o login da própria CLI)
+    # Assinaturas via CLI/Browser Scripts (usam a sessão do usuário no Chrome)
     "claude_sub": {"env": None, "model": "claude-subscription", "cli": "claude"},
-    "codex_sub":  {"env": None, "model": "chatgpt-subscription", "cli": "codex"},
-    "gemini_sub": {"env": None, "model": "gemini-subscription", "cli": "gemini"},
+    "codex_sub":  {"env": None, "model": "chatgpt-subscription", "python_script": r"C:\Users\Servdia\.gemini\config\plugins\openai-integration\scripts\openai_cli.py"},
+    "gemini_sub": {"env": None, "model": "gemini-subscription", "python_script": r"C:\Users\Servdia\.gemini\config\plugins\gemini-advanced\scripts\gemini_cli.py"},
     # Local grátis
     "ollama":   {"env": None, "model": os.getenv("OLLAMA_MODEL", "llama3.2:latest")},
     # APIs diretas legadas (NÃO usadas por padrão — assinaturas têm prioridade)
@@ -84,7 +84,7 @@ PROVIDER_CONFIG = {
                  "url": "https://api.openai.com/v1/chat/completions"},
     # Gateway autorizado para modelos sem assinatura/local.
     "openrouter": {"env": "OPENROUTER_API_KEY",
-                   "model": os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-v4-pro"),
+                   "model": os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat"),
                    "fallback_models": ["moonshotai/kimi-k2.6"],
                    "url": "https://openrouter.ai/api/v1/chat/completions"},
     "claude":   {"env": "ANTHROPIC_API_KEY", "model": "claude-haiku-4-5-20251001",
@@ -114,11 +114,14 @@ def _cli_available(bin_name):
 
 
 def _claude_cli(cfg, prompt, system, max_tokens):
-    """Claude via assinatura (CLI oficial). Sem API key."""
-    full = (system + "\n\n" + prompt) if system else prompt
+    args = [_resolve_bin("claude")]
+    if system:
+        args.extend(["--system-prompt", system])
+    args.extend(["--tools", "None", "-p", prompt])
+    
     proc = subprocess.run(
-        [_resolve_bin("claude"), "-p", full, "--output-format", "text"],
-        capture_output=True, text=True, timeout=120,
+        args,
+        capture_output=True, text=True, encoding='utf-8'
     )
     out = (proc.stdout or "").strip()
     err = (proc.stderr or "").strip()
@@ -131,52 +134,32 @@ def _claude_cli(cfg, prompt, system, max_tokens):
 
 
 def _codex_cli(cfg, prompt, system, max_tokens):
-    """ChatGPT via assinatura (Codex CLI). Sem API key. Usa stdin + --full-auto."""
+    """ChatGPT via assinatura (browser automation)."""
     full = (system + "\n\n" + prompt) if system else prompt
+    script = cfg["python_script"]
     proc = subprocess.run(
-        [_resolve_bin("codex"), "exec", "--full-auto"],
-        input=full,
-        capture_output=True, text=True, timeout=180,
+        ["python", script, full],
+        capture_output=True, text=True, timeout=180, encoding='utf-8'
     )
     raw = (proc.stdout or "")
     if proc.returncode != 0 and not raw.strip():
-        raise RuntimeError(((proc.stderr or "").strip() or "codex CLI falhou")[:160])
-    return _parse_codex_output(raw)
+        raise RuntimeError(((proc.stderr or "").strip() or "openai_cli falhou")[:160])
+    return raw.strip()
 
 
 def _gemini_cli(cfg, prompt, system, max_tokens):
-    """Gemini via assinatura Google usando o CLI oficial em modo headless."""
+    """Gemini via assinatura Google One (browser automation)."""
     full = (system + "\n\n" + prompt) if system else prompt
-    root = Path(__file__).resolve().parent
-    runtime_dir = root / ".gemini-forja" / "runtime"
-    runtime_dir.mkdir(parents=True, exist_ok=True)
-    env = os.environ.copy()
-    env["GEMINI_CLI_HOME"] = str(root / ".gemini-forja")
-    env["GEMINI_CLI_TRUST_WORKSPACE"] = "true"
-    # Assinatura OAuth deve prevalecer sobre qualquer API key herdada do host.
-    env.pop("GOOGLE_API_KEY", None)
-    env.pop("GEMINI_API_KEY", None)
+    script = cfg["python_script"]
     proc = subprocess.run(
-        [
-            _resolve_bin("gemini"),
-            "-p", full,
-            "--output-format", "json",
-            "--approval-mode", "plan",
-            "--skip-trust",
-        ],
-        capture_output=True, text=True, timeout=180, env=env, cwd=runtime_dir,
+        ["python", script, full],
+        capture_output=True, text=True, timeout=180, encoding='utf-8'
     )
     raw = (proc.stdout or "").strip()
     err = (proc.stderr or "").strip()
     if proc.returncode != 0 or not raw:
-        raise RuntimeError((err or raw or "gemini CLI sem saída")[:160])
-    data = json.loads(raw)
-    if data.get("error"):
-        raise RuntimeError(str(data["error"])[:160])
-    response = str(data.get("response") or "").strip()
-    if not response:
-        raise RuntimeError("gemini CLI retornou resposta vazia")
-    return response
+        raise RuntimeError((err or raw or "gemini_cli sem saída")[:160])
+    return raw
 
 
 def _parse_codex_output(raw):
@@ -217,6 +200,8 @@ def provider_status(provider):
     # Assinatura via CLI: CONFIGURADO se a CLI estiver instalada
     if cfg.get("cli"):
         return "CONFIGURADO" if _cli_available(cfg["cli"]) else "AUSENTE"
+    if cfg.get("python_script"):
+        return "CONFIGURADO" if os.path.exists(cfg["python_script"]) else "AUSENTE"
     if cfg["env"] is None:  # local
         return "CONFIGURADO"
     v = os.environ.get(cfg["env"], "")

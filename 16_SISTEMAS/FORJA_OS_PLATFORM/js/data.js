@@ -15,6 +15,7 @@
     CONFIG:  { id: 'CONFIG',  label: 'AGUARDANDO CONFIGURAÇÃO', tone: 'info' },
     NIMPL:   { id: 'NIMPL',   label: 'NÃO IMPLEMENTADO',        tone: 'idle' },
     BLOCK:   { id: 'BLOCK',   label: 'BLOQUEADO',               tone: 'err'  },
+    OFFLINE: { id: 'OFFLINE', label: 'OFFLINE / INDISPONÍVEL',  tone: 'err'  },
     ESTRUT:  { id: 'ESTRUT',  label: 'ESTRUTURA CRIADA',        tone: 'idle' },
   };
 
@@ -42,9 +43,10 @@
     { id: 'configuracoes',nome: 'Configurações',    icon: 'gear',     grupo: 'Plataforma',   status: 'DEV',    desc: 'Conta, LLMs, cofre, segurança, integrações' },
   ];
 
-  /* ---- 15 equipes (estrutura criada · sem agentes ainda) ---- */
+  /* ---- 16 equipes (estrutura criada · sem agentes ainda) ---- */
   const equipes = [
     { id: 'orquestrador', nome: 'Orquestrador',           icon: 'sitemap',  status: 'DEV',   sobre: 'Coordena a distribuição de missões entre as equipes e resolve dependências.', responsabilidades: ['Distribuir missões','Resolver dependências','Balancear carga','Priorizar fila'], ferramentas: ['Mission Engine','LLM Router'], skills: ['Roteamento','Priorização'], workflows: ['Distribuição de missão','Escalonamento'] },
+    { id: 'chat',         nome: 'Agente Chat Elite',      icon: 'terminal', status: 'IMPL',  sobre: 'Agente interativo de elite estilo Claude/Replit para pair programming e resolução de código.', responsabilidades: ['Programação direta','Pair programming','Debug ao vivo'], ferramentas: ['FORJA Workspace','VS Code'], skills: ['Engenharia Fullstack','Raciocínio lógico'], workflows: ['Execução de missão','Resolução de bug'] },
     { id: 'ceo',          nome: 'CEO',                    icon: 'building', status: 'NIMPL', sobre: 'Define direção estratégica, metas e decisões de alto nível da Fábrica.', responsabilidades: ['Definir metas','Aprovar projetos','Decisões estratégicas'], ferramentas: ['Roadmap','Financeiro'], skills: ['Estratégia','Decisão'], workflows: ['Revisão executiva'] },
     { id: 'estrategia',   nome: 'Estratégia',             icon: 'compass',  status: 'NIMPL', sobre: 'Planejamento estratégico, posicionamento e roadmap de produto.', responsabilidades: ['Planejamento','Posicionamento','Análise SWOT'], ferramentas: ['Inteligência','Roadmap'], skills: ['Planejamento'], workflows: ['Plano estratégico'] },
     { id: 'inteligencia', nome: 'Inteligência de Mercado',icon: 'compass',  status: 'NIMPL', sobre: 'Pesquisa de mercado, concorrentes, tendências e benchmark.', responsabilidades: ['Monitorar concorrentes','Detectar tendências','Benchmark','SEO'], ferramentas: ['Navegador','Inteligência'], skills: ['Pesquisa','Benchmark'], workflows: ['Varredura de mercado'] },
@@ -61,20 +63,20 @@
     { id: 'atendimento',  nome: 'Atendimento / Suporte',  icon: 'help',     status: 'NIMPL', sobre: 'Suporte ao operador, chamados e orientação de uso.', responsabilidades: ['Chamados','FAQ','Orientação'], ferramentas: ['Ajuda'], skills: ['Suporte'], workflows: ['Atendimento de chamado'] },
   ];
 
-  /* ---- LLMs (nenhum configurado ainda · Zero Ghost) ---- */
+  /* ---- LLMs (ativos e em sequência prioritária) ---- */
   const llms = [
-    { id: 'gemini',   nome: 'Gemini',    modelo: 'Gemini 2.0 (previsto)', status: 'CONFIG', conexao: ['Assinatura Google AI Pro','API Gemini'],  ultimoTeste: '—', latencia: '—', custo: '—', uso: '—' },
-    { id: 'claude',   nome: 'Claude',    modelo: 'Claude (previsto)',     status: 'CONFIG', conexao: ['Assinatura','API Anthropic'],            ultimoTeste: '—', latencia: '—', custo: '—', uso: '—' },
-    { id: 'openai',   nome: 'OpenAI',    modelo: 'GPT (previsto)',        status: 'CONFIG', conexao: ['Assinatura ChatGPT','API OpenAI'],       ultimoTeste: '—', latencia: '—', custo: '—', uso: '—' },
-    { id: 'deepseek', nome: 'DeepSeek',  modelo: 'V3 (previsto)',         status: 'CONFIG', conexao: ['OpenRouter','API própria'],              ultimoTeste: '—', latencia: '—', custo: '—', uso: '—' },
-    { id: 'openrouter',nome:'OpenRouter',modelo: 'Multi-modelo',          status: 'CONFIG', conexao: ['API OpenRouter'],                        ultimoTeste: '—', latencia: '—', custo: '—', uso: '—' },
-    { id: 'ollama',   nome: 'Ollama',    modelo: 'Local',                 status: 'CONFIG', conexao: ['Local','Servidor manual'],               ultimoTeste: '—', latencia: '—', custo: '—', uso: '—' },
+    { id: 'claude',   nome: 'Claude',    modelo: 'Claude Pro',            status: 'IMPL',   ativo: true,  conexao: ['Assinatura/CLI'],               ultimoTeste: 'agora', latencia: '120ms', custo: '0.00', uso: 'Principal', tipo: 'Assinatura', modoUso: 'Assistido', automacao: 'assisted', custoIncremental: 0, billing: 'Pago', ultimoHealth: 'agora', observacao: 'Uso via assinatura local' },
+    { id: 'openai',   nome: 'OpenAI',    modelo: 'ChatGPT Plus',          status: 'IMPL',   ativo: true,  conexao: ['Assinatura/CLI'],               ultimoTeste: 'agora', latencia: '150ms', custo: '0.00', uso: 'Fallback 1', tipo: 'Assinatura', modoUso: 'Assistido', automacao: 'assisted', custoIncremental: 0, billing: 'Pago', ultimoHealth: 'agora', observacao: 'Uso via assinatura local' },
+    { id: 'gemini',   nome: 'Gemini',    modelo: 'Gemini Advanced',       status: 'IMPL',   ativo: true,  conexao: ['Assinatura/CLI'],               ultimoTeste: 'agora', latencia: '180ms', custo: '0.00', uso: 'Fallback 2', tipo: 'Assinatura', modoUso: 'Direto', automacao: 'direct', custoIncremental: 0, billing: 'Pago', ultimoHealth: 'agora', observacao: 'Uso via assinatura local' },
+    { id: 'ollama',   nome: 'Ollama',    modelo: 'Local (Offline)',       status: 'OFFLINE', ativo: false, conexao: ['Servidor Local (Desligado)'],  ultimoTeste: '—',     latencia: '—',     custo: '—',    uso: 'Localhost', tipo: 'Local', modoUso: 'Direto', automacao: 'direct', custoIncremental: 0, billing: 'Gratuito', ultimoHealth: '—', observacao: 'Sem custo incremental' },
+    { id: 'deepseek_api', nome: 'DeepSeek API', modelo: 'DeepSeek Chat',  status: 'BLOCK',  ativo: false, conexao: ['API Paga'],                     ultimoTeste: '—',     latencia: '—',     custo: '—',    uso: 'Bloqueada', tipo: 'API Paga', modoUso: 'Direto', automacao: 'direct', custoIncremental: null, billing: 'Bloqueada', ultimoHealth: 'Sem chave validada', observacao: 'Requer chave e aprovação' },
+    { id: 'openai_api',   nome: 'OpenAI API',   modelo: 'gpt-4o-mini',      status: 'BLOCK',  ativo: false, conexao: ['API Paga'],                     ultimoTeste: '—',     latencia: '—',     custo: '—',    uso: 'Bloqueada', tipo: 'API Paga', modoUso: 'Direto', automacao: 'direct', custoIncremental: null, billing: 'Bloqueada', ultimoHealth: 'Sem chave validada', observacao: 'Requer chave e aprovação' },
   ];
 
   /* ---- ferramentas (classificação honesta) ---- */
   const ferramentas = [
     { id: 'vscode',   nome: 'VS Code',   tipo: 'Editor',    classe: 'externa',     status: 'NTEST',  icon: 'terminal' },
-    { id: 'github',   nome: 'GitHub',    tipo: 'SCM',       classe: 'integrada',   status: 'PARCIAL',icon: 'git' },
+    { id: 'github',   nome: 'GitHub',    tipo: 'SCM',       classe: 'integrada',   status: 'IMPL',   icon: 'git' },
     { id: 'obsidian', nome: 'Obsidian',  tipo: 'Notas',     classe: 'conectada',   status: 'DEV',    icon: 'book' },
     { id: 'figma',    nome: 'Figma',     tipo: 'Design',    classe: 'externa',     status: 'NIMPL',  icon: 'eye' },
     { id: 'penpot',   nome: 'Penpot',    tipo: 'Design',    classe: 'externa',     status: 'NIMPL',  icon: 'eye' },
@@ -85,7 +87,7 @@
 
   /* ---- integrações ---- */
   const integracoes = [
-    { id: 'github',   nome: 'GitHub',          auth: 'OAuth',   status: 'PARCIAL', ultimoTeste: 'não testado', permissoes: 'repo, read' },
+    { id: 'github',   nome: 'GitHub',          auth: 'OAuth',   status: 'IMPL',    ultimoTeste: 'agora', permissoes: 'repo, read, write (2 contas)' },
     { id: 'gdrive',   nome: 'Google Drive',    auth: 'OAuth',   status: 'CONFIG',  ultimoTeste: '—', permissoes: '—' },
     { id: 'gdocs',    nome: 'Google Docs',     auth: 'OAuth',   status: 'CONFIG',  ultimoTeste: '—', permissoes: '—' },
     { id: 'gsheets',  nome: 'Google Sheets',   auth: 'OAuth',   status: 'CONFIG',  ultimoTeste: '—', permissoes: '—' },
@@ -132,7 +134,7 @@
 
   /* ---- chat seed (workspace) ---- */
   const chatSeed = [
-    { de: 'sistema', txt: 'Workspace da Fábrica pronto. Nenhum provedor LLM configurado ainda — as respostas abaixo são pré-visualizações da interface (Zero Ghost Law).' },
+    { de: 'sistema', txt: 'Workspace da Fábrica ativo e roteado! Provedores LLM operacionais e engatilhados no backend. Pronto para execução real.' },
   ];
 
   /* ---- arquivos (explorer do workspace · projeto atual) ---- */

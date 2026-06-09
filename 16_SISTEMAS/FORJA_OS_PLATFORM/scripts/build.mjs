@@ -11,14 +11,15 @@ const { build } = depRoot
 const root = process.cwd();
 const sourceOrder = [
   'js/data.js',
-  'js/api.js',
   'js/shared.jsx',
   'js/shell.jsx',
   'js/explorer.jsx',
   'js/copilot.jsx',
-  'js/centers_a.jsx',
-  'js/centers_b.jsx',
-  'js/centers_c.jsx',
+  'js/home.jsx',
+  'js/home_exec.jsx',
+  'js/equipes.jsx',
+  'js/modules_a.jsx',
+  'js/modules_b.jsx',
   'js/app.jsx',
 ];
 
@@ -31,12 +32,7 @@ for (const file of sourceOrder) {
   chunks.push(await readFile(join(root, file), 'utf8'));
 }
 
-const entry = [
-  "import React from 'react';",
-  "import { createRoot } from 'react-dom/client';",
-  'const ReactDOM = { createRoot };',
-  ...chunks,
-].join('\n\n');
+const entry = chunks.join('\n\n');
 
 const generatedEntry = join(process.env.FORJA_BUILD_TMP || join(root, 'scripts'), 'generated-entry.jsx');
 await writeFile(generatedEntry, entry, 'utf8');
@@ -56,7 +52,10 @@ await build({
   },
 });
 
-await copyFile(join(root, 'Factory OS - Monitor 1.html'), join(dist, 'index.html'));
+let html = await readFile(join(root, 'Factory OS - Monitor 1.html'), 'utf8');
+html = html.replace(/<script.*?src="js\/.*?".*?><\/script>/g, '');
+html = html.replace('</body>', '  <script src="assets/app.js"></script>\n</body>');
+await writeFile(join(dist, 'index.html'), html, 'utf8');
 await copyFile(join(root, 'favicon.svg'), join(dist, 'favicon.svg'));
 await copyFile(join(root, 'css/tokens.css'), join(dist, 'css/tokens.css'));
 await copyFile(join(root, 'css/app.css'), join(dist, 'css/app.css'));

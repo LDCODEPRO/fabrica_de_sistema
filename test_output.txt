@@ -1,0 +1,14 @@
+Sender: ag_chat_elite
+Content: Entendido. Estou pronto para ajudar com o projeto **FABRICA_DE_SISTEMAS** / **FORJA_OS_PLATFORM**.
+
+Vejo que há trabalho em andamento no seu repositório — várias alterações não commitadas no painel Forja OS, no runtime do agente (`agent_runtime.py`), no servidor (`forja_os_server.py`), no roteador de provedores (`provider_router.py`), além de novos relatórios e testes do painel do agente de chat.
+
+O que você gostaria de fazer? Por exemplo:
+
+- **Continuar o desenvolvimento** de alguma funcionalidade do painel ou do Agentic Core
+- **Revisar** as alterações atuais (`/code-review` ou `/review`)
+- **Rodar/testar** o painel ou os testes novos (`tests/test_chat_agent_panel.py`)
+- **Investigar** algum bug ou comportamento específico
+- **Commitar** o trabalho em andamento
+
+Me diga qual é a tarefa e eu começo. 🔨

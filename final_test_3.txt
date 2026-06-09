@@ -1,0 +1,1 @@
+[('USER', 'teste de supressão'), ('chat', 'Desculpe, ocorreu uma falha de comunicação cognitiva ou os provedores estão indisponíveis.')]

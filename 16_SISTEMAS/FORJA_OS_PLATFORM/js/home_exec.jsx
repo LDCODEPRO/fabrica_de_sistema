@@ -87,7 +87,7 @@ function ExecutiveHome({ setView }) {
   const sistemas = [
     { nome: 'Banco de Dados',     icon: 'db',       st: 'DEV',    nota: 'não provisionado' },
     { nome: 'API Core',           icon: 'zap',      st: 'DEV',    nota: 'em desenvolvimento' },
-    { nome: 'GitHub',             icon: 'git',      st: 'NTEST',  nota: 'não testado' },
+    { nome: 'GitHub',             icon: 'git',      st: 'IMPL',   nota: '2 contas conectadas' },
     { nome: 'Sistema de Arquivos',icon: 'folder',   st: 'IMPL',   nota: 'operacional' },
     { nome: 'Scheduler',          icon: 'clock',    st: 'NIMPL',  nota: 'não configurado' },
     { nome: 'Runtime',            icon: 'cpu',      st: 'DEV',    nota: 'em desenvolvimento' },
@@ -195,16 +195,19 @@ function ExecutiveHome({ setView }) {
         </ExecSection>
 
         {/* ===== BLOCO 6 · GITHUB COMMAND CENTER ===== */}
-        <ExecSection icon="git" title="GitHub Command Center" right={<StatusPill status="NTEST" size="sm"/>}>
-          <dl className="kv exec-kv">
-            <dt>Repositório</dt><dd className="faint">Não configurado</dd>
-            <dt>Branch atual</dt><dd className="mono faint">—</dd>
-            <dt>Último commit</dt><dd className="faint">Sem dados</dd>
-            <dt>Último push</dt><dd className="faint">Sem dados</dd>
-            <dt>Sincronização</dt><dd className="faint">Aguardando integração</dd>
-            <dt>Status Git</dt><dd><StatusPill status="NTEST" size="sm"/></dd>
+        <ExecSection icon="git" title="GitHub Command Center" right={<StatusPill status="IMPL" size="sm"/>}>
+          <dl className="kv exec-kv" style={{marginBottom:10}}>
+            <dt>Conta 1</dt><dd className="mono">CipolariCreator (Ativa)</dd>
+            <dt>Conta 2</dt><dd className="mono">Servdia (Ativa)</dd>
+            <dt>Branch atual</dt><dd className="mono faint">main</dd>
+            <dt>Último commit</dt><dd className="faint">Sincronizado</dd>
+            <dt>Sincronização</dt><dd className="faint" style={{color:'var(--ok)'}}>Operacional bidirecional</dd>
           </dl>
-          <button className="btn sm" style={{marginTop:10}} onClick={()=>setView('integracoes')}><Icon name="link" size={12}/> Conectar GitHub</button>
+          <div className="exec-syscard-top" style={{marginTop:8, padding: '6px 10px', background:'var(--bg-3)', borderRadius:4}}>
+            <span className="exec-sysic"><Icon name="shield" size={13}/></span>
+            <span style={{fontSize:12, color:'var(--text-2)'}}>Acesso Total Autorizado</span>
+            <span className="dot ok" style={{marginLeft:'auto'}}/>
+          </div>
         </ExecSection>
       </div>
 

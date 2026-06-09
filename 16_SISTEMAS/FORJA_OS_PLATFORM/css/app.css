@@ -122,7 +122,7 @@
 .cp-msg { display: flex; flex-direction: column; gap: 5px; max-width: 90%; }
 .cp-msg.me { align-self: flex-end; align-items: flex-end; }
 .cp-msg-who { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-2); }
-.cp-bubble { padding: 9px 11px; border-radius: 10px; font-size: 12.5px; line-height: 1.5; }
+.cp-bubble { padding: 9px 11px; border-radius: 10px; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; }
 .cp-msg.ag .cp-bubble { background: var(--bg-2); border: 1px solid var(--border); border-top-left-radius: 3px; }
 .cp-msg.me .cp-bubble { background: var(--accent); color: #fff; border-top-right-radius: 3px; }
 .cp-typing { display: flex; gap: 4px; align-items: center; }

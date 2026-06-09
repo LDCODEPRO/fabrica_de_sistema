@@ -1,22 +1,21 @@
 # LLM_PROVIDER_VALIDATION_REPORT
+**Gerado:** 2026-06-09T04:12:54.344545
 
-Data: 2026-06-05
-Status: SUBSTITUIDO_POR_LLM_COST_ZERO_GOVERNANCE_V1
+| Provider | Status | Motivo |
+|----------|--------|--------|
+| DeepSeek V4 Pro | ❌ unknown | Assinatura/interface exige validação humana ou conector real; sem health automático nesta execução |
+| Claude Pro | ❌ unknown | Assinatura/interface exige validação humana ou conector real; sem health automático nesta execução |
+| ChatGPT Plus / GPT | ❌ unknown | Assinatura/interface exige validação humana ou conector real; sem health automático nesta execução |
+| Gemini Google One AI Pro | ❌ unavailable | Chamada real falhou: RuntimeError: gemini_cli sem saída |
+| Ollama Local | ❌ unavailable | OLLAMA_UNAVAILABLE: URLError |
+| OpenAI API | ❌ missing_key | Variável OPENAI_API_KEY não configurada |
+| Claude API | ❌ missing_key | Variável ANTHROPIC_API_KEY não configurada |
+| Gemini API | ❌ missing_key | Variável GOOGLE_API_KEY não configurada |
+| OpenRouter API | ✅ active_real | Health check OK. Resposta: SUCESSO |
+| DeepSeek API | ❌ missing_key | Variável DEEPSEEK_API_KEY não configurada |
 
-Este relatorio substitui versoes anteriores que marcavam providers como ativos apenas por credencial ou assinatura conhecida.
+## AUDITORIA DE SEGURANÇA
+- Nenhum valor de credencial foi registrado neste relatório.
+- Apenas existência de variáveis de ambiente foi verificada.
 
-## Estado oficial atual
-
-| Provider | Tipo | Health oficial | Observacao |
-| --- | --- | --- | --- |
-| DeepSeek V4 Pro | subscription | unknown | Assinatura assistida; sem automacao direta certificada |
-| Claude Pro / Claude Code | subscription | unknown | Assinatura assistida; sem custo por token |
-| ChatGPT Plus / GPT | subscription | unknown | Assinatura assistida; distinta da OpenAI API |
-| Gemini Advanced | subscription | unknown | Assinatura assistida; distinta da Gemini API |
-| Ollama Local | local | unknown | Requer `/api/tags` e geracao real |
-| APIs pagas | paid_api | missing_key/unknown | Bloqueadas por padrao |
-
-## Fonte de verdade
-
-Usar `17_AUTOMACOES/LLM_ROUTER/provider_registry.json` e os relatorios em `19_RELATORIOS/LLM_COST_ZERO_*`.
-
+_Gerado por provider_health_check.py · 2026-06-09_

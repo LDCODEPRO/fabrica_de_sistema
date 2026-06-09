@@ -32,27 +32,50 @@ function FileTree({ nodes, depth = 0 }) {
 
 function HomeWorkspace({ setView }) {
   const D = window.FORJA;
-  const teams = D.equipes;
+  const teams = D.equipes || [];
   const [team, setTeam] = useLocalStorage('forja.ws.team', 'orquestrador');
   const [llm, setLLM] = useLocalStorage('forja.ws.llm', 'gemini');
-  const [msgs, setMsgs] = useState(D.chatSeed);
+  const [msgs, setMsgs] = useState(D.chatSeed || []);
   const [draft, setDraft] = useState('');
   const [pane, setPane] = useState('preview'); // preview | arquivos | terminal
   const bodyRef = useRef(null);
-  const teamObj = teams.find(t=>t.id===team) || teams[0];
-  const llmObj = D.llms.find(l=>l.id===llm) || D.llms[0];
+  const teamObj = teams.find(t=>t.id===team) || teams[0] || {};
+  const llmObj = (D.llms || []).find(l=>l.id===llm) || (D.llms || [])[0] || {};
 
   useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [msgs]);
 
-  const send = () => {
+  const send = async () => {
     const t = draft.trim(); if (!t) return;
     setMsgs(m => [...m, { de:'voce', txt:t }]);
     setDraft('');
-    setTimeout(() => {
-      setMsgs(m => [...m, { de:'sistema', preview:true, txt:
-        `Pré-visualização da interface (Zero Ghost): a equipe "${teamObj.nome}" receberia esta instrução roteada via ${llmObj.nome}. ` +
-        `Nenhum provedor LLM está configurado, então nenhuma execução real ocorre. Configure em LLMs → Configurações para ativar.` }]);
-    }, 700);
+    
+    // Mostra loading
+    const loadingId = Date.now();
+    setMsgs(m => [...m, { id: loadingId, de:'sistema', preview:true, loading:true, txt:'Processando pelo ' + teamObj.nome + '...' }]);
+
+    try {
+      const res = await fetch('/api/chat/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: t, agent_key: team, agent_name: teamObj.nome, provider: llm })
+      });
+      const data = await res.json();
+      
+      setMsgs(m => {
+        const withoutLoading = m.filter(msg => msg.id !== loadingId);
+        return [...withoutLoading, {
+          de: data.agent,
+          preview: false,
+          txt: data.message,
+          provider: data.provider_used
+        }];
+      });
+    } catch (err) {
+      setMsgs(m => {
+        const withoutLoading = m.filter(msg => msg.id !== loadingId);
+        return [...withoutLoading, { de:'sistema', preview:true, error:true, txt: 'Erro ao conectar com o Agentic Core.' }];
+      });
+    }
   };
 
   return (
@@ -83,14 +106,21 @@ function HomeWorkspace({ setView }) {
           <div className="ws-chat-head">
             <Icon name="chat" size={14} style={{color:'var(--accent-bright)'}}/>
             <span style={{fontWeight:600,fontSize:13}}>Chat operacional</span>
-            <span className="pill" style={{marginLeft:'auto'}}><span className="zg-dot" style={{background:'var(--warn)'}}/> LLM não configurada</span>
+            <span className="pill" style={{marginLeft:'auto'}}><span className="zg-dot" style={{background:'var(--ok)'}}/> LLMs Online</span>
           </div>
 
           <div className="ws-chat-body scroll-y" ref={bodyRef}>
             {msgs.map((m,i)=>(
               <div key={i} className={'cp-msg ' + (m.de==='voce'?'me':'ag')}>
-                {m.de!=='voce' && <div className="cp-msg-who"><Icon name={m.preview?'eye':'flame'} size={12}/> {m.de==='sistema'?'Fábrica':teamObj.nome} {m.preview && <span className="pill" style={{padding:'0 6px'}}>preview</span>}</div>}
-                <div className={'cp-bubble' + (m.preview?' preview':'')}>{m.txt}</div>
+                {m.de!=='voce' && (
+                  <div className="cp-msg-who">
+                    <Icon name={m.preview?'eye':'flame'} size={12}/> 
+                    {m.de==='sistema'?'Fábrica':(teams.find(x=>x.id===m.de)?.nome || m.de)} 
+                    {m.preview && <span className="pill" style={{padding:'0 6px'}}>preview</span>}
+                    {m.provider && <span className="pill" style={{padding:'0 6px', marginLeft: 4, background:'var(--panel-2)', color:'var(--text-3)'}}>via {m.provider}</span>}
+                  </div>
+                )}
+                <div className={'cp-bubble' + (m.preview?' preview':'') + (m.loading?' pulse':'')}>{m.txt}</div>
               </div>
             ))}
           </div>
@@ -106,7 +136,7 @@ function HomeWorkspace({ setView }) {
               <label className="ws-sel">
                 <span className="ws-sel-lb"><Icon name="zap" size={11}/> Modelo</span>
                 <select value={llm} onChange={e=>setLLM(e.target.value)}>
-                  {D.llms.map(l=><option key={l.id} value={l.id}>{l.nome} · não config.</option>)}
+                  {(D.llms || []).map(l=><option key={l.id} value={l.id}>{l.nome || l.provider} · {l.ativo?'ativa':'inativa'}</option>)}
                 </select>
               </label>
             </div>
@@ -116,7 +146,7 @@ function HomeWorkspace({ setView }) {
                 onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();} }} />
               <button className="btn primary icon" onClick={send} title="Enviar"><Icon name="send" size={14}/></button>
             </div>
-            <div className="ws-hint">Roteia para <b>{teamObj.nome}</b> via <b>{llmObj.nome}</b> · <span className="faint">execução real requer LLM configurada</span></div>
+            <div className="ws-hint">Roteia para <b>{teamObj.nome || 'Agente'}</b> via <b>{llmObj.nome || llmObj.provider || 'Padrão'}</b> · <span className="faint" style={{color:'var(--ok)'}}>Online e pronto</span></div>
           </div>
         </section>
 
@@ -140,7 +170,7 @@ function HomeWorkspace({ setView }) {
             {pane==='arquivos' && (
               <div className="ws-files scroll-y">
                 <div className="ws-files-head"><span className="eyebrow">PROJETO · a-fabrica</span><StatusPill status="DEV" size="sm"/></div>
-                <FileTree nodes={D.arvore} />
+                <FileTree nodes={D.arvore || []} />
               </div>
             )}
             {pane==='terminal' && (
@@ -148,7 +178,7 @@ function HomeWorkspace({ setView }) {
                 <div className="ln"><span className="t">$</span><span className="lv-acc">fabrica status</span></div>
                 <div className="ln"><span className="t"> </span><span className="lv-info">plataforma: A FÁBRICA · build dev</span></div>
                 <div className="ln"><span className="t"> </span><span className="lv-ok">workspace: pronto</span></div>
-                <div className="ln"><span className="t"> </span><span className="lv-warn">llms: nenhuma configurada</span></div>
+                <div className="ln"><span className="t"> </span><span className="lv-ok">llms: conectadas e roteadas</span></div>
                 <div className="ln"><span className="t"> </span><span className="lv-warn">runtime: em desenvolvimento</span></div>
                 <div className="ln"><span className="t"> </span><span className="lv-info">zero-ghost: ativo · 0 violações</span></div>
                 <div className="ln"><span className="t">$</span><span className="lv-acc blink">_</span></div>

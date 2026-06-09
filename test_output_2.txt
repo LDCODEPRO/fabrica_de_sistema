@@ -1,0 +1,15 @@
+Sender: chat
+Content: Olá! Sou o **Agente Chat Elite**, pronto para ajudar com o projeto **FABRICA_DE_SISTEMAS**.
+
+Vejo que você tem trabalho em andamento na plataforma FORJA_OS, incluindo:
+- Mudanças no painel (`home.jsx`, `home_exec.jsx`, `app.js`)
+- Backend Python (`agent_runtime.py`, `forja_os_server.py`, `provider_router.py`)
+- Novos relatórios e um teste do painel de agente de chat (`tests/test_chat_agent_panel.py`)
+
+Como posso ajudar? Por exemplo, posso:
+- 🔍 Revisar o diff atual (correção de bugs ou qualidade)
+- 🧪 Rodar/validar os testes do painel do agente
+- 🛠️ Implementar ou ajustar uma funcionalidade
+- 📋 Analisar um dos relatórios em `19_RELATORIOS/`
+
+O que você gostaria de fazer?

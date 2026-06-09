@@ -366,7 +366,7 @@
 .cp-msg { display: flex; flex-direction: column; gap: 5px; max-width: 86%; }
 .cp-msg.me { align-self: flex-end; align-items: flex-end; }
 .cp-msg-who { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-2); }
-.cp-bubble { padding: 10px 13px; border-radius: 12px; font-size: 12.5px; line-height: 1.55; }
+.cp-bubble { padding: 10px 13px; border-radius: 12px; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
 .cp-msg.ag .cp-bubble { background: var(--bg-2); border: 1px solid var(--border); border-top-left-radius: 3px; }
 .cp-msg.me .cp-bubble { background: var(--accent); color: #fff; border-top-right-radius: 3px; }
 .cp-bubble.preview { background: var(--bg-1); border-style: dashed; color: var(--text-2); }

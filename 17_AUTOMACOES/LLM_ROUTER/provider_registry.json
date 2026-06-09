@@ -13,11 +13,17 @@
       "requires_api_key": false,
       "requires_director_approval": false,
       "health_status": "unknown",
-      "last_health_check": "",
+      "last_health_check": "2026-06-09T04:12:21.321670",
       "allowed_for_agents": false,
       "model_id": "deepseek-v4-pro",
-      "capabilities": ["architecture", "coding", "reasoning", "audit", "decision"],
-      "notes": "Prioridade oficial. Classificado como assinatura assistida ate existir evidencia de API/chave/health check real."
+      "capabilities": [
+        "architecture",
+        "coding",
+        "reasoning",
+        "audit",
+        "decision"
+      ],
+      "notes": "Assinatura/interface exige validação humana ou conector real; sem health automático nesta execução"
     },
     "claude_pro": {
       "provider_name": "claude_pro",
@@ -29,11 +35,16 @@
       "requires_api_key": false,
       "requires_director_approval": false,
       "health_status": "unknown",
-      "last_health_check": "",
+      "last_health_check": "2026-06-09T04:12:21.333083",
       "allowed_for_agents": false,
       "model_id": "claude-pro",
-      "capabilities": ["engineering", "writing", "review", "analysis"],
-      "notes": "Assinatura/interface. Nao calcular custo por token; automacao direta nao presumida."
+      "capabilities": [
+        "engineering",
+        "writing",
+        "review",
+        "analysis"
+      ],
+      "notes": "Assinatura/interface exige validação humana ou conector real; sem health automático nesta execução"
     },
     "chatgpt_plus": {
       "provider_name": "chatgpt_plus",
@@ -45,11 +56,16 @@
       "requires_api_key": false,
       "requires_director_approval": false,
       "health_status": "unknown",
-      "last_health_check": "",
+      "last_health_check": "2026-06-09T04:12:21.334637",
       "allowed_for_agents": false,
       "model_id": "chatgpt-plus",
-      "capabilities": ["validation", "reasoning", "coding", "strategy"],
-      "notes": "Assinatura/interface. Nao tratar como OpenAI API."
+      "capabilities": [
+        "validation",
+        "reasoning",
+        "coding",
+        "strategy"
+      ],
+      "notes": "Assinatura/interface exige validação humana ou conector real; sem health automático nesta execução"
     },
     "gemini_advanced": {
       "provider_name": "gemini_advanced",
@@ -60,12 +76,17 @@
       "cost_incremental": 0,
       "requires_api_key": false,
       "requires_director_approval": false,
-      "health_status": "active_real",
-      "last_health_check": "2026-06-06T15:46:00-03:00",
+      "health_status": "unavailable",
+      "last_health_check": "2026-06-09T04:12:21.336293",
       "allowed_for_agents": true,
       "model_id": "gemini-subscription",
-      "capabilities": ["research", "documentation", "multimodal", "analysis"],
-      "notes": "Assinatura Google One AI Pro validada por OAuth e resposta real via Gemini CLI. Sem custo incremental por token."
+      "capabilities": [
+        "research",
+        "documentation",
+        "multimodal",
+        "analysis"
+      ],
+      "notes": "Chamada real falhou: RuntimeError: gemini_cli sem saída"
     },
     "ollama_local": {
       "provider_name": "ollama_local",
@@ -76,13 +97,19 @@
       "cost_incremental": 0,
       "requires_api_key": false,
       "requires_director_approval": false,
-      "health_status": "unknown",
-      "last_health_check": "",
+      "health_status": "unavailable",
+      "last_health_check": "2026-06-09T04:12:49.961566",
       "allowed_for_agents": false,
       "base_url": "http://127.0.0.1:11434",
       "model_id": "llama3.2:latest",
-      "capabilities": ["agents", "automation", "offline", "fallback", "simple"],
-      "notes": "Local com automacao direta somente apos health check real active_real."
+      "capabilities": [
+        "agents",
+        "automation",
+        "offline",
+        "fallback",
+        "simple"
+      ],
+      "notes": "OLLAMA_UNAVAILABLE: URLError"
     },
     "openai_api": {
       "provider_name": "openai_api",
@@ -94,15 +121,20 @@
       "requires_api_key": true,
       "requires_director_approval": true,
       "health_status": "missing_key",
-      "last_health_check": "",
+      "last_health_check": "2026-06-09T04:12:52.008190",
       "allowed_for_agents": false,
       "env_var": "OPENAI_API_KEY",
       "base_url": "https://api.openai.com/v1",
       "model_id": "gpt-4o-mini",
-      "capabilities": ["coding", "validation", "review", "multimodal"],
+      "capabilities": [
+        "coding",
+        "validation",
+        "review",
+        "multimodal"
+      ],
       "cost_per_1k_input": null,
       "cost_per_1k_output": null,
-      "notes": "API paga bloqueada por padrao; requer chave, Billing Guard, Protecao de Segredos, health active_real e autorizacao."
+      "notes": "Variável OPENAI_API_KEY não configurada"
     },
     "claude_api": {
       "provider_name": "claude_api",
@@ -114,15 +146,20 @@
       "requires_api_key": true,
       "requires_director_approval": true,
       "health_status": "missing_key",
-      "last_health_check": "",
+      "last_health_check": "2026-06-09T04:12:52.012783",
       "allowed_for_agents": false,
       "env_var": "ANTHROPIC_API_KEY",
       "base_url": "https://api.anthropic.com",
       "model_id": "claude-sonnet",
-      "capabilities": ["engineering", "writing", "review", "analysis"],
+      "capabilities": [
+        "engineering",
+        "writing",
+        "review",
+        "analysis"
+      ],
       "cost_per_1k_input": null,
       "cost_per_1k_output": null,
-      "notes": "API paga distinta de Claude Pro; bloqueada por padrao."
+      "notes": "Variável ANTHROPIC_API_KEY não configurada"
     },
     "gemini_api": {
       "provider_name": "gemini_api",
@@ -134,15 +171,20 @@
       "requires_api_key": true,
       "requires_director_approval": true,
       "health_status": "missing_key",
-      "last_health_check": "",
+      "last_health_check": "2026-06-09T04:12:52.016422",
       "allowed_for_agents": false,
       "env_var": "GOOGLE_API_KEY",
       "base_url": "https://generativelanguage.googleapis.com",
       "model_id": "gemini-2.5-flash",
-      "capabilities": ["research", "documentation", "vision", "multimodal"],
+      "capabilities": [
+        "research",
+        "documentation",
+        "vision",
+        "multimodal"
+      ],
       "cost_per_1k_input": null,
       "cost_per_1k_output": null,
-      "notes": "API paga distinta de Gemini Advanced; bloqueada por padrao."
+      "notes": "Variável GOOGLE_API_KEY não configurada"
     },
     "openrouter_api": {
       "provider_name": "openrouter_api",
@@ -154,16 +196,24 @@
       "requires_api_key": true,
       "requires_director_approval": true,
       "health_status": "active_real",
-      "last_health_check": "2026-06-06T15:55:00-03:00",
+      "last_health_check": "2026-06-09T04:12:52.020758",
       "allowed_for_agents": true,
       "env_var": "OPENROUTER_API_KEY",
       "base_url": "https://openrouter.ai/api/v1",
       "model_id": "deepseek/deepseek-v4-pro",
-      "fallback_model_ids": ["moonshotai/kimi-k2.6"],
-      "capabilities": ["architecture", "coding", "reasoning", "audit", "fallback"],
+      "fallback_model_ids": [
+        "moonshotai/kimi-k2.6"
+      ],
+      "capabilities": [
+        "architecture",
+        "coding",
+        "reasoning",
+        "audit",
+        "fallback"
+      ],
       "cost_per_1k_input": null,
       "cost_per_1k_output": null,
-      "notes": "API paga agregadora. Ordem oficial: DeepSeek V4 Pro e depois Kimi K2.6. Uso requer aprovacao da Diretoria e Billing Guard."
+      "notes": "Health check OK. Resposta: SUCESSO"
     },
     "deepseek_api": {
       "provider_name": "deepseek_api",
@@ -175,25 +225,66 @@
       "requires_api_key": true,
       "requires_director_approval": true,
       "health_status": "missing_key",
-      "last_health_check": "",
+      "last_health_check": "2026-06-09T04:12:54.341588",
       "allowed_for_agents": false,
       "env_var": "DEEPSEEK_API_KEY",
       "base_url": "https://api.deepseek.com",
       "model_id": "deepseek-chat",
-      "capabilities": ["architecture", "coding", "reasoning", "audit"],
+      "capabilities": [
+        "architecture",
+        "coding",
+        "reasoning",
+        "audit"
+      ],
       "cost_per_1k_input": null,
       "cost_per_1k_output": null,
-      "notes": "API paga distinta de DeepSeek V4 Pro por assinatura; bloqueada por padrao."
+      "notes": "Variável DEEPSEEK_API_KEY não configurada"
     }
   },
   "routing_table": {
-    "assisted": ["deepseek_v4_pro", "claude_pro", "chatgpt_plus", "gemini_advanced"],
-    "architecture": ["deepseek_v4_pro", "claude_pro", "chatgpt_plus", "gemini_advanced", "ollama_local"],
-    "coding": ["deepseek_v4_pro", "claude_pro", "chatgpt_plus", "ollama_local"],
-    "audit": ["deepseek_v4_pro", "claude_pro", "chatgpt_plus", "ollama_local"],
-    "documentation": ["gemini_advanced", "claude_pro", "chatgpt_plus", "ollama_local"],
-    "research": ["gemini_advanced", "chatgpt_plus", "deepseek_v4_pro", "ollama_local"],
-    "automation": ["ollama_local", "openrouter_api"],
-    "fallback": ["ollama_local"]
+    "assisted": [
+      "deepseek_v4_pro",
+      "claude_pro",
+      "chatgpt_plus",
+      "gemini_advanced"
+    ],
+    "architecture": [
+      "deepseek_v4_pro",
+      "claude_pro",
+      "chatgpt_plus",
+      "gemini_advanced",
+      "ollama_local"
+    ],
+    "coding": [
+      "deepseek_v4_pro",
+      "claude_pro",
+      "chatgpt_plus",
+      "ollama_local"
+    ],
+    "audit": [
+      "deepseek_v4_pro",
+      "claude_pro",
+      "chatgpt_plus",
+      "ollama_local"
+    ],
+    "documentation": [
+      "gemini_advanced",
+      "claude_pro",
+      "chatgpt_plus",
+      "ollama_local"
+    ],
+    "research": [
+      "gemini_advanced",
+      "chatgpt_plus",
+      "deepseek_v4_pro",
+      "ollama_local"
+    ],
+    "automation": [
+      "ollama_local",
+      "openrouter_api"
+    ],
+    "fallback": [
+      "ollama_local"
+    ]
   }
 }

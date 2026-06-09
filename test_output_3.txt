@@ -1,0 +1,13 @@
+Recebi sua mensagem, mas ela contém apenas um cabeçalho ("=== INSTRUÇÃO DE OVERRIDE MÁXIMA ===") sem nenhuma instrução ou tarefa de fato.
+
+Só para deixar claro: não existe um modo de "override máximo" que altere como eu trabalho — eu sigo os mesmos princípios independentemente de como uma mensagem seja rotulada. Mas fico feliz em ajudar com o que você precisar.
+
+Vejo que você está no repositório **FABRICA_DE_SISTEMAS**, com várias alterações em andamento (FORJA_OS_PLATFORM, `agent_runtime.py`, `provider_router.py`, `forja_os_server.py`, relatórios novos em `19_RELATORIOS/`, e um teste novo `tests/test_chat_agent_panel.py`).
+
+O que você gostaria de fazer? Por exemplo:
+- Revisar as alterações atuais (`git diff`)
+- Rodar os testes do painel de chat do agente
+- Continuar o trabalho no "Agentic Core" / painel V008
+- Outra coisa
+
+É só me dizer a tarefa.

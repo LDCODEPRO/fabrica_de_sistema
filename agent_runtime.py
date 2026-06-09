@@ -136,9 +136,49 @@ def run_mission(mission_id):
         conn.commit()
         _audit(conn, "MISSION_RUNNING", f"MIS-{mid:03d} agente={agent_name}")
 
-        # Prompt + provider real (com fallback)
-        prompt = _build_prompt(ms, agent_name)
-        llm = pr.execute_with_fallback(prompt, max_tokens=400)
+        # Tenta usar o novo cérebro AGENTIC_CORE
+        import sys
+        if str(ROOT) not in sys.path:
+            sys.path.append(str(ROOT))
+            
+        try:
+            from AGENTIC_CORE.base_agent import BaseAgent
+            # Instancia o novo agente cognitivo
+            agent_instance = BaseAgent(
+                name=agent_name,
+                role="Operador Autônomo da Forja",
+                goal=f"Executar a missão: {ms['title']}"
+            )
+            
+            objective = f"{ms['title']}\nDetalhes: {ms['description'] or 'Nenhum'}"
+            core_result = agent_instance.execute_mission(objective)
+            
+            resp_text = core_result.get("final_answer")
+            if not resp_text:
+                resp_text = f"O agente encerrou com status: {core_result.get('status')} sem resposta final."
+                
+            llm = {
+                "ok": core_result.get("status") in ["completed", "max_steps_reached"],
+                "provider": "AGENTIC_CORE_REACT",
+                "model": "router_auto",
+                "tokens_estimated": 0,
+                "response": resp_text,
+                "error": None if core_result.get("status") in ["completed", "max_steps_reached"] else "Erro cognitivo",
+                "fallback_trail": None
+            }
+        except Exception as e:
+            # Fallback de segurança para o motor antigo
+            prompt = _build_prompt(ms, agent_name)
+            import provider_governance as pg
+            providers = {p.provider_key: p for p in conn.execute("SELECT * FROM llm_providers").fetchall()}
+            certified = [k for k, p in providers.items() if p["status"] in {"CERTIFIED", "ROUTER_LIMITED"}]
+            order = pg.execution_order(certified)
+            if not order:
+                llm = {"ok": False, "provider": None, "error": "Nenhum provider operacional."}
+            else:
+                llm = pr.execute_with_fallback(prompt, max_tokens=400, order=order)
+            llm["error"] = llm.get("error") or str(e)
+
         result["provider"] = llm.get("provider")
 
         if llm.get("fallback_trail"):
