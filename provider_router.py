@@ -40,26 +40,49 @@ def _load_local_env():
 _load_local_env()
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434")
+REGISTRY_PATH = Path(__file__).resolve().parent / "17_AUTOMACOES" / "LLM_ROUTER" / "provider_registry.json"
+
+
+def _is_provider_healthy(provider_id: str) -> bool:
+    """Verifica se o provider está saudável no registry antes de rodar (evita timeouts pesados)."""
+    map_to_registry = {
+        "claude_sub": "claude_pro",
+        "codex_sub": "chatgpt_plus",
+        "gemini_sub": "gemini_advanced",
+        "ollama": "ollama_local",
+        "openai": "openai_api",
+        "claude": "claude_api",
+        "gemini": "gemini_api",
+        "openrouter": "openrouter_api",
+        "deepseek": "deepseek_api"
+    }
+    registry_id = map_to_registry.get(provider_id)
+    if not registry_id:
+        return True
+    try:
+        if REGISTRY_PATH.exists():
+            data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+            p = data.get("providers", {}).get(registry_id, {})
+            status = p.get("health_status", "unknown")
+            if status in {"unavailable", "missing_key", "offline"}:
+                return False
+    except Exception:
+        pass
+    return True
+
 
 # ORDEM OFICIAL: SÓ ASSINATURAS (CLIs oficiais que autenticam pelo login da
 # assinatura, como o Claude Code/Codex fazem — sem API key, sem navegador).
 # 1. Claude (assinatura, CLI `claude`)
-# 2. ChatGPT/Codex (assinatura, CLI `codex`)
-# 3. Gemini (assinatura, CLI oficial `gemini`)
+# 2. Gemini (assinatura, CLI oficial `gemini`)
+# 3. ChatGPT/Codex (assinatura, CLI `codex`)
 # 4. Ollama local (último recurso grátis)
-# OpenRouter fica disponível apenas por seleção explícita; não entra no
-# fallback automático para impedir consumo pago acidental.
-# Ordem de execução real (confirmado por health check em 2026-06-08):
-# 1. gemini_sub  — Gemini Google One AI Pro (CLI local, active_real)
-# 2. codex_sub   — ChatGPT Plus via Codex CLI (active_real, gpt-5.5)
-# 3. claude_sub  — Claude Pro (headless disabled — falhará e passa ao próximo)
-# 4. ollama      — local (active_real: qwen3:8b, llama3, llama3.2 disponíveis)
-PREFERRED_ORDER = ["claude_sub", "codex_sub", "gemini_sub", "openrouter", "ollama"]
+PREFERRED_ORDER = ["claude_sub", "gemini_sub", "codex_sub", "openrouter", "ollama"]
 
 GROUP_ORDERS = {
-    "conversation": ["claude_sub", "codex_sub", "gemini_sub", "openrouter", "ollama"],
-    "engineering": ["claude_sub", "codex_sub", "gemini_sub", "openrouter", "ollama"],
-    "low_cost": ["gemini_sub", "openrouter", "ollama", "codex_sub", "claude_sub"],
+    "conversation": ["claude_sub", "gemini_sub", "codex_sub", "openrouter", "ollama"],
+    "engineering": ["claude_sub", "gemini_sub", "codex_sub", "openrouter", "ollama"],
+    "low_cost": ["gemini_sub", "openrouter", "ollama", "claude_sub", "codex_sub"],
 }
 
 # Providers de ASSINATURA via CLI oficial (custo incremental R$ 0, sem API key)
@@ -139,7 +162,7 @@ def _codex_cli(cfg, prompt, system, max_tokens):
     script = cfg["python_script"]
     proc = subprocess.run(
         ["python", script, full],
-        capture_output=True, text=True, timeout=180, encoding='utf-8'
+        capture_output=True, text=True, timeout=50, encoding='utf-8'
     )
     raw = (proc.stdout or "")
     if proc.returncode != 0 and not raw.strip():
@@ -153,7 +176,7 @@ def _gemini_cli(cfg, prompt, system, max_tokens):
     script = cfg["python_script"]
     proc = subprocess.run(
         ["python", script, full],
-        capture_output=True, text=True, timeout=180, encoding='utf-8'
+        capture_output=True, text=True, timeout=50, encoding='utf-8'
     )
     raw = (proc.stdout or "").strip()
     err = (proc.stderr or "").strip()
@@ -352,6 +375,9 @@ def execute_with_fallback(prompt, system=None, max_tokens=500, order=None):
     for prov in order:
         if provider_status(prov) == "AUSENTE":
             trail.append({"provider": prov, "skipped": "AUSENTE"})
+            continue
+        if not _is_provider_healthy(prov):
+            trail.append({"provider": prov, "skipped": "HEALTH_UNHEALTHY_IN_REGISTRY"})
             continue
         r = execute_llm(prov, prompt, system, max_tokens)
         trail.append({"provider": prov, "ok": r["ok"], "error": r["error"]})
