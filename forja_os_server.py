@@ -117,8 +117,8 @@ def _ensure_chat_session(session_key: str, db: Session) -> m.ChatSession:
 
 @app.post("/api/chat/message")
 def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
-    import provider_router as pr
-    
+    import provider_router
+
     session_id = req.session_id or str(uuid.uuid4())
     _ensure_chat_session(session_id, db)
 
@@ -163,57 +163,44 @@ def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
         "=====================================\n"
     )
     
-    agent_prompt = (
-        f"{hist_text}"
-        f"MENSAGEM DO USUÁRIO:\n{req.message}\n"
-    )
+    full_prompt = f"{hist_text}MENSAGEM DO USUÁRIO:\n{req.message}\n"
 
-    # Roteia para o provedor com Fallback Total
-    provider_rows = {p.provider_key: p for p in db.query(m.LLMProvider).all()}
-    prefs = db.query(m.AgentProviderPreference).filter(
-        m.AgentProviderPreference.agent_key == (req.agent_key or "COMMUNICATION").upper()
-    ).order_by(m.AgentProviderPreference.priority.asc()).all()
-    
-    if prefs:
-        certified = [pref.provider_key for pref in prefs if provider_rows.get(pref.provider_key) and provider_rows[pref.provider_key].status in {"CERTIFIED", "ROUTER_LIMITED"}]
-        order = pg.execution_order(certified)
+    # Roteia via provider_router REAL. Ordem oficial de conversação:
+    # claude_sub → gemini_sub → codex_sub → openrouter → ollama.
+    # Estes executam de fato (assinaturas via CLI + gateway autorizado).
+    # O llm_router baseado em registry só alcança APIs com adapter e bloqueava
+    # assinaturas com ASSISTED_SUBSCRIPTION_REQUIRES_HUMAN_INTERFACE (chat quebrado).
+    if req.provider:
+        result = provider_router.execute_llm(
+            req.provider, full_prompt, system=system_prompt, max_tokens=1024
+        )
+        result.setdefault("fallback_trail", [{"provider": req.provider, "ok": result.get("ok")}])
     else:
-        order = pr.GROUP_ORDERS.get("conversation", pr.PREFERRED_ORDER)
+        result = provider_router.execute_for_group(
+            "conversation", full_prompt, system=system_prompt, max_tokens=1024
+        )
 
-    db_to_router = {
-        "claude": "claude_sub",
-        "openai": "codex_sub",
-        "gemini": "gemini_sub",
-        "deepseek": "openrouter",
-        "kimi": "openrouter",
-        "openrouter": "openrouter",
-        "ollama": "ollama",
-    }
-    
-    if req.provider and req.provider not in ["", "group"]:
-        target_provider = db_to_router.get(req.provider, req.provider)
-        if target_provider in order:
-            order.remove(target_provider)
-        order = [target_provider] + order
-
-    if not order:
-        raise HTTPException(status_code=503, detail="Nenhum provedor disponível na cascata.")
-
-    llm_resp = pr.execute_with_fallback(agent_prompt, system=system_prompt, max_tokens=1500, order=order)
-    
-    agent_text = llm_resp.get("response")
-    if not llm_resp.get("ok") or not agent_text:
+    if not result.get("ok") or not result.get("response"):
+        err = result.get("error") or "todos os providers falharam"
         db.add(m.ChatMessage(
             session_key=session_id,
             sender="system",
-            content="Desculpe, ocorreu uma falha de comunicação cognitiva ou os provedores estão indisponíveis.",
-            provider_key=llm_resp.get("provider", "UNKNOWN"),
+            content=f"Falha de comunicação: {err}",
+            provider_key=result.get("provider"),
             provider_status="ERROR",
         ))
+        db.add(m.AuditLog(
+            event_type="CHAT_MESSAGE",
+            details=json.dumps({"session_key": session_id, "ok": False, "error": err,
+                                "trail": result.get("fallback_trail", [])}, ensure_ascii=False),
+        ))
         db.commit()
-        raise HTTPException(status_code=503, detail="Agent indisponível. Verifique o fallback.")
-        
-    provider_used = llm_resp.get("provider") or "UNKNOWN"
+        raise HTTPException(status_code=503, detail=f"Agent indisponível: {err}")
+
+    provider_used = result.get("provider")
+    agent_text = result.get("response")
+    model_used = result.get("model")
+    fallback_used = len(result.get("fallback_trail", [])) > 1
 
     agent_msg = m.ChatMessage(
         session_key=session_id,
@@ -223,10 +210,10 @@ def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
         provider_status="CERTIFIED"
     )
     db.add(agent_msg)
-    
+
     db.add(m.AuditLog(
         event_type="CHAT_MESSAGE",
-        details=json.dumps({"session_key": session_id, "provider": provider_used, "ok": True}, ensure_ascii=False),
+        details=json.dumps({"session_key": session_id, "provider": provider_used, "model": model_used, "ok": True}, ensure_ascii=False),
     ))
     db.commit()
 
@@ -234,11 +221,12 @@ def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
         "session_id": session_id,
         "agent": req.agent_key or "COMMUNICATION",
         "provider_used": provider_used,
-        "model": llm_resp.get("model"),
+        "model": model_used,
         "message": agent_text,
         "response": agent_text,
         "status": "ok",
-        "fallback_trail": llm_resp.get("fallback_trail", []),
+        "fallback_used": fallback_used,
+        "fallback_trail": result.get("fallback_trail", []),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
 
@@ -248,23 +236,34 @@ def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
 
 @app.get("/api/chat/status")
 def chat_status():
-    """Retorna status REAL dos providers disponíveis para o chat.
-    ZERO GHOST: só reporta 'online' se houver provider certificado de verdade."""
-    import provider_router as pr
-
+    """Retorna status REAL dos providers lendo direto do registry.
+    ZERO GHOST: só reporta 'online' se houver provider active_real."""
+    registry_path = Path(__file__).parent / "17_AUTOMACOES" / "LLM_ROUTER" / "provider_registry.json"
+    
     available = []
     unavailable = []
-    for prov in pr.PREFERRED_ORDER:
-        st = pr.provider_status(prov)
-        healthy = pr._is_provider_healthy(prov)
-        cfg = pr.PROVIDER_CONFIG.get(prov, {})
-        label = pr.SUBSCRIPTION_CLIS.get(prov, {}).get("label", cfg.get("model", prov))
-        entry = {"id": prov, "label": label, "configured": st == "CONFIGURADO", "healthy": healthy}
-        if st == "CONFIGURADO" and healthy:
-            available.append(entry)
-        else:
-            entry["reason"] = "não configurado" if st != "CONFIGURADO" else "health indisponível"
-            unavailable.append(entry)
+    
+    try:
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+        providers = registry.get("providers", {})
+        
+        for pid, pcfg in providers.items():
+            label = pcfg.get("display_name", pid)
+            health = pcfg.get("health_status", "unknown")
+            ptype = pcfg.get("provider_type", "unknown")
+            entry = {
+                "id": pid,
+                "label": label,
+                "type": ptype,
+                "health": health,
+            }
+            if health == "active_real":
+                available.append(entry)
+            else:
+                entry["reason"] = health
+                unavailable.append(entry)
+    except Exception as e:
+        logger.error("Erro ao ler registry: %s", e)
 
     online = len(available) > 0
     return {

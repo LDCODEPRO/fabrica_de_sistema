@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-06-09 - FORJA_V008_CHAT_STABLE_CHECKPOINT
+
+- **Correção do Chat Operacional**: Ajustada a comunicação da interface do chat da plataforma FORJA OS com o backend FastAPI (`/api/chat/message` e `/api/chat/status`), garantindo a entrega estável de mensagens.
+- **Correção do Roteamento (Provider Router)**: Refatoração do `provider_router.py` com suporte estável a fallback e tratamento apropriado de erros de automação (`_looks_like_cli_error` contra falhas do Playwright/CLI).
+- **Correção Claude CLI**: O prompt agora vai por STDIN (não por -p) para evitar quebra do parser do CLI oficial do Claude com prompts longos ou multi-linha.
+- **Correção Fallback & OpenAI Ghost Provider**: Impedidos erros do "OpenAI ghost provider" no fallback, garantindo que falhas reais de API/Chaves ou timeouts pesados do Ollama não interrompam o fluxo, caindo de forma limpa na ordem de preferência.
+- **Correção Health Checks & Provider Governance**: Mapeados health checks reais dos providers e governança de custos integrada com o banco de dados.
+- **Reconstrução do Bundle**: Recompilação total do bundle da plataforma FORJA OS platform (`dist/assets/app.js` e `.map`) via `npm run build` usando esbuild, integrando os módulos reais (`modules_a.jsx`, `modules_b.jsx`, etc.).
+- **Persistência de Conversas e Memória**: Validação e integração do histórico de conversas do chat e persistência de memória no banco de dados SQLite principal `nexus.db`.
+
 ## 2026-06-08 - FORJA_V008_PORTABILITY_AND_CHECKPOINT
 
 - **Portabilidade de LLMs**: Criados templates de configuração `LLM_ENVIRONMENT_TEMPLATE.md` e `.env.llm.example` com placeholders seguros.

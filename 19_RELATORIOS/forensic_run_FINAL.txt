@@ -1,0 +1,164 @@
+======================================================================
+FASE 1 — AUDITORIA FORENSE DE ENDPOINTS
+======================================================================
+  OK   [200] /api/health
+  OK   [200] /api/status
+  OK   [200] /api/chat/status
+  OK   [200] /api/agents
+  OK   [200] /api/missions
+  OK   [200] /api/llm/providers
+  OK   [200] /api/llm/health
+  OK   [200] /api/audit
+  OK   [200] /api/services
+  OK   [200] /api/dashboard
+  OK   [200] /api/billing/status
+  OK   [200] /api/runtime/status
+
+======================================================================
+FASE 2 — AUDITORIA DO CHAT (FLUXO COMPLETO)
+======================================================================
+  Status HTTP: 200
+  Provider: openrouter
+  Modelo: deepseek/deepseek-chat
+  Resposta: 'No aguardo da instrução.'
+  Session ID: 886fa565-5e14-408b-894b-56a29fea5f81
+  Tempo: 1631ms
+  Trail: [{'provider': 'openrouter', 'ok': True}]
+  RESULTADO: CHAT_FUNCIONAL
+
+======================================================================
+FASE 3 — AUDITORIA DOS PROVIDERS (TESTE REAL INDIVIDUAL)
+======================================================================
+
+  [claude_sub]
+    Configurado: CONFIGURADO
+    Health Registry: Saudavel
+    Teste Real: SUCESSO
+    Resposta: 'OK'
+    Tempo: 4087ms
+
+  [gemini_sub]
+    Configurado: CONFIGURADO
+    Health Registry: Saudavel
+    Teste Real: SUCESSO
+    Resposta: 'O Gemini disse\n\nOK'
+    Tempo: 23362ms
+
+  [codex_sub]
+    Configurado: CONFIGURADO
+    Health Registry: Saudavel
+    Teste Real: FALHOU
+    Erro: RuntimeError: [Cookies do ChatGPT carregados com sucesso.]
+[Stealth Mode ativado. Acessando ChatGPT invis�vel...]
+ERRO: N�o foi poss�vel encontrar o campo de texto do ChatGPT
+    Tempo: 14249ms
+
+  [openrouter]
+    Configurado: CONFIGURADO
+    Health Registry: Saudavel
+    Teste Real: SUCESSO
+    Resposta: 'OK'
+    Tempo: 1180ms
+
+  [ollama]
+    Configurado: CONFIGURADO
+    Health Registry: Indisponivel
+    Teste Real: SKIP (HEALTH_INDISPONIVEL)
+
+======================================================================
+FASE 4 — AUDITORIA DO ROUTER (TRACE)
+======================================================================
+  OK: True
+  Provider Selecionado: claude_sub
+  Modelo: claude-subscription
+  Resposta: 'ROTEADO.'
+  Trail de Fallback:
+    - {'provider': 'claude_sub', 'ok': True, 'error': None}
+
+======================================================================
+FASE 5 — AUDITORIA DO BANCO DE DADOS
+======================================================================
+  Banco: C:\Users\Servdia\Desktop\CB PM CIPOLARI\DESENVOLVIMENTO\FABRICA_DE_SISTEMA\FABRICA_DE_SISTEMAS\nexus.db
+  Tabelas encontradas: 19
+    agent_actions: 95 registros
+    agent_costs: 1 registros
+    agent_executions: 1 registros
+    agent_failures: 0 registros
+    agent_fallbacks: 1 registros
+    agent_health: 1 registros
+    agent_memories: 4 registros
+    agent_provider_preferences: 82 registros
+    agents: 14 registros
+    audit_logs: 101 registros
+    chat_messages: 115 registros
+    chat_sessions: 65 registros
+    evidences: 18 registros
+    knowledge_queries: 4 registros
+    llm_providers: 6 registros
+    memory_entries: 0 registros
+    mission_events: 95 registros
+    missions: 9 registros
+    provider_health_checks: 20 registros
+
+  Ultimas 5 mensagens de chat:
+    ID=115 sender=chat provider=openrouter conteudo='No aguardo da instrução.'
+    ID=114 sender=USER provider=None conteudo='Olá'
+    ID=113 sender=system provider=openai conteudo='Falha de comunicação: RuntimeError: OPENAI_API_KEY ausente'
+    ID=112 sender=USER provider=None conteudo='OI'
+    ID=111 sender=system provider=claude conteudo='Falha de comunicação: RuntimeError: ANTHROPIC_API_KEY ausente'
+
+  Ultimas 5 missoes:
+    ID=9 status=RUNNING titulo='Boa noite'
+    ID=8 status=RUNNING titulo='Listar os módulos implementados da plataforma'
+    ID=7 status=COMPLETED titulo='[SEED][TEST] Fila operacional tick'
+    ID=6 status=COMPLETED titulo='[SEED][TEST] Missão de teste de runtime real'
+    ID=5 status=COMPLETED titulo='[SEED] Revisar trilha de auditoria imutável (Lei Zero Fantas'
+
+  Evidencias:
+    Tabela evidence: no such table: evidence
+
+  Audit Log:
+    Tabela audit_log: no such table: audit_log
+
+======================================================================
+FASE 6 — AUDITORIA DE INTEGRACOES
+======================================================================
+  .env existe: True
+  Chaves encontradas: ['OPENROUTER_API_KEY']
+  Chaves ausentes: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'DEEPSEEK_API_KEY']
+
+  CLIs de Assinatura:
+    claude: ENCONTRADO -> C:\Users\Servdia\AppData\Local\Microsoft\WinGet\Packages\OpenJS.NodeJS.LTS_Microsoft.Winget.Source_8wekyb3d8bbwe\node-v24.15.0-win-x64\claude.CMD
+    gemini: NAO ENCONTRADO -> N/A
+    codex: ENCONTRADO -> C:\Users\Servdia\AppData\Local\Microsoft\WinGet\Packages\OpenJS.NodeJS.LTS_Microsoft.Winget.Source_8wekyb3d8bbwe\node-v24.15.0-win-x64\codex.CMD
+
+  Ollama:
+    Status: OFFLINE (<urlopen error [WinError 10061] Nenhuma conexão pôde ser feita porque a máquina de destino as recusou ativamente>)
+
+======================================================================
+FASE 7 — AUDITORIA ZERO GHOST DO FRONTEND
+======================================================================
+
+  [home.jsx]
+    LIMPO - Nenhum texto fantasma encontrado
+
+  [data.js]
+    LIMPO - Nenhum texto fantasma encontrado
+
+======================================================================
+RESUMO FINAL DA AUDITORIA FORENSE
+======================================================================
+
+  PROVIDERS ATIVOS REAIS: 3/5
+    claude_sub: ACTIVE_REAL
+    gemini_sub: ACTIVE_REAL
+    codex_sub: FAILED_REAL
+    openrouter: ACTIVE_REAL
+    ollama: HEALTH_INDISPONIVEL
+
+  ENDPOINTS OK: 12/12
+  CHAT: FUNCIONAL
+  ROUTER: FUNCIONAL
+  BANCO: EXISTE
+
+  >>> STATUS GERAL: OPERATIONAL_REAL <<<

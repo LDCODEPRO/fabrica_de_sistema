@@ -63,11 +63,12 @@
     { id: 'atendimento',  nome: 'Atendimento / Suporte',  icon: 'help',     status: 'NIMPL', sobre: 'Suporte ao operador, chamados e orientação de uso.', responsabilidades: ['Chamados','FAQ','Orientação'], ferramentas: ['Ajuda'], skills: ['Suporte'], workflows: ['Atendimento de chamado'] },
   ];
 
-  /* ---- LLMs (ativos e em sequência prioritária) ---- */
+  /* ---- LLMs (dados do backend sobrescrevem via api.js/hydrate) ---- */
+  /* ZERO GHOST: latências e datas são preenchidas APENAS pelo backend */
   const llms = [
-    { id: 'claude',   nome: 'Claude',    modelo: 'Claude Pro',            status: 'IMPL',   ativo: true,  conexao: ['Assinatura/CLI'],               ultimoTeste: 'agora', latencia: '120ms', custo: '0.00', uso: 'Principal', tipo: 'Assinatura', modoUso: 'Assistido', automacao: 'assisted', custoIncremental: 0, billing: 'Pago', ultimoHealth: 'agora', observacao: 'Uso via assinatura local' },
-    { id: 'openai',   nome: 'OpenAI',    modelo: 'ChatGPT Plus',          status: 'IMPL',   ativo: true,  conexao: ['Assinatura/CLI'],               ultimoTeste: 'agora', latencia: '150ms', custo: '0.00', uso: 'Fallback 1', tipo: 'Assinatura', modoUso: 'Assistido', automacao: 'assisted', custoIncremental: 0, billing: 'Pago', ultimoHealth: 'agora', observacao: 'Uso via assinatura local' },
-    { id: 'gemini',   nome: 'Gemini',    modelo: 'Gemini Advanced',       status: 'IMPL',   ativo: true,  conexao: ['Assinatura/CLI'],               ultimoTeste: 'agora', latencia: '180ms', custo: '0.00', uso: 'Fallback 2', tipo: 'Assinatura', modoUso: 'Direto', automacao: 'direct', custoIncremental: 0, billing: 'Pago', ultimoHealth: 'agora', observacao: 'Uso via assinatura local' },
+    { id: 'claude',   nome: 'Claude',    modelo: 'Claude Pro',            status: 'NTEST',  ativo: false, conexao: ['Assinatura/CLI'],               ultimoTeste: 'não validado', latencia: '—', custo: '0.00', uso: 'Principal', tipo: 'Assinatura', modoUso: 'Assistido', automacao: 'assisted', custoIncremental: 0, billing: 'Pago', ultimoHealth: 'não validado', observacao: 'CLI instalada · aguardando validação real' },
+    { id: 'openai',   nome: 'OpenAI',    modelo: 'ChatGPT Plus',          status: 'NTEST',  ativo: false, conexao: ['Assinatura/CLI'],               ultimoTeste: 'não validado', latencia: '—', custo: '0.00', uso: 'Fallback 1', tipo: 'Assinatura', modoUso: 'Assistido', automacao: 'assisted', custoIncremental: 0, billing: 'Pago', ultimoHealth: 'não validado', observacao: 'CLI instalada · aguardando validação real' },
+    { id: 'gemini',   nome: 'Gemini',    modelo: 'Gemini Advanced',       status: 'NTEST',  ativo: false, conexao: ['Assinatura/CLI'],               ultimoTeste: 'não validado', latencia: '—', custo: '0.00', uso: 'Fallback 2', tipo: 'Assinatura', modoUso: 'Direto', automacao: 'direct', custoIncremental: 0, billing: 'Pago', ultimoHealth: 'não validado', observacao: 'CLI instalada · aguardando validação real' },
     { id: 'ollama',   nome: 'Ollama',    modelo: 'Local (Offline)',       status: 'OFFLINE', ativo: false, conexao: ['Servidor Local (Desligado)'],  ultimoTeste: '—',     latencia: '—',     custo: '—',    uso: 'Localhost', tipo: 'Local', modoUso: 'Direto', automacao: 'direct', custoIncremental: 0, billing: 'Gratuito', ultimoHealth: '—', observacao: 'Sem custo incremental' },
     { id: 'deepseek_api', nome: 'DeepSeek API', modelo: 'DeepSeek Chat',  status: 'BLOCK',  ativo: false, conexao: ['API Paga'],                     ultimoTeste: '—',     latencia: '—',     custo: '—',    uso: 'Bloqueada', tipo: 'API Paga', modoUso: 'Direto', automacao: 'direct', custoIncremental: null, billing: 'Bloqueada', ultimoHealth: 'Sem chave validada', observacao: 'Requer chave e aprovação' },
     { id: 'openai_api',   nome: 'OpenAI API',   modelo: 'gpt-4o-mini',      status: 'BLOCK',  ativo: false, conexao: ['API Paga'],                     ultimoTeste: '—',     latencia: '—',     custo: '—',    uso: 'Bloqueada', tipo: 'API Paga', modoUso: 'Direto', automacao: 'direct', custoIncremental: null, billing: 'Bloqueada', ultimoHealth: 'Sem chave validada', observacao: 'Requer chave e aprovação' },
@@ -87,12 +88,12 @@
 
   /* ---- integrações ---- */
   const integracoes = [
-    { id: 'github',   nome: 'GitHub',          auth: 'OAuth',   status: 'IMPL',    ultimoTeste: 'agora', permissoes: 'repo, read, write (2 contas)' },
+    { id: 'github',   nome: 'GitHub',          auth: 'OAuth',   status: 'IMPL',    ultimoTeste: 'não medido', permissoes: 'repo, read, write (2 contas)' },
     { id: 'gdrive',   nome: 'Google Drive',    auth: 'OAuth',   status: 'CONFIG',  ultimoTeste: '—', permissoes: '—' },
     { id: 'gdocs',    nome: 'Google Docs',     auth: 'OAuth',   status: 'CONFIG',  ultimoTeste: '—', permissoes: '—' },
     { id: 'gsheets',  nome: 'Google Sheets',   auth: 'OAuth',   status: 'CONFIG',  ultimoTeste: '—', permissoes: '—' },
     { id: 'gcal',     nome: 'Google Calendar', auth: 'OAuth',   status: 'CONFIG',  ultimoTeste: '—', permissoes: '—' },
-    { id: 'openrouter',nome:'OpenRouter',      auth: 'API key', status: 'CONFIG',  ultimoTeste: '—', permissoes: '—' },
+    { id: 'openrouter',nome:'OpenRouter',      auth: 'API key', status: 'IMPL',    ultimoTeste: 'validado', permissoes: 'chave ativa' },
     { id: 'webhooks', nome: 'Webhooks',        auth: 'Token',   status: 'NIMPL',   ultimoTeste: '—', permissoes: '—' },
   ];
 
@@ -133,8 +134,9 @@
   }));
 
   /* ---- chat seed (workspace) ---- */
+  /* ZERO GHOST: chatSeed só exibe informação verificável */
   const chatSeed = [
-    { de: 'sistema', txt: 'Workspace da Fábrica ativo e roteado! Provedores LLM operacionais e engatilhados no backend. Pronto para execução real.' },
+    { de: 'sistema', txt: 'Workspace da Fábrica iniciado. Status dos providers será verificado em tempo real.' },
   ];
 
   /* ---- arquivos (explorer do workspace · projeto atual) ---- */

@@ -141,7 +141,10 @@ def status_from_result(provider_key: str, result: dict) -> str:
         "disabled claude subscription", "expired", "not logged in", "approval-mode",
         "skip-trust", "unauthorized", "headless", "cli sem saída", "command not found",
         "change_me", "apikey ausente", "key ausente", "refused", "ollama_unavailable",
-        "connection refused", "timeout"  # for ollama local, these mean daemon is not running
+        "connection refused", "timeout",  # for ollama local, these mean daemon is not running
+        # Conexão recusada em português/Windows (ollama desligado) e modelo de
+        # router ainda não habilitado na conta — condições de AMBIENTE, não erros de código.
+        "recusou", "10061", "máquina de destino", "sem modelo disponível",
     ]
     if any(ekw in error_lower for ekw in env_pending_keywords):
         return STATUS_ENV_PENDING

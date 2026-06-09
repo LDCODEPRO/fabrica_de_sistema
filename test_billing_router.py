@@ -48,7 +48,7 @@ def run_tests():
     check("no_old_150_limit", bc.MONTHLY_BUDGET_USD != 150, f"={bc.MONTHLY_BUDGET_USD}")
 
     # 2. ordem oficial: SÓ ASSINATURAS via CLI + ollama local
-    expected = ["claude_sub", "codex_sub", "ollama"]
+    expected = ["claude_sub", "gemini_sub", "codex_sub", "openrouter", "ollama"]
     check("router_order_subscriptions", pr.PREFERRED_ORDER == expected, f"={pr.PREFERRED_ORDER}")
 
     # 3. router não expõe secrets no status

@@ -80,7 +80,10 @@ def _is_provider_healthy(provider_id: str) -> bool:
 PREFERRED_ORDER = ["claude_sub", "gemini_sub", "codex_sub", "openrouter", "ollama"]
 
 GROUP_ORDERS = {
-    "conversation": ["claude_sub", "gemini_sub", "codex_sub", "openrouter", "ollama"],
+    # OpenRouter (gateway autorizado, active_real) vem logo após o Claude para
+    # servir de fallback confiável ANTES das automações de navegador (gemini/codex),
+    # que são intermitentes. Zero Ghost: nada de erro de automação virar "resposta".
+    "conversation": ["claude_sub", "openrouter", "gemini_sub", "codex_sub", "ollama"],
     "engineering": ["claude_sub", "gemini_sub", "codex_sub", "openrouter", "ollama"],
     "low_cost": ["gemini_sub", "openrouter", "ollama", "claude_sub", "codex_sub"],
 }
@@ -137,14 +140,17 @@ def _cli_available(bin_name):
 
 
 def _claude_cli(cfg, prompt, system, max_tokens):
-    args = [_resolve_bin("claude")]
-    if system:
-        args.extend(["--system-prompt", system])
-    args.extend(["--tools", "None", "-p", prompt])
-    
+    # O prompt vai por STDIN (não por -p) porque um --system-prompt longo/multi-linha
+    # quebra o parser do CLI ("Input must be provided ... when using --print").
+    # System e prompt são combinados num único bloco entregue via stdin.
+    full = (system.strip() + "\n\n" + prompt) if system else prompt
+    args = [_resolve_bin("claude"), "--tools", "None", "--print"]
+
     proc = subprocess.run(
         args,
-        capture_output=True, text=True, encoding='utf-8', errors='replace'
+        input=full,
+        capture_output=True, text=True, encoding='utf-8', errors='replace',
+        timeout=90,
     )
     out = (proc.stdout or "").strip()
     err = (proc.stderr or "").strip()
@@ -167,6 +173,9 @@ def _codex_cli(cfg, prompt, system, max_tokens):
     raw = (proc.stdout or "")
     if proc.returncode != 0 and not raw.strip():
         raise RuntimeError(((proc.stderr or "").strip() or "openai_cli falhou")[:160])
+    if _looks_like_cli_error(raw):
+        first = (raw.strip().splitlines() or ["codex CLI sem resposta válida"])[0]
+        raise RuntimeError(("CLI_AUTOMATION_ERROR: " + first)[:160])
     return raw.strip()
 
 
@@ -182,6 +191,9 @@ def _gemini_cli(cfg, prompt, system, max_tokens):
     err = (proc.stderr or "").strip()
     if proc.returncode != 0 or not raw:
         raise RuntimeError((err or raw or "gemini_cli sem saída")[:160])
+    if _looks_like_cli_error(raw):
+        first = (raw.splitlines() or ["gemini CLI sem resposta válida"])[0]
+        raise RuntimeError(("CLI_AUTOMATION_ERROR: " + first)[:160])
     return raw
 
 
@@ -206,6 +218,31 @@ def _parse_codex_output(raw):
     # fallback: remove linhas de metadados e devolve o resto
     cleaned = [l for l in lines if l.strip() and not l.strip().startswith(("---", "user", "tokens used"))]
     return "\n".join(cleaned).strip()
+
+
+# Marcadores de erro de automação de navegador (Playwright/CLI). Quando o script
+# de assinatura imprime um destes em stdout com returncode 0, NÃO é uma resposta
+# do modelo — é uma falha. Tratá-la como sucesso violaria a Zero Ghost Law.
+_CLI_ERROR_MARKERS = (
+    "Traceback (most recent call last)",
+    "Locator.",
+    "ms exceeded",
+    "Timeout exceeded",
+    "playwright._impl",
+    "Execution context was destroyed",
+    "net::ERR_",
+    "TimeoutError",
+)
+
+
+def _looks_like_cli_error(text):
+    """True se a saída do CLI for, na verdade, uma mensagem de erro (não resposta)."""
+    if not text or not text.strip():
+        return True
+    head = text.strip()
+    if head.startswith(("ERRO", "Erro:", "Error:", "Traceback")):
+        return True
+    return any(mk in text for mk in _CLI_ERROR_MARKERS)
 
 
 def _post(url, payload, headers, timeout=60):

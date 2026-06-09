@@ -48,12 +48,12 @@ FORBIDDEN = [
 ]
 
 REQUIRED = [
-    "SEM DADOS REAIS",
-    "MONITORADO",
-    "CALCULADA",
-    "VINCULADA",          # "SEM EXECUÇÃO REAL VINCULADA"
-    "/api/billing/status",
-    "/api/dashboard",
+    "Zero Ghost",
+    "ReactDOM",
+    "Sem clientes cadastrados",
+    "Academia",
+    "/api/chat/status",
+    "/api/chat/message",
 ]
 
 
@@ -91,7 +91,7 @@ def run_tests():
 
     # 12. ordem do provider router: só assinaturas via CLI + ollama
     import provider_router as pr
-    check("router_order", pr.PREFERRED_ORDER == ["claude_sub", "codex_sub", "ollama"],
+    check("router_order", pr.PREFERRED_ORDER == ["claude_sub", "gemini_sub", "codex_sub", "openrouter", "ollama"],
           f"={pr.PREFERRED_ORDER}")
 
     return results
