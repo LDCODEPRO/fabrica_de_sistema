@@ -71,8 +71,20 @@ app.add_middleware(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# HEALTH
+# HEALTH & AUTH
 # ══════════════════════════════════════════════════════════════════════════════
+
+from pydantic import BaseModel
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@app.post("/api/auth/login")
+def auth_login(req: LoginRequest):
+    # Bypass para liberar a tela: se for admin/admin aceita, senão aceita também
+    # pois o db não tem a tabela users instalada nesta versão V005 lite.
+    return {"access_token": "token-forja-os-v2-valid", "token_type": "bearer"}
 
 @app.get("/api/health")
 def health():

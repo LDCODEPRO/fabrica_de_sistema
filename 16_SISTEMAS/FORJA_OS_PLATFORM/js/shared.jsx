@@ -50,6 +50,23 @@ const ICON_PATHS = {
   dollar: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
   squares: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
   pulse: 'M22 12h-4l-3 9L9 3l-3 9H2',
+  users: 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75',
+  server: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
+  sitemap: 'M9 3h6v4H9zM3 17h6v4H3zM15 17h6v4h-6zM12 7v4M6 17v-2a2 2 0 012-2h8a2 2 0 012 2v2',
+  compass: 'M12 2a10 10 0 100 20 10 10 0 000-20zM16.2 7.8l-2.9 6.4-6.4 2.9 2.9-6.4z',
+  home: 'M3 11l9-8 9 8M5 9v11a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1V9',
+  building: 'M4 22V4a2 2 0 012-2h8a2 2 0 012 2v18M4 22h16M9 7h.01M13 7h.01M9 11h.01M13 11h.01M9 15h.01M13 15h.01M18 22V9h2a1 1 0 011 1v12',
+  wrench: 'M14.7 6.3a4 4 0 00-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 005.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z',
+  flask: 'M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3M6.5 14h11',
+  award: 'M12 15a6 6 0 100-12 6 6 0 000 12zM8.2 13.5L7 22l5-3 5 3-1.2-8.5',
+  cap: 'M22 10L12 5 2 10l10 5 10-5zM6 12v5c0 1.2 2.7 3 6 3s6-1.8 6-3v-5',
+  help: 'M12 2a10 10 0 100 20 10 10 0 000-20zM9.1 9a3 3 0 015.8 1c0 2-3 3-3 3M12 17h.01',
+  megaphone: 'M3 11v2a1 1 0 001 1h2l4 4V6L6 10H4a1 1 0 00-1 1zM15 8a4 4 0 010 8M18 5a8 8 0 010 14',
+  chart: 'M3 3v18h18M7 14l3-3 3 3 5-6',
+  file: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6',
+  lock: 'M5 11h14v10H5zM8 11V7a4 4 0 018 0v4',
+  play2: 'M5 3l14 9-14 9z',
+  stop: 'M6 6h12v12H6z',
 };
 
 function Icon({ name, size = 16, stroke = 2, fill, style, className }) {
@@ -138,42 +155,66 @@ const STATUS_CLASS = {
   blocked: 'err', bloqueada: 'err', erro: 'err', fail: 'err', 'crítico': 'err', aviso: 'warn', info: 'info',
 };
 
-const STATUS_LABEL = {
-  ok: 'ok',
-  live: 'publicado',
-  running: 'em execução',
-  executando: 'em execução',
-  building: 'em construção',
-  review: 'em revisão',
-  paused: 'pausado',
-  idle: 'em espera',
-  blocked: 'bloqueado',
-  fail: 'falhou',
-  warn: 'atenção',
-  backlog: 'fila',
-  indexado: 'indexado',
-  indexando: 'indexando',
-  erro: 'erro',
-};
+/* ============================================================
+   ZERO GHOST LAW — componentes de status honesto
+   ============================================================ */
+function StatusPill({ status, size = 'md' }) {
+  const ST = (window.FORJA && window.FORJA.ST) || {};
+  const s = ST[status] || { label: status, tone: 'idle' };
+  return (
+    <span className={'zg zg-' + s.tone + (size==='sm'?' zg-sm':'')}>
+      <span className="zg-dot" />{s.label}
+    </span>
+  );
+}
 
-const MISSION_STATUS_LABEL = {
-  PENDING: 'PENDENTE',
-  QUEUED: 'NA FILA',
-  RUNNING: 'EM EXECUÇÃO',
-  FAILED: 'FALHOU',
-  COMPLETED: 'CONCLUÍDA',
-};
+function EmptyState({ icon = 'box', title, sub, action, onAction, status }) {
+  return (
+    <div className="empty">
+      <div className="empty-ic"><Icon name={icon} size={24} /></div>
+      <div className="empty-title">{title}</div>
+      {status && <div style={{margin:'2px 0 2px'}}><StatusPill status={status} /></div>}
+      {sub && <div className="empty-sub">{sub}</div>}
+      {action && <button className="btn" style={{marginTop:6}} onClick={onAction}>{action}</button>}
+    </div>
+  );
+}
 
-const AGENT_STATUS_LABEL = {
-  running: 'EM EXECUÇÃO',
-  blocked: 'BLOQUEADO',
-  idle: 'EM ESPERA',
-};
+/* cabeçalho de página padrão com status Zero Ghost */
+function PageHead({ icon, crumb, title, sub, status, children }) {
+  return (
+    <div className="center-head hud-grid">
+      <div className="ch-top">
+        <div className="ch-icon"><Icon name={icon} size={19} /></div>
+        <div className="ch-titles">
+          <div className="ch-crumb">A FÁBRICA · {crumb}</div>
+          <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+            <h1 className="ch-title">{title}</h1>
+            {status && <StatusPill status={status} />}
+          </div>
+          {sub && <div className="ch-sub">{sub}</div>}
+        </div>
+        {children && <div className="ch-actions">{children}</div>}
+      </div>
+    </div>
+  );
+}
 
-const labelStatus = (value) => STATUS_LABEL[value] || value;
-const labelMissionStatus = (value) => MISSION_STATUS_LABEL[value] || value;
-const labelAgentStatus = (value) => AGENT_STATUS_LABEL[value] || value;
+/* card de seção com título + status opcional */
+function SectionCard({ icon, title, status, right, children, flush }) {
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        {icon && <Icon name={icon} size={14} style={{color:'var(--text-2)'}}/>}
+        <h3>{title}</h3>
+        {status && <StatusPill status={status} size="sm" />}
+        {right && <div className="right">{right}</div>}
+      </div>
+      <div className={'panel-body' + (flush?' flush':'')}>{children}</div>
+    </div>
+  );
+}
 
 Object.assign(window, { Icon, Sparkline, Bars, Donut, Progress, useLocalStorage, STATUS_CLASS,
-  STATUS_LABEL, MISSION_STATUS_LABEL, AGENT_STATUS_LABEL, labelStatus, labelMissionStatus, labelAgentStatus,
+  StatusPill, EmptyState, PageHead, SectionCard,
   useState, useEffect, useRef, useCallback, createContext, useContext });
