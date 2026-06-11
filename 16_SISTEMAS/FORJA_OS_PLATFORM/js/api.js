@@ -64,6 +64,7 @@
       etapa: ms.etapa || 0,
       etapas: ms.etapas || 1,
       tags: ms.tags || [],
+      description: ms.description || '',
     }));
   }
 
@@ -71,11 +72,19 @@
     const tipoMap = {
       subscription: 'Assinatura', local: 'Local', paid_api: 'API Paga',
     };
+    const ONLINE = { active_real: 1, CERTIFIED: 1, ROUTER_LIMITED: 1 };
     const statusMap = {
-      active_real: 'Ativa real',
-      unavailable: 'Indisponível',
+      active_real: 'Online',
+      CERTIFIED: 'Online',
+      ROUTER_LIMITED: 'Online (via router)',
+      ENVIRONMENT_PENDING: 'Fora do ar',
+      OFFLINE: 'Fora do ar',
+      unavailable: 'Fora do ar',
       inactive: 'Inativa',
-      missing_key: 'Bloqueada',
+      missing_key: 'Sem chave',
+      BLOCKED_BY_BILLING: 'Bloqueada (billing)',
+      NOT_IMPLEMENTED: 'Não implementada',
+      ERROR: 'Erro',
       unknown: 'Não validada',
     };
     return (providers || []).map(p => ({
@@ -96,7 +105,7 @@
       billing: p.billing_mode,
       ultimoHealth: p.last_health_check || 'Não validado',
       observacao: p.notes || '',
-      ativo: p.health_status === 'active_real',
+      ativo: !!ONLINE[p.health_status],
     }));
   }
 
@@ -200,8 +209,29 @@
       setCore('database', 'ok'); setCore('operational', 'ok'); setCore('factory', 'ok');
       setCore('agent', (d.agents || {}).total > 0 ? 'ok' : 'idle');
       setCore('router', (d.ollama || {}).status === 'active_real' ? 'ok' : 'idle');
+      F.dashboard = d;                       // dados crus para a Home Executiva
       sources.dashboard = 'backend_real';
     } catch (e) { errors.dashboard = String(e); sources.dashboard = 'fallback_window_forja'; }
+
+    // status real do chat / providers de conversa (para Home + alertas)
+    try {
+      F.chatStatus = await getJSON('/api/chat/status');
+      sources.chatStatus = 'backend_real';
+    } catch (e) { errors.chatStatus = String(e); sources.chatStatus = 'fallback_window_forja'; }
+
+    // conhecimento real (contagem de itens no repositório)
+    try {
+      const k = await getJSON('/api/knowledge');
+      F.knowledge = k;
+      sources.knowledge = 'backend_real';
+    } catch (e) { errors.knowledge = String(e); sources.knowledge = 'fallback_window_forja'; }
+
+    // saúde real dos componentes do sistema (Banco, API Core, Runtime, Logs…)
+    try {
+      const sh = await getJSON('/api/system/health');
+      F.systemHealth = sh.items || [];
+      sources.systemHealth = 'backend_real';
+    } catch (e) { errors.systemHealth = String(e); sources.systemHealth = 'fallback_window_forja'; }
 
     // billing real ($1/dia, $30/mês) — nunca seed/demo
     try {
@@ -275,8 +305,148 @@
     }
   }
 
+  // POST /api/missions — cria missão real no banco
+  async function createMission(titulo, descricao) {
+    const r = await postJSON('/api/missions', { titulo: titulo, descricao: descricao || '' });
+    await refreshMissions();
+    return r;
+  }
+
+  async function delJSON(path) {
+    const res = await fetch(BASE + path, { method: 'DELETE', headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' em ' + path);
+    return res.json();
+  }
+
+  // ---- CLIENTES + CONEXÕES (multi-cliente) ----
+  async function listClients() { return getJSON('/api/clients'); }
+  async function createClient(nome, descricao) { return postJSON('/api/clients', { nome: nome, descricao: descricao || '' }); }
+  async function getClient(id) { return getJSON('/api/clients/' + encodeURIComponent(id)); }
+  async function listConnectors(scope) { return getJSON('/api/connectors' + (scope ? ('?scope=' + scope) : '')); }
+  async function addConnection(clientId, kind, label, credential, meta) {
+    return postJSON('/api/clients/' + encodeURIComponent(clientId) + '/connections', { kind: kind, label: label, credential: credential, meta: meta || {} });
+  }
+  async function testConnection(connId) { return postJSON('/api/connections/' + connId + '/test'); }
+  async function deleteConnection(connId) { return delJSON('/api/connections/' + connId); }
+  // Conexões GLOBAIS da Fábrica (logadas uma vez)
+  async function listAgencyConnections() { return getJSON('/api/agency/connections'); }
+  async function addAgencyConnection(kind, label, credential, meta) {
+    return postJSON('/api/agency/connections', { kind: kind, label: label, credential: credential, meta: meta || {} });
+  }
+
+  // ---- PROJETOS (fatia vertical: projeto → missão → execução → entrega) ----
+  async function listProjects() { return getJSON('/api/projects'); }
+  async function createProject(nome, descricao, clientId) { return postJSON('/api/projects', { nome: nome, descricao: descricao || '', client_id: clientId }); }
+  async function getProject(id) { return getJSON('/api/projects/' + encodeURIComponent(id)); }
+  async function createProjectMission(id, titulo, descricao) {
+    return postJSON('/api/projects/' + encodeURIComponent(id) + '/missions', { titulo: titulo, descricao: descricao || '' });
+  }
+  async function getDeliverables(id) { return getJSON('/api/projects/' + encodeURIComponent(id) + '/deliverables'); }
+  async function uploadProjectFiles(id, files) { return postJSON('/api/projects/' + encodeURIComponent(id) + '/upload', { files: files }); }
+  async function listProjectFiles(id) { return getJSON('/api/projects/' + encodeURIComponent(id) + '/files'); }
+  async function developProject(id) { return postJSON('/api/projects/' + encodeURIComponent(id) + '/develop'); }
+
+  // POST /api/agents/{key}/act — execução AGÊNTICA (ReAct + ferramentas)
+  async function getAgentBrain(agentKey) { return getJSON('/api/agents/' + encodeURIComponent(agentKey) + '/brain'); }
+
+  async function actAgent(agentKey, objective, clientId) {
+    return postJSON('/api/agents/' + encodeURIComponent(agentKey || 'orquestrador') + '/act', { objective: objective, client_id: clientId });
+  }
+
+  // POST /api/tests/run — auto-teste real do sistema
+  async function runTests() { return postJSON('/api/tests/run'); }
+
+  // ---- CONTEÚDO (estúdio de posts/reels) ----
+  async function listContent(clientId) { return getJSON('/api/content' + (clientId ? ('?client_id=' + encodeURIComponent(clientId)) : '')); }
+  async function createContent(c) { return postJSON('/api/content', c); }
+  async function developContent(id) { return postJSON('/api/content/' + id + '/develop'); }
+  async function updateContent(id, data) { return postJSON('/api/content/' + id, data); }
+  async function uploadContentMedia(id, dataUrl) { return postJSON('/api/content/' + id + '/upload', { data_url: dataUrl }); }
+  async function scheduleContent(id, st, sv) { return postJSON('/api/content/' + id + '/schedule', { schedule_type: st, schedule_value: sv }); }
+  async function publishContent(id) { return postJSON('/api/content/' + id + '/publish'); }
+  async function deleteContent(id) { return delJSON('/api/content/' + id); }
+  async function planContent(brief) { return postJSON('/api/content/plan', brief); }
+  async function generateImage(id, prompt) { return postJSON('/api/content/' + id + '/generate-image', { prompt: prompt }); }
+
+  // ---- SCHEDULER (agendamentos) ----
+  async function listJobs() { return getJSON('/api/scheduler/jobs'); }
+  async function createJob(job) { return postJSON('/api/scheduler/jobs', job); }
+  async function runJob(id) { return postJSON('/api/scheduler/jobs/' + id + '/run'); }
+  async function toggleJob(id) { return postJSON('/api/scheduler/jobs/' + id + '/toggle'); }
+  async function deleteJob(id) { return delJSON('/api/scheduler/jobs/' + id); }
+
+  // ---- FINANCEIRO (livro-caixa real) ----
+  async function getFinance(clientId) { return getJSON('/api/finance' + (clientId ? ('?client_id=' + encodeURIComponent(clientId)) : '')); }
+  async function addFinance(kind, description, amount, clientId) {
+    return postJSON('/api/finance', { kind: kind, description: description, amount: amount, client_id: clientId });
+  }
+  async function deleteFinance(id) { return delJSON('/api/finance/' + id); }
+
+  // GET /api/chat/session/{id} — histórico real da conversa
+  async function getChatSession(sessionId) {
+    try { return await getJSON('/api/chat/session/' + encodeURIComponent(sessionId)); }
+    catch (e) { return { session_id: sessionId, messages: [] }; }
+  }
+
+  // GET /api/files — lista real de arquivos do repositório
+  async function listFiles(path) {
+    return getJSON('/api/files' + (path ? ('?path=' + encodeURIComponent(path)) : ''));
+  }
+
+  // GET /api/knowledge — contagem real de conhecimento
+  async function getKnowledge() {
+    const k = await getJSON('/api/knowledge');
+    window.FORJA.knowledge = k;
+    return k;
+  }
+
+  // GET/POST /api/config/keys — cofre de chaves (status e gravação)
+  async function getConfigKeys() { return getJSON('/api/config/keys'); }
+  async function setConfigKey(key, value) {
+    return postJSON('/api/config/keys', { key: key, value: value });
+  }
+
+  // POST /api/providers/health-check — teste REAL de um provider (executa o LLM)
+  async function testProvider(providerKey) {
+    return postJSON('/api/providers/health-check', { provider_key: providerKey });
+  }
+
+  // POST /api/providers/reconnect — tenta reconectar com várias tentativas
+  async function reconnectProvider(providerKey, attempts) {
+    return postJSON('/api/providers/reconnect', { provider_key: providerKey, attempts: attempts || 3 });
+  }
+
+  // GET /api/llm/providers — recarrega lista de providers (após teste)
+  async function refreshProviders() {
+    const r = await getJSON('/api/llm/providers');
+    const mapped = mapLLMs(r.providers || []);
+    if (window.FORJA) window.FORJA.llms = mapped;
+    return mapped;
+  }
+
+  // GET /api/services + /api/status — health check operacional ao vivo
+  async function healthCheckServices() {
+    const [services, status] = await Promise.all([
+      getJSON('/api/services').catch(() => ({ items: [] })),
+      getJSON('/api/status').catch(() => null),
+    ]);
+    if (services && Array.isArray(services.items)) window.FORJA.services = services.items;
+    return { services: services, status: status };
+  }
+
   window.ForjaAPI = {
     getJSON, hydrate, postJSON,
     runMission, getEvidences, getRuntimeStatus, refreshMissions,
+    createMission, getKnowledge, getConfigKeys, setConfigKey, healthCheckServices,
+    testProvider, refreshProviders, reconnectProvider,
+    getChatSession, listFiles, actAgent, getAgentBrain, runTests,
+    getFinance, addFinance, deleteFinance,
+    listJobs, createJob, runJob, toggleJob, deleteJob,
+    listContent, createContent, developContent, updateContent, uploadContentMedia, scheduleContent, publishContent, deleteContent,
+    planContent, generateImage,
+    listProjects, createProject, getProject, createProjectMission, getDeliverables,
+    uploadProjectFiles, listProjectFiles, developProject,
+    listClients, createClient, getClient, listConnectors, addConnection, testConnection, deleteConnection,
+    listAgencyConnections, addAgencyConnection,
   };
 })();

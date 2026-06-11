@@ -8,6 +8,13 @@ function App() {
   const [cmdOpen, setCmdOpen] = useState(false);
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
+  // Deep-link: abrir direto numa tela via hash (ex.: /painel#llms)
+  useEffect(() => {
+    const apply = () => { const h = (location.hash || '').replace('#', '').trim(); if (h && ROUTES[h]) setView(h); };
+    apply();
+    window.addEventListener('hashchange', apply);
+    return () => window.removeEventListener('hashchange', apply);
+  }, []);
   useEffect(() => {
     const h = (e) => {
       const cmd = e.metaKey || e.ctrlKey;
@@ -21,8 +28,10 @@ function App() {
   const ROUTES = {
     home: ExecutiveHome,
     forja: HomeWorkspace,
+    conteudo: ConteudoCenter,
     clientes: ClientesCenter,
     projetos: ProjetosCenter,
+    enviar: EnviarProjetoCenter,
     missoes: MissoesCenter,
     equipes: EquipesCenter,
     inteligencia: InteligenciaCenter,
@@ -65,4 +74,17 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+/* Boot: hidrata dados REAIS do backend (api.js) ANTES de renderizar,
+   para que os componentes inicializem já com o estado real do nexus.db.
+   Sem backend, segue com o fallback estático de window.FORJA. */
+async function bootForja() {
+  try {
+    if (window.ForjaAPI && window.ForjaAPI.hydrate) {
+      await window.ForjaAPI.hydrate();
+    }
+  } catch (e) {
+    console.warn('[FORJA] hydrate falhou, usando fallback:', e);
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+}
+bootForja();

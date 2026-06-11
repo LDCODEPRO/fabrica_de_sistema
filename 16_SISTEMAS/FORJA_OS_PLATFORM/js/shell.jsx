@@ -2,30 +2,39 @@
    FORJA — Shell: menu bar, activity bar, status bar
    ============================================================ */
 
+/* Sequência objetiva do fluxo: Início → Negócio → Execução → IA/Recursos → Gestão → Plataforma */
 const NAV = [
-  { id: 'home',         label: 'Home · Centro Executivo', short: 'Home',    icon: 'home',     grupo: 'Trabalho' },
-  { id: 'forja',        label: 'FORJA · Workspace',  short: 'FORJA',        icon: 'flame',    grupo: 'Trabalho' },
-  { id: 'clientes',     label: 'Clientes',       short: 'Clientes',     icon: 'building', grupo: 'Negócio' },
-  { id: 'projetos',     label: 'Projetos',       short: 'Projetos',     icon: 'folder',   grupo: 'Negócio' },
-  { id: 'missoes',      label: 'Missões',        short: 'Missões',      icon: 'target',   grupo: 'Operação' },
-  { id: 'equipes',      label: 'Equipes',        short: 'Equipes',      icon: 'users',    grupo: 'Operação' },
-  { id: 'inteligencia', label: 'Inteligência',   short: 'Inteligência', icon: 'compass',  grupo: 'Operação' },
-  { id: 'llms',         label: 'LLMs',           short: 'LLMs',         icon: 'zap',      grupo: 'Recursos' },
-  { id: 'ferramentas',  label: 'Ferramentas',    short: 'Ferramentas',  icon: 'wrench',   grupo: 'Recursos' },
-  { id: 'integracoes',  label: 'Integrações',    short: 'Integrações',  icon: 'link',     grupo: 'Recursos' },
+  // 1 · Início
+  { id: 'home',         label: '1 · Início · Centro Executivo', short: 'Início', icon: 'home',  grupo: 'Início' },
+  { id: 'forja',        label: 'FORJA · Workspace (chat/agentes)', short: 'FORJA', icon: 'flame', grupo: 'Início' },
+  // 2 · Negócio: do cliente ao conteúdo
+  { id: 'clientes',     label: '2 · Clientes',   short: 'Clientes',     icon: 'building', grupo: 'Negócio' },
+  { id: 'projetos',     label: '3 · Projetos',   short: 'Projetos',     icon: 'folder',   grupo: 'Negócio' },
+  { id: 'enviar',       label: '3.1 · Enviar projeto (upload)', short: 'Enviar', icon: 'box', grupo: 'Negócio' },
+  { id: 'conteudo',     label: '4 · Conteúdo · Posts & Reels', short: 'Conteúdo', icon: 'megaphone', grupo: 'Negócio' },
+  // 3 · Execução
+  { id: 'missoes',      label: '5 · Missões',    short: 'Missões',      icon: 'target',   grupo: 'Execução' },
+  { id: 'equipes',      label: 'Equipe Inteligente (agentes)', short: 'Equipes', icon: 'users', grupo: 'Execução' },
+  { id: 'inteligencia', label: 'Inteligência de Mercado', short: 'Inteligência', icon: 'compass', grupo: 'Execução' },
+  // 4 · IA & Recursos
+  { id: 'llms',         label: 'IA · Provedores (LLMs)', short: 'IA',   icon: 'zap',      grupo: 'Recursos' },
+  { id: 'integracoes',  label: 'Integrações da Fábrica', short: 'Integrações', icon: 'link', grupo: 'Recursos' },
   { id: 'conhecimento', label: 'Conhecimento',   short: 'Conhecimento', icon: 'book',     grupo: 'Recursos' },
-  { id: 'testes',       label: 'Testes',         short: 'Testes',       icon: 'flask',    grupo: 'Garantia' },
-  { id: 'validacao',    label: 'Validação',      short: 'Validação',     icon: 'award',    grupo: 'Garantia' },
-  { id: 'auditoria',    label: 'Auditoria',      short: 'Auditoria',    icon: 'shield',   grupo: 'Garantia' },
-  { id: 'operacoes',    label: 'Operações',      short: 'Operações',     icon: 'server',   grupo: 'Infra' },
-  { id: 'financeiro',   label: 'Financeiro',     short: 'Financeiro',   icon: 'dollar',   grupo: 'Negócio' },
+  { id: 'ferramentas',  label: 'Ferramentas',    short: 'Ferramentas',  icon: 'wrench',   grupo: 'Recursos' },
+  // 5 · Gestão
+  { id: 'financeiro',   label: 'Financeiro',     short: 'Financeiro',   icon: 'dollar',   grupo: 'Gestão' },
+  { id: 'operacoes',    label: 'Operações · Scheduler', short: 'Operações', icon: 'server', grupo: 'Gestão' },
+  { id: 'auditoria',    label: 'Auditoria',      short: 'Auditoria',    icon: 'shield',   grupo: 'Gestão' },
+  // 6 · Plataforma
   { id: 'roadmap',      label: 'Roadmap',        short: 'Roadmap',      icon: 'chart',    grupo: 'Plataforma' },
+  { id: 'testes',       label: 'Testes',         short: 'Testes',       icon: 'flask',    grupo: 'Plataforma' },
+  { id: 'validacao',    label: 'Validação',      short: 'Validação',     icon: 'award',    grupo: 'Plataforma' },
   { id: 'academia',     label: 'Academia',       short: 'Academia',     icon: 'cap',      grupo: 'Plataforma' },
   { id: 'ajuda',        label: 'Ajuda',          short: 'Ajuda',        icon: 'help',     grupo: 'Plataforma' },
 ];
 
 /* ícones por grupo (para divisores na activity bar) */
-const NAV_GROUPS = ['Trabalho','Negócio','Operação','Recursos','Garantia','Infra','Plataforma'];
+const NAV_GROUPS = ['Início','Negócio','Execução','Recursos','Gestão','Plataforma'];
 
 const MENUS = {
   'Arquivo': ['Novo projeto…', 'Nova missão…', 'Abrir projeto…', '—', 'Importar codebase', 'Exportar relatório', '—', 'Encerrar sessão'],

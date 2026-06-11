@@ -8,6 +8,95 @@ from sqlalchemy.orm import relationship
 from _compat_db import Base
 
 
+class Client(Base):
+    __tablename__ = "clients"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    description = Column(Text, nullable=True)
+    status = Column(String, default="ACTIVE")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    projects = relationship("Project", back_populates="client", lazy="select")
+    connections = relationship("ClientConnection", back_populates="client", lazy="select")
+
+
+class ClientConnection(Base):
+    __tablename__ = "client_connections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True, index=True)  # 0/NULL = global (Fábrica)
+    scope = Column(String, default="client")         # global (Fábrica, 1x) ou client (por cliente)
+    kind = Column(String, nullable=False)            # instagram, canva, github, telegram, google_drive...
+    label = Column(String, nullable=True)
+    credential = Column(Text, nullable=True)         # token/segredo — NUNCA retornado pela API
+    status = Column(String, default="PENDING")       # CONNECTED, PENDING, ERROR
+    metadata_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    client = relationship("Client", back_populates="connections")
+
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    description = Column(Text, nullable=True)
+    status = Column(String, default="ACTIVE")
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    missions = relationship("Mission", back_populates="project", lazy="select")
+    client = relationship("Client", back_populates="projects")
+
+
+class ContentItem(Base):
+    __tablename__ = "content_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True, index=True)
+    network = Column(String, default="instagram")    # instagram | facebook | ...
+    tipo = Column(String, default="post")            # post | reel | story | carrossel
+    briefing = Column(Text, nullable=True)           # o pedido/ideia
+    output = Column(Text, nullable=True)             # conteúdo desenvolvido (legenda/roteiro/hashtags)
+    media_url = Column(String, nullable=True)        # URL da imagem/vídeo
+    status = Column(String, default="rascunho")      # rascunho | desenvolvido | aprovado | publicado
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class ScheduledJob(Base):
+    __tablename__ = "scheduled_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    kind = Column(String, nullable=False)            # agent_act | telegram_message | run_queue
+    spec = Column(Text, nullable=True)               # JSON com os parâmetros da ação
+    schedule_type = Column(String, default="interval")  # interval | daily | once
+    schedule_value = Column(String, nullable=True)   # minutos (interval) | HH:MM (daily) | ISO (once)
+    next_run = Column(DateTime, nullable=True, index=True)
+    last_run = Column(DateTime, nullable=True)
+    last_result = Column(Text, nullable=True)
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class FinanceEntry(Base):
+    __tablename__ = "finance_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kind = Column(String, nullable=False)            # receita | despesa
+    description = Column(String, nullable=True)
+    amount = Column(Float, nullable=False, default=0.0)
+    currency = Column(String, default="BRL")
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
 class Mission(Base):
     __tablename__ = "missions"
 
@@ -15,10 +104,12 @@ class Mission(Base):
     title = Column(String, index=True)
     description = Column(Text, nullable=True)
     status = Column(String, default="PENDING")
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
     evidences = relationship("Evidence", back_populates="mission", lazy="select")
+    project = relationship("Project", back_populates="missions")
 
 
 class Agent(Base):

@@ -61,50 +61,70 @@ function RadialGauge({ value, size = 132, stroke = 12, label, sub }) {
 function ExecutiveHome({ setView }) {
   const D = window.FORJA;
 
-  /* ---- métricas REAIS derivadas do estado da plataforma ---- */
+  /* ---- dados REAIS vindos do backend (hidratados por api.js) ---- */
+  const dash = D.dashboard || {};
+  const dMiss = dash.missions || {};
+  const dByStatus = dMiss.by_status || {};
+  const chat = D.chatStatus || {};
+  const provDisponiveis = (chat.available || []).length;
+  const missTotal   = dMiss.total || 0;
+  const missRunning = dByStatus.RUNNING || 0;
+  const missDone    = dByStatus.COMPLETED || 0;
+  const missFail    = dByStatus.FAILED || 0;
+  const missWait    = (dByStatus.PENDING || 0) + (dByStatus.QUEUED || 0);
+  const agentesReais  = (dash.agents || {}).total || (D.agentes ? D.agentes.length : 0);
+  const evidReais     = (dash.evidences || {}).total || 0;
+  const projetosReais = (dash.projects || {}).total || 0;
+
+  /* ---- métricas de prontidão (estrutura da plataforma) ---- */
   const implCount  = D.modulos.filter(m => m.status === 'IMPL' || m.status === 'CERT').length;
   const devCount   = D.modulos.filter(m => m.status === 'DEV'  || m.status === 'PARCIAL').length;
   const equipesEstrut = D.equipes.length;
   const intConect  = D.integracoes.filter(i => i.status === 'IMPL' || i.status === 'CERT').length;
-  const llmAtivos  = D.llms.filter(l => l.status === 'IMPL' || l.status === 'CERT').length;
   const prontidao  = implCount / D.modulos.length;  /* índice real de prontidão */
 
-  /* status geral honesto: nada crítico, mas há itens aguardando → Atenção */
-  const overall = (llmAtivos === 0 || intConect === 0) ? 'warn' : (devCount > 0 ? 'warn' : 'ok');
-  const overallLabel = overall === 'ok' ? 'Operacional' : overall === 'warn' ? 'Atenção' : 'Crítico';
-  const overallDesc = 'Plataforma em construção · LLMs e integrações aguardando configuração';
+  /* status geral honesto baseado em providers de IA realmente disponíveis */
+  const overall = provDisponiveis === 0 ? 'warn' : 'ok';
+  const overallLabel = overall === 'ok' ? 'Operacional' : 'Atenção';
+  const overallDesc = provDisponiveis > 0
+    ? (provDisponiveis + ' provedor(es) de IA disponível(is) · ' + missTotal + ' missões · ' + agentesReais + ' agentes')
+    : 'Nenhum provedor de IA disponível · configure no cofre de chaves';
 
-  /* contadores reais (zero quando não há dado) */
+  /* contadores reais do banco (Zero Ghost: vêm do backend) */
   const resumo = [
-    { k: 'Projetos',     v: 0,             sub: 'nenhum criado' },
-    { k: 'Missões',      v: 0,             sub: 'nenhuma ativa' },
-    { k: 'Artefatos',    v: 0,             sub: 'nenhum gerado' },
+    { k: 'Projetos',     v: projetosReais, sub: projetosReais ? 'no banco' : 'nenhum criado' },
+    { k: 'Missões',      v: missTotal,     sub: missRunning + ' em execução' },
+    { k: 'Agentes',      v: agentesReais,  sub: 'registrados' },
+    { k: 'Evidências',   v: evidReais,     sub: 'execuções reais' },
     { k: 'Equipes',      v: equipesEstrut, sub: 'estrutura criada' },
-    { k: 'Integrações',  v: intConect,     sub: intConect ? 'conectadas' : 'nenhuma conectada' },
   ];
 
-  /* saúde dos sistemas (real: derivado de operações + integrações) */
-  const sistemas = [
-    { nome: 'Banco de Dados',     icon: 'db',       st: 'DEV',    nota: 'não provisionado' },
-    { nome: 'API Core',           icon: 'zap',      st: 'DEV',    nota: 'em desenvolvimento' },
-    { nome: 'GitHub',             icon: 'git',      st: 'IMPL',   nota: '2 contas conectadas' },
-    { nome: 'Sistema de Arquivos',icon: 'folder',   st: 'IMPL',   nota: 'operacional' },
-    { nome: 'Scheduler',          icon: 'clock',    st: 'NIMPL',  nota: 'não configurado' },
-    { nome: 'Runtime',            icon: 'cpu',      st: 'DEV',    nota: 'em desenvolvimento' },
-    { nome: 'Logs',               icon: 'terminal', st: 'DEV',    nota: 'coletando local' },
-    { nome: 'Auditoria',          icon: 'shield',   st: 'IMPL',   nota: 'operacional' },
+  /* saúde dos sistemas — REAL, vinda do backend (/api/system/health) */
+  const sistemas = (D.systemHealth && D.systemHealth.length) ? D.systemHealth : [
+    { nome: 'Banco de Dados',     icon: 'db',       st: 'NTEST', nota: 'verificando…' },
+    { nome: 'API Core',           icon: 'zap',      st: 'NTEST', nota: 'verificando…' },
+    { nome: 'Runtime',            icon: 'cpu',      st: 'NTEST', nota: 'verificando…' },
+    { nome: 'Logs',               icon: 'terminal', st: 'NTEST', nota: 'verificando…' },
+    { nome: 'Auditoria',          icon: 'shield',   st: 'NTEST', nota: 'verificando…' },
   ];
 
   const hora = new Date().toTimeString().slice(0,8);
   const tone = (st) => (D.ST[st] || {}).tone || 'idle';
 
-  /* alertas REAIS (derivados de configuração pendente) */
-  const alertas = [
-    { sev: 'warn', txt: 'Nenhum provedor LLM configurado', acao: 'llms' },
-    { sev: 'warn', txt: 'GitHub não testado / não conectado', acao: 'integracoes' },
-    { sev: 'info', txt: 'Banco de dados não provisionado', acao: 'operacoes' },
-    { sev: 'info', txt: 'Backups não configurados', acao: 'operacoes' },
-  ];
+  /* alertas REAIS derivados do estado vivo do backend */
+  const alertas = [];
+  if (provDisponiveis === 0)
+    alertas.push({ sev: 'warn', txt: 'Nenhum provedor de IA disponível — configure no cofre', acao: 'configuracoes' });
+  else
+    alertas.push({ sev: 'info', txt: provDisponiveis + ' provedor(es) de IA disponível(is)', acao: 'llms' });
+  if (missFail > 0)
+    alertas.push({ sev: 'warn', txt: missFail + ' missão(ões) com falha — revisar', acao: 'missoes' });
+  if (missWait > 0)
+    alertas.push({ sev: 'info', txt: missWait + ' missão(ões) aguardando execução', acao: 'missoes' });
+  if (intConect === 0)
+    alertas.push({ sev: 'info', txt: 'Nenhuma integração conectada', acao: 'integracoes' });
+  if (!alertas.length)
+    alertas.push({ sev: 'info', txt: 'Sistema operacional — sem alertas pendentes', acao: 'auditoria' });
 
   const equipesView = D.equipes.slice(0, 9);
 
@@ -152,30 +172,39 @@ function ExecutiveHome({ setView }) {
               </div>
               <div className="exec-syscard-nm">{s.nome}</div>
               <div className="exec-syscard-st"><StatusPill status={s.st} size="sm"/></div>
-              <div className="exec-syscard-meta mono">últ. verif. {hora}</div>
+              <div className="exec-syscard-meta" style={{fontSize:10.5}}>{s.nota || ('últ. verif. ' + hora)}</div>
             </div>
           ))}
         </div>
       </ExecSection>
 
       {/* ===== BLOCO 3 · LLM COMMAND CENTER ===== */}
-      <ExecSection icon="zap" title="LLM Command Center" right={<StatusPill status="CONFIG" size="sm"/>}>
+      <ExecSection icon="zap" title="LLM Command Center"
+        right={<span className={'pill ' + (provDisponiveis>0?'ok':'warn')}>{provDisponiveis} disponível(is)</span>}>
         <div className="exec-llm-grid">
-          {D.llms.map(l => (
-            <div className="exec-llm" key={l.id}>
-              <div className="exec-llm-top">
-                <span className={'dot ' + tone(l.status)} />
-                <span className="exec-llm-nm">{l.nome}</span>
+          {D.llms.map(l => {
+            const nome   = l.nome || l.provider || l.id;
+            const modelo = l.modelo || (l.modelos && l.modelos[0]) || '—';
+            const lat    = l.latencia || l.ultimoHealth || '—';
+            const ult    = l.ultimoTeste || l.ultimoHealth || '—';
+            const prov   = (l.conexao && l.conexao[0]) || l.tipo || '—';
+            const ativo  = l.status === 'active_real' || l.ativo;
+            return (
+              <div className="exec-llm" key={l.id}>
+                <div className="exec-llm-top">
+                  <span className={'dot ' + (ativo ? 'ok' : tone(l.status))} />
+                  <span className="exec-llm-nm">{nome}</span>
+                </div>
+                <div className="exec-llm-model mono">{modelo}</div>
+                <div className="exec-llm-rows">
+                  <div><span className="faint">Saúde</span><span className="mono">{lat}</span></div>
+                  <div><span className="faint">Últ. check</span><span className="mono">{ult}</span></div>
+                  <div><span className="faint">Tipo</span><span className="mono">{prov}</span></div>
+                </div>
+                <span className={'pill ' + (ativo?'ok':'warn')}>{l.statusLabel || (ativo?'Ativa real':'Não validada')}</span>
               </div>
-              <div className="exec-llm-model mono">{l.modelo}</div>
-              <div className="exec-llm-rows">
-                <div><span className="faint">Latência</span><span className="mono">{l.latencia}</span></div>
-                <div><span className="faint">Últ. exec.</span><span className="mono">{l.ultimoTeste}</span></div>
-                <div><span className="faint">Provider</span><span className="mono">{l.conexao[0]}</span></div>
-              </div>
-              <StatusPill status={l.status} size="sm"/>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </ExecSection>
 
@@ -183,7 +212,7 @@ function ExecutiveHome({ setView }) {
         {/* ===== BLOCO 4 · MISSÕES ===== */}
         <ExecSection icon="target" title="Missões" right={<button className="btn ghost sm" onClick={()=>setView('missoes')}>Abrir <Icon name="chevR" size={12}/></button>}>
           <div className="exec-mini-grid">
-            {[['Em execução','ok',0],['Concluídas','info',0],['Bloqueadas','err',0],['Aguardando','idle',0]].map(([l,c,v])=>(
+            {[['Em execução','ok',missRunning],['Concluídas','info',missDone],['Com falha','err',missFail],['Aguardando','idle',missWait]].map(([l,c,v])=>(
               <div className="exec-mini" key={l}>
                 <div className="exec-mini-v"><CountUp value={v} /></div>
                 <div className="exec-mini-l"><span className={'dot '+c}/> {l}</div>
@@ -191,7 +220,9 @@ function ExecutiveHome({ setView }) {
               </div>
             ))}
           </div>
-          <div className="exec-empty-note"><Icon name="target" size={13}/> Nenhuma missão registrada — crie a primeira na FORJA.</div>
+          {missTotal === 0
+            ? <div className="exec-empty-note"><Icon name="target" size={13}/> Nenhuma missão registrada — crie a primeira em Missões.</div>
+            : <div className="exec-empty-note"><Icon name="target" size={13}/> {missTotal} missões no banco · clique em "Abrir" para gerenciar.</div>}
         </ExecSection>
 
         {/* ===== BLOCO 6 · GITHUB COMMAND CENTER ===== */}

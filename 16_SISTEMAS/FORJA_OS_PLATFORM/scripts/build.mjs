@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, copyFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 
@@ -11,6 +11,7 @@ const { build } = depRoot
 const root = process.cwd();
 const sourceOrder = [
   'js/data.js',
+  'js/api.js',
   'js/shared.jsx',
   'js/shell.jsx',
   'js/explorer.jsx',
@@ -54,8 +55,19 @@ await build({
 
 let html = await readFile(join(root, 'Factory OS - Monitor 1.html'), 'utf8');
 html = html.replace(/<script.*?src="js\/.*?".*?><\/script>/g, '');
-html = html.replace('</body>', '  <script src="assets/app.js"></script>\n</body>');
+// Produção self-contained: React local (sem CDN) e sem Babel (app.js já vem compilado).
+html = html.replace(/<script[^>]*react-dom@[^>]*><\/script>/g, '<script src="assets/vendor/react-dom.production.min.js"></script>');
+html = html.replace(/<script[^>]*react@[^>]*><\/script>/g, '<script src="assets/vendor/react.production.min.js"></script>');
+html = html.replace(/<script[^>]*@babel\/standalone[^>]*><\/script>/g, '');
+// cache-busting: versão pelo tamanho do bundle, evita navegador servir build antigo
+const _appVer = (await stat(join(dist, 'assets', 'app.js'))).size;
+html = html.replace('</body>', `  <script src="assets/app.js?v=${_appVer}"></script>\n</body>`);
 await writeFile(join(dist, 'index.html'), html, 'utf8');
+
+// vendoriza React UMD de produção dentro do dist (servido por /assets)
+await mkdir(join(dist, 'assets', 'vendor'), { recursive: true });
+await copyFile(join(root, 'vendor', 'react.production.min.js'), join(dist, 'assets', 'vendor', 'react.production.min.js'));
+await copyFile(join(root, 'vendor', 'react-dom.production.min.js'), join(dist, 'assets', 'vendor', 'react-dom.production.min.js'));
 await copyFile(join(root, 'favicon.svg'), join(dist, 'favicon.svg'));
 await copyFile(join(root, 'css/tokens.css'), join(dist, 'css/tokens.css'));
 await copyFile(join(root, 'css/app.css'), join(dist, 'css/app.css'));

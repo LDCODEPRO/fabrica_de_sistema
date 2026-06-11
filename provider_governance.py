@@ -156,7 +156,7 @@ def status_from_result(provider_key: str, result: dict) -> str:
     return STATUS_ERROR
 
 
-def check_provider(provider_key: str, prompt: str = "Responda apenas PROVIDER_OK", max_tokens: int = 40) -> dict:
+def check_provider(provider_key: str, prompt: str = "Responda apenas PROVIDER_OK", max_tokens: int = 256) -> dict:
     """Executa health check real, sem expor segredos."""
     exec_key = PROVIDER_EXECUTION_MAP.get(provider_key)
     if not exec_key:

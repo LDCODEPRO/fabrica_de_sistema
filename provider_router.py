@@ -108,10 +108,13 @@ PROVIDER_CONFIG = {
     "gemini":   {"env": "GOOGLE_API_KEY", "model": "gemini-2.5-flash"},
     "openai":   {"env": "OPENAI_API_KEY", "model": "gpt-4o-mini",
                  "url": "https://api.openai.com/v1/chat/completions"},
-    # Gateway autorizado para modelos sem assinatura/local.
+    # Gateway autorizado (API router em dia). Prioridade da Diretoria:
+    # 1º DeepSeek V4 Pro  →  2º Kimi K2.6  →  demais como rede de segurança.
     "openrouter": {"env": "OPENROUTER_API_KEY",
-                   "model": os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat"),
-                   "fallback_models": ["moonshotai/kimi-k2.6"],
+                   "model": os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-v4-pro"),
+                   "fallback_models": ["moonshotai/kimi-k2.6",
+                                       "deepseek/deepseek-chat-v3.1",
+                                       "deepseek/deepseek-chat"],
                    "url": "https://openrouter.ai/api/v1/chat/completions"},
     "claude":   {"env": "ANTHROPIC_API_KEY", "model": "claude-haiku-4-5-20251001",
                  "url": "https://api.anthropic.com/v1/messages"},

@@ -158,6 +158,460 @@
 
 
 /* ============================================================
+   FORJA — Camada de API V1
+   fetch nativo (sem axios, sem Vite). Mesma origem do FastAPI.
+   Carrega dados REAIS do backend e hidrata window.FORJA.
+   window.FORJA continua existindo apenas como FALLBACK.
+   ============================================================ */
+(function () {
+  const BASE = ''; // mesma origem (SPA servida pelo FastAPI)
+
+  async function getJSON(path) {
+    const headers = { 'Accept': 'application/json' };
+    const token = localStorage.getItem('forja.token');
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    const res = await fetch(BASE + path, {
+      headers: headers,
+      credentials: 'same-origin',
+    });
+    if (res.status === 401) {
+      window.dispatchEvent(new Event('unauthorized'));
+      throw new Error('HTTP 401 em ' + path);
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' em ' + path);
+    return res.json();
+  }
+
+  // Usa dados reais quando existirem; senão mantém o fallback de window.FORJA.
+  function pick(realArr, fallback, sourceKey, sources) {
+    if (Array.isArray(realArr) && realArr.length > 0) {
+      sources[sourceKey] = 'backend_real';
+      return realArr;
+    }
+    sources[sourceKey] = 'fallback_window_forja';
+    return fallback;
+  }
+
+  // ---- mapeadores: shape do backend -> shape esperado pelo painel ----
+
+  function mapAgentes(items) {
+    const stMap = { IDLE: 'idle', WORKING: 'running', OFFLINE: 'blocked' };
+    return (items || []).map(a => ({
+      id: a.id,
+      papel: a.nome,            // backend.nome = papel curto (ex: ARCHITECT)
+      nome: a.papel || a.nome,  // backend.papel = descrição
+      status: stMap[a.status] || 'idle',
+      missao: '—',
+      ultimaExec: '—',
+      provider: 'não atribuído',
+      tempoMedio: 'não medido',
+      tokens: null, custo: 0, tarefas: null, sucesso: null,
+    }));
+  }
+
+  function mapMissoes(items) {
+    return (items || []).map(ms => ({
+      id: ms.id,
+      titulo: ms.titulo,
+      proj: ms.proj || '—',
+      status: ms.status,
+      prio: ms.prio || 'P3',
+      agente: ms.agente || '—',
+      llm: ms.llm || '—',
+      tempo: ms.tempo || '—',
+      etapa: ms.etapa || 0,
+      etapas: ms.etapas || 1,
+      tags: ms.tags || [],
+      description: ms.description || '',
+    }));
+  }
+
+  function mapLLMs(providers) {
+    const tipoMap = {
+      subscription: 'Assinatura', local: 'Local', paid_api: 'API Paga',
+    };
+    const ONLINE = { active_real: 1, CERTIFIED: 1, ROUTER_LIMITED: 1 };
+    const statusMap = {
+      active_real: 'Online',
+      CERTIFIED: 'Online',
+      ROUTER_LIMITED: 'Online (via router)',
+      ENVIRONMENT_PENDING: 'Fora do ar',
+      OFFLINE: 'Fora do ar',
+      unavailable: 'Fora do ar',
+      inactive: 'Inativa',
+      missing_key: 'Sem chave',
+      BLOCKED_BY_BILLING: 'Bloqueada (billing)',
+      NOT_IMPLEMENTED: 'Não implementada',
+      ERROR: 'Erro',
+      unknown: 'Não validada',
+    };
+    return (providers || []).map(p => ({
+      id: p.id,
+      provider: p.display_name,
+      modelos: p.models && p.models.length ? p.models : ['configurável'],
+      tipo: tipoMap[p.provider_type] || p.provider_type,
+      status: p.health_status || 'unknown',
+      statusLabel: statusMap[p.health_status] || p.health_status || 'Não validada',
+      modoUso: p.automation_mode === 'assisted' ? 'Assistido'
+             : p.automation_mode === 'direct'
+               ? (p.provider_type === 'local' ? 'Direto/Local' : 'Direto')
+               : '—',
+      automacao: p.automation_mode,
+      custoIncremental: p.cost_incremental === 0
+        ? 'R$ 0,00'
+        : p.provider_type === 'paid_api' ? 'Por consumo' : 'Não informado',
+      billing: p.billing_mode,
+      ultimoHealth: p.last_health_check || 'Não validado',
+      observacao: p.notes || '',
+      ativo: !!ONLINE[p.health_status],
+    }));
+  }
+
+  function mapAuditoria(items) {
+    return (items || []).map(a => {
+      const dt = a.created_at ? new Date(a.created_at) : null;
+      const hora = dt ? dt.toTimeString().slice(0, 8) : '—';
+      return {
+        id: a.id,
+        ts: hora,
+        data: dt ? dt.toLocaleDateString('pt-BR') : '—',
+        hora: hora,
+        ator: 'sistema',
+        acao: a.event_type || '—',
+        alvo: (a.details || '').slice(0, 60),
+        sev: 'info',
+        hash: 'evt-' + a.id,
+      };
+    });
+  }
+
+  function applyStatusToServices(services, health, status, llmHealth) {
+    const set = (id, st) => {
+      const s = (services || []).find(x => x.id === id);
+      if (s) s.status = st;
+    };
+    if (health && health.status === 'ok') set('fastapi', 'ok');
+    if (status && status.database === 'ok') set('database', 'ok');
+    if (llmHealth) set('ollama', llmHealth.health_status === 'active_real' ? 'ok' : 'idle');
+    return services;
+  }
+
+  // ---- hidratação principal: roda ANTES do React renderizar ----
+  async function hydrate() {
+    const F = window.FORJA || {};
+    F._live = { hydratedAt: null, sources: {}, errors: {} };
+    const sources = F._live.sources;
+    const errors = F._live.errors;
+
+    // health + status + llm/health (tolerantes a falha individual)
+    let health = null, status = null, llmHealth = null;
+    try { health = await getJSON('/api/health'); } catch (e) { errors.health = String(e); }
+    try { status = await getJSON('/api/status'); } catch (e) { errors.status = String(e); }
+    try { llmHealth = await getJSON('/api/llm/health'); } catch (e) { errors.llmHealth = String(e); }
+
+    // agentes
+    try {
+      const r = await getJSON('/api/agents');
+      F.agentes = pick(mapAgentes(r.items), F.agentes, 'agentes', sources);
+    } catch (e) { errors.agentes = String(e); sources.agentes = 'fallback_window_forja'; }
+
+    // missões
+    try {
+      const r = await getJSON('/api/missions');
+      F.missoes = pick(mapMissoes(r.items), F.missoes, 'missoes', sources);
+    } catch (e) { errors.missoes = String(e); sources.missoes = 'fallback_window_forja'; }
+
+    // providers / LLMs
+    try {
+      const r = await getJSON('/api/llm/providers');
+      F.llms = pick(mapLLMs(r.providers), F.llms, 'llms', sources);
+    } catch (e) { errors.llms = String(e); sources.llms = 'fallback_window_forja'; }
+
+    // auditoria
+    try {
+      const r = await getJSON('/api/audit');
+      F.auditoria = pick(mapAuditoria(r.items), F.auditoria, 'auditoria', sources);
+    } catch (e) { errors.auditoria = String(e); sources.auditoria = 'fallback_window_forja'; }
+
+    // serviços (saúde real) + status bar
+    try {
+      const r = await getJSON('/api/services');
+      if (Array.isArray(r.items) && r.items.length) {
+        F.services = r.items;
+        sources.services = 'backend_real';
+      }
+    } catch (e) { errors.services = String(e); sources.services = 'fallback_window_forja'; }
+
+    // dashboard real: KPIs + núcleos + governança a partir do banco
+    try {
+      const d = await getJSON('/api/dashboard');
+      const ms = d.missions || {}; const byS = ms.by_status || {};
+      const kmap = {
+        projetos: { valor: String((d.projects || {}).total || 0), sub: 'sem tabela de projetos' },
+        missoes: { valor: String(ms.total || 0), sub: (byS.RUNNING || 0) + ' em execução' },
+        agentes: { valor: String((d.agents || {}).total || 0), sub: 'do banco' },
+        evidencias: { valor: String((d.evidences || {}).total || 0), sub: 'execuções reais' },
+        ia: { valor: ((d.ollama || {}).status === 'active_real' ? (d.ollama.models + ' modelos') : 'offline'), sub: 'Ollama' },
+      };
+      F.kpis = (F.kpis || []).map(k => kmap[k.id] ? Object.assign({}, k, kmap[k.id]) : k);
+
+      // governança real
+      F.governance = Object.assign({}, F.governance, {
+        evidence: Object.assign({}, F.governance.evidence, { total: (d.evidences || {}).total || 0 }),
+        zeroGhostLaw: Object.assign({}, F.governance.zeroGhostLaw,
+          { ativas: (d.audit || {}).total || 0, violacoes: 0, ultimaVarredura: 'tempo real' }),
+      });
+
+      // núcleos: marca status real do que sabemos
+      const setCore = (id, st) => { const c = (F.cores || []).find(x => x.id === id); if (c) c.status = st; };
+      setCore('database', 'ok'); setCore('operational', 'ok'); setCore('factory', 'ok');
+      setCore('agent', (d.agents || {}).total > 0 ? 'ok' : 'idle');
+      setCore('router', (d.ollama || {}).status === 'active_real' ? 'ok' : 'idle');
+      F.dashboard = d;                       // dados crus para a Home Executiva
+      sources.dashboard = 'backend_real';
+    } catch (e) { errors.dashboard = String(e); sources.dashboard = 'fallback_window_forja'; }
+
+    // status real do chat / providers de conversa (para Home + alertas)
+    try {
+      F.chatStatus = await getJSON('/api/chat/status');
+      sources.chatStatus = 'backend_real';
+    } catch (e) { errors.chatStatus = String(e); sources.chatStatus = 'fallback_window_forja'; }
+
+    // conhecimento real (contagem de itens no repositório)
+    try {
+      const k = await getJSON('/api/knowledge');
+      F.knowledge = k;
+      sources.knowledge = 'backend_real';
+    } catch (e) { errors.knowledge = String(e); sources.knowledge = 'fallback_window_forja'; }
+
+    // saúde real dos componentes do sistema (Banco, API Core, Runtime, Logs…)
+    try {
+      const sh = await getJSON('/api/system/health');
+      F.systemHealth = sh.items || [];
+      sources.systemHealth = 'backend_real';
+    } catch (e) { errors.systemHealth = String(e); sources.systemHealth = 'fallback_window_forja'; }
+
+    // billing real ($1/dia, $30/mês) — nunca seed/demo
+    try {
+      const b = await getJSON('/api/billing/status');
+      F.custos = Object.assign({}, F.custos, {
+        diario: b.daily_used_usd,
+        mensal: b.monthly_used_usd,
+        limite: b.monthly_budget_usd,
+        limiteDiario: b.daily_budget_usd,
+        projecao: b.projection_usd,
+        source: b.source,
+        primaryProvider: b.primary_provider,
+        fallbackProvider: b.fallback_provider,
+      });
+      sources.billing = 'backend_real';
+    } catch (e) { errors.billing = String(e); sources.billing = 'fallback_window_forja'; }
+
+    // status bar / serviços
+    try {
+      F.services = applyStatusToServices(F.services, health, status, llmHealth);
+      sources.services = (health || status) ? 'backend_real' : 'fallback_window_forja';
+    } catch (e) { errors.services = String(e); }
+
+    F._live.hydratedAt = new Date().toISOString();
+    window.FORJA = F;
+
+    // Log de evidência no console (visível no navegador / DevTools)
+    console.info('[FORJA] hydrate concluído', F._live.sources, 'erros:', F._live.errors);
+    return F._live;
+  }
+
+  // ---- Runtime real: executar missão, evidências, status ----
+  async function postJSON(path, body) {
+    const res = await fetch(BASE + path, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' em ' + path);
+    return res.json();
+  }
+
+  // POST /api/missions/{id}/run — executa missão real
+  async function runMission(missionId) {
+    const r = await postJSON('/api/missions/' + missionId + '/run');
+    console.info('[FORJA] runMission', missionId, '→', r.status, '(provider:', r.provider + ')');
+    return r;
+  }
+
+  // GET /api/missions/{id}/evidences
+  async function getEvidences(missionId) {
+    return getJSON('/api/missions/' + missionId + '/evidences');
+  }
+
+  // GET /api/runtime/status
+  async function getRuntimeStatus() {
+    return getJSON('/api/runtime/status');
+  }
+
+  // Atualiza window.FORJA.missoes a partir do backend (após execução)
+  async function refreshMissions() {
+    try {
+      const r = await getJSON('/api/missions');
+      const F = window.FORJA;
+      F.missoes = pick(mapMissoes(r.items), F.missoes, 'missoes', (F._live || {}).sources || {});
+      return F.missoes;
+    } catch (e) {
+      console.warn('[FORJA] refreshMissions falhou:', e);
+      return (window.FORJA || {}).missoes;
+    }
+  }
+
+  // POST /api/missions — cria missão real no banco
+  async function createMission(titulo, descricao) {
+    const r = await postJSON('/api/missions', { titulo: titulo, descricao: descricao || '' });
+    await refreshMissions();
+    return r;
+  }
+
+  async function delJSON(path) {
+    const res = await fetch(BASE + path, { method: 'DELETE', headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' em ' + path);
+    return res.json();
+  }
+
+  // ---- CLIENTES + CONEXÕES (multi-cliente) ----
+  async function listClients() { return getJSON('/api/clients'); }
+  async function createClient(nome, descricao) { return postJSON('/api/clients', { nome: nome, descricao: descricao || '' }); }
+  async function getClient(id) { return getJSON('/api/clients/' + encodeURIComponent(id)); }
+  async function listConnectors(scope) { return getJSON('/api/connectors' + (scope ? ('?scope=' + scope) : '')); }
+  async function addConnection(clientId, kind, label, credential, meta) {
+    return postJSON('/api/clients/' + encodeURIComponent(clientId) + '/connections', { kind: kind, label: label, credential: credential, meta: meta || {} });
+  }
+  async function testConnection(connId) { return postJSON('/api/connections/' + connId + '/test'); }
+  async function deleteConnection(connId) { return delJSON('/api/connections/' + connId); }
+  // Conexões GLOBAIS da Fábrica (logadas uma vez)
+  async function listAgencyConnections() { return getJSON('/api/agency/connections'); }
+  async function addAgencyConnection(kind, label, credential, meta) {
+    return postJSON('/api/agency/connections', { kind: kind, label: label, credential: credential, meta: meta || {} });
+  }
+
+  // ---- PROJETOS (fatia vertical: projeto → missão → execução → entrega) ----
+  async function listProjects() { return getJSON('/api/projects'); }
+  async function createProject(nome, descricao, clientId) { return postJSON('/api/projects', { nome: nome, descricao: descricao || '', client_id: clientId }); }
+  async function getProject(id) { return getJSON('/api/projects/' + encodeURIComponent(id)); }
+  async function createProjectMission(id, titulo, descricao) {
+    return postJSON('/api/projects/' + encodeURIComponent(id) + '/missions', { titulo: titulo, descricao: descricao || '' });
+  }
+  async function getDeliverables(id) { return getJSON('/api/projects/' + encodeURIComponent(id) + '/deliverables'); }
+  async function uploadProjectFiles(id, files) { return postJSON('/api/projects/' + encodeURIComponent(id) + '/upload', { files: files }); }
+  async function listProjectFiles(id) { return getJSON('/api/projects/' + encodeURIComponent(id) + '/files'); }
+  async function developProject(id) { return postJSON('/api/projects/' + encodeURIComponent(id) + '/develop'); }
+
+  // POST /api/agents/{key}/act — execução AGÊNTICA (ReAct + ferramentas)
+  async function getAgentBrain(agentKey) { return getJSON('/api/agents/' + encodeURIComponent(agentKey) + '/brain'); }
+
+  async function actAgent(agentKey, objective, clientId) {
+    return postJSON('/api/agents/' + encodeURIComponent(agentKey || 'orquestrador') + '/act', { objective: objective, client_id: clientId });
+  }
+
+  // POST /api/tests/run — auto-teste real do sistema
+  async function runTests() { return postJSON('/api/tests/run'); }
+
+  // ---- CONTEÚDO (estúdio de posts/reels) ----
+  async function listContent(clientId) { return getJSON('/api/content' + (clientId ? ('?client_id=' + encodeURIComponent(clientId)) : '')); }
+  async function createContent(c) { return postJSON('/api/content', c); }
+  async function developContent(id) { return postJSON('/api/content/' + id + '/develop'); }
+  async function updateContent(id, data) { return postJSON('/api/content/' + id, data); }
+  async function uploadContentMedia(id, dataUrl) { return postJSON('/api/content/' + id + '/upload', { data_url: dataUrl }); }
+  async function scheduleContent(id, st, sv) { return postJSON('/api/content/' + id + '/schedule', { schedule_type: st, schedule_value: sv }); }
+  async function publishContent(id) { return postJSON('/api/content/' + id + '/publish'); }
+  async function deleteContent(id) { return delJSON('/api/content/' + id); }
+  async function planContent(brief) { return postJSON('/api/content/plan', brief); }
+  async function generateImage(id, prompt) { return postJSON('/api/content/' + id + '/generate-image', { prompt: prompt }); }
+
+  // ---- SCHEDULER (agendamentos) ----
+  async function listJobs() { return getJSON('/api/scheduler/jobs'); }
+  async function createJob(job) { return postJSON('/api/scheduler/jobs', job); }
+  async function runJob(id) { return postJSON('/api/scheduler/jobs/' + id + '/run'); }
+  async function toggleJob(id) { return postJSON('/api/scheduler/jobs/' + id + '/toggle'); }
+  async function deleteJob(id) { return delJSON('/api/scheduler/jobs/' + id); }
+
+  // ---- FINANCEIRO (livro-caixa real) ----
+  async function getFinance(clientId) { return getJSON('/api/finance' + (clientId ? ('?client_id=' + encodeURIComponent(clientId)) : '')); }
+  async function addFinance(kind, description, amount, clientId) {
+    return postJSON('/api/finance', { kind: kind, description: description, amount: amount, client_id: clientId });
+  }
+  async function deleteFinance(id) { return delJSON('/api/finance/' + id); }
+
+  // GET /api/chat/session/{id} — histórico real da conversa
+  async function getChatSession(sessionId) {
+    try { return await getJSON('/api/chat/session/' + encodeURIComponent(sessionId)); }
+    catch (e) { return { session_id: sessionId, messages: [] }; }
+  }
+
+  // GET /api/files — lista real de arquivos do repositório
+  async function listFiles(path) {
+    return getJSON('/api/files' + (path ? ('?path=' + encodeURIComponent(path)) : ''));
+  }
+
+  // GET /api/knowledge — contagem real de conhecimento
+  async function getKnowledge() {
+    const k = await getJSON('/api/knowledge');
+    window.FORJA.knowledge = k;
+    return k;
+  }
+
+  // GET/POST /api/config/keys — cofre de chaves (status e gravação)
+  async function getConfigKeys() { return getJSON('/api/config/keys'); }
+  async function setConfigKey(key, value) {
+    return postJSON('/api/config/keys', { key: key, value: value });
+  }
+
+  // POST /api/providers/health-check — teste REAL de um provider (executa o LLM)
+  async function testProvider(providerKey) {
+    return postJSON('/api/providers/health-check', { provider_key: providerKey });
+  }
+
+  // POST /api/providers/reconnect — tenta reconectar com várias tentativas
+  async function reconnectProvider(providerKey, attempts) {
+    return postJSON('/api/providers/reconnect', { provider_key: providerKey, attempts: attempts || 3 });
+  }
+
+  // GET /api/llm/providers — recarrega lista de providers (após teste)
+  async function refreshProviders() {
+    const r = await getJSON('/api/llm/providers');
+    const mapped = mapLLMs(r.providers || []);
+    if (window.FORJA) window.FORJA.llms = mapped;
+    return mapped;
+  }
+
+  // GET /api/services + /api/status — health check operacional ao vivo
+  async function healthCheckServices() {
+    const [services, status] = await Promise.all([
+      getJSON('/api/services').catch(() => ({ items: [] })),
+      getJSON('/api/status').catch(() => null),
+    ]);
+    if (services && Array.isArray(services.items)) window.FORJA.services = services.items;
+    return { services: services, status: status };
+  }
+
+  window.ForjaAPI = {
+    getJSON, hydrate, postJSON,
+    runMission, getEvidences, getRuntimeStatus, refreshMissions,
+    createMission, getKnowledge, getConfigKeys, setConfigKey, healthCheckServices,
+    testProvider, refreshProviders, reconnectProvider,
+    getChatSession, listFiles, actAgent, getAgentBrain, runTests,
+    getFinance, addFinance, deleteFinance,
+    listJobs, createJob, runJob, toggleJob, deleteJob,
+    listContent, createContent, developContent, updateContent, uploadContentMedia, scheduleContent, publishContent, deleteContent,
+    planContent, generateImage,
+    listProjects, createProject, getProject, createProjectMission, getDeliverables,
+    uploadProjectFiles, listProjectFiles, developProject,
+    listClients, createClient, getClient, listConnectors, addConnection, testConnection, deleteConnection,
+    listAgencyConnections, addAgencyConnection,
+  };
+})();
+
+
+/* ============================================================
    FORJA — primitivos compartilhados: ícones, charts, hooks
    Exporta tudo em window.*
    ============================================================ */
@@ -374,8 +828,28 @@ function SectionCard({ icon, title, status, right, children, flush }) {
   );
 }
 
+/* ---------- exportação CSV real (download client-side) ---------- */
+function downloadCSV(filename, rows) {
+  if (!rows || !rows.length) { alert('Nada para exportar.'); return; }
+  const cols = Object.keys(rows[0]);
+  const esc = (v) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const csv = [cols.join(';')]
+    .concat(rows.map(r => cols.map(c => esc(r[c])).join(';')))
+    .join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 Object.assign(window, { Icon, Sparkline, Bars, Donut, Progress, useLocalStorage, STATUS_CLASS,
-  StatusPill, EmptyState, PageHead, SectionCard,
+  StatusPill, EmptyState, PageHead, SectionCard, downloadCSV,
   useState, useEffect, useRef, useCallback, createContext, useContext });
 
 
@@ -383,30 +857,39 @@ Object.assign(window, { Icon, Sparkline, Bars, Donut, Progress, useLocalStorage,
    FORJA — Shell: menu bar, activity bar, status bar
    ============================================================ */
 
+/* Sequência objetiva do fluxo: Início → Negócio → Execução → IA/Recursos → Gestão → Plataforma */
 const NAV = [
-  { id: 'home',         label: 'Home · Centro Executivo', short: 'Home',    icon: 'home',     grupo: 'Trabalho' },
-  { id: 'forja',        label: 'FORJA · Workspace',  short: 'FORJA',        icon: 'flame',    grupo: 'Trabalho' },
-  { id: 'clientes',     label: 'Clientes',       short: 'Clientes',     icon: 'building', grupo: 'Negócio' },
-  { id: 'projetos',     label: 'Projetos',       short: 'Projetos',     icon: 'folder',   grupo: 'Negócio' },
-  { id: 'missoes',      label: 'Missões',        short: 'Missões',      icon: 'target',   grupo: 'Operação' },
-  { id: 'equipes',      label: 'Equipes',        short: 'Equipes',      icon: 'users',    grupo: 'Operação' },
-  { id: 'inteligencia', label: 'Inteligência',   short: 'Inteligência', icon: 'compass',  grupo: 'Operação' },
-  { id: 'llms',         label: 'LLMs',           short: 'LLMs',         icon: 'zap',      grupo: 'Recursos' },
-  { id: 'ferramentas',  label: 'Ferramentas',    short: 'Ferramentas',  icon: 'wrench',   grupo: 'Recursos' },
-  { id: 'integracoes',  label: 'Integrações',    short: 'Integrações',  icon: 'link',     grupo: 'Recursos' },
+  // 1 · Início
+  { id: 'home',         label: '1 · Início · Centro Executivo', short: 'Início', icon: 'home',  grupo: 'Início' },
+  { id: 'forja',        label: 'FORJA · Workspace (chat/agentes)', short: 'FORJA', icon: 'flame', grupo: 'Início' },
+  // 2 · Negócio: do cliente ao conteúdo
+  { id: 'clientes',     label: '2 · Clientes',   short: 'Clientes',     icon: 'building', grupo: 'Negócio' },
+  { id: 'projetos',     label: '3 · Projetos',   short: 'Projetos',     icon: 'folder',   grupo: 'Negócio' },
+  { id: 'enviar',       label: '3.1 · Enviar projeto (upload)', short: 'Enviar', icon: 'box', grupo: 'Negócio' },
+  { id: 'conteudo',     label: '4 · Conteúdo · Posts & Reels', short: 'Conteúdo', icon: 'megaphone', grupo: 'Negócio' },
+  // 3 · Execução
+  { id: 'missoes',      label: '5 · Missões',    short: 'Missões',      icon: 'target',   grupo: 'Execução' },
+  { id: 'equipes',      label: 'Equipe Inteligente (agentes)', short: 'Equipes', icon: 'users', grupo: 'Execução' },
+  { id: 'inteligencia', label: 'Inteligência de Mercado', short: 'Inteligência', icon: 'compass', grupo: 'Execução' },
+  // 4 · IA & Recursos
+  { id: 'llms',         label: 'IA · Provedores (LLMs)', short: 'IA',   icon: 'zap',      grupo: 'Recursos' },
+  { id: 'integracoes',  label: 'Integrações da Fábrica', short: 'Integrações', icon: 'link', grupo: 'Recursos' },
   { id: 'conhecimento', label: 'Conhecimento',   short: 'Conhecimento', icon: 'book',     grupo: 'Recursos' },
-  { id: 'testes',       label: 'Testes',         short: 'Testes',       icon: 'flask',    grupo: 'Garantia' },
-  { id: 'validacao',    label: 'Validação',      short: 'Validação',     icon: 'award',    grupo: 'Garantia' },
-  { id: 'auditoria',    label: 'Auditoria',      short: 'Auditoria',    icon: 'shield',   grupo: 'Garantia' },
-  { id: 'operacoes',    label: 'Operações',      short: 'Operações',     icon: 'server',   grupo: 'Infra' },
-  { id: 'financeiro',   label: 'Financeiro',     short: 'Financeiro',   icon: 'dollar',   grupo: 'Negócio' },
+  { id: 'ferramentas',  label: 'Ferramentas',    short: 'Ferramentas',  icon: 'wrench',   grupo: 'Recursos' },
+  // 5 · Gestão
+  { id: 'financeiro',   label: 'Financeiro',     short: 'Financeiro',   icon: 'dollar',   grupo: 'Gestão' },
+  { id: 'operacoes',    label: 'Operações · Scheduler', short: 'Operações', icon: 'server', grupo: 'Gestão' },
+  { id: 'auditoria',    label: 'Auditoria',      short: 'Auditoria',    icon: 'shield',   grupo: 'Gestão' },
+  // 6 · Plataforma
   { id: 'roadmap',      label: 'Roadmap',        short: 'Roadmap',      icon: 'chart',    grupo: 'Plataforma' },
+  { id: 'testes',       label: 'Testes',         short: 'Testes',       icon: 'flask',    grupo: 'Plataforma' },
+  { id: 'validacao',    label: 'Validação',      short: 'Validação',     icon: 'award',    grupo: 'Plataforma' },
   { id: 'academia',     label: 'Academia',       short: 'Academia',     icon: 'cap',      grupo: 'Plataforma' },
   { id: 'ajuda',        label: 'Ajuda',          short: 'Ajuda',        icon: 'help',     grupo: 'Plataforma' },
 ];
 
 /* ícones por grupo (para divisores na activity bar) */
-const NAV_GROUPS = ['Trabalho','Negócio','Operação','Recursos','Garantia','Infra','Plataforma'];
+const NAV_GROUPS = ['Início','Negócio','Execução','Recursos','Gestão','Plataforma'];
 
 const MENUS = {
   'Arquivo': ['Novo projeto…', 'Nova missão…', 'Abrir projeto…', '—', 'Importar codebase', 'Exportar relatório', '—', 'Encerrar sessão'],
@@ -710,18 +1193,62 @@ function FileTree({ nodes, depth = 0 }) {
   );
 }
 
+/* Árvore de arquivos REAIS do repositório (lazy via /api/files) */
+function RealFiles() {
+  const [data, setData] = useState({});   // path -> items[]
+  const [open, setOpen] = useState({ '': true });
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.listFiles);
+
+  const load = async (path) => {
+    if (data[path] || !apiOn) return;
+    try { const r = await window.ForjaAPI.listFiles(path); setData(d => ({ ...d, [path]: r.items || [] })); }
+    catch { setData(d => ({ ...d, [path]: [] })); }
+  };
+  useEffect(() => { load(''); }, []);
+
+  const toggle = (path) => { setOpen(o => ({ ...o, [path]: !o[path] })); load(path); };
+
+  const renderLevel = (path, depth) => {
+    const items = data[path];
+    if (items == null) return <div className="faint" style={{padding:'6px 10px',fontSize:11}}>carregando…</div>;
+    if (!items.length) return <div className="faint" style={{padding:'6px 10px',fontSize:11}}>vazio</div>;
+    return items.map(it => it.tipo === 'dir' ? (
+      <div key={it.path}>
+        <button className="ftree-row" style={{paddingLeft:8+depth*12}} onClick={()=>toggle(it.path)}>
+          <Icon name="chevR" size={11} style={{transform:open[it.path]?'rotate(90deg)':'none', transition:'transform .12s', color:'var(--text-3)'}}/>
+          <Icon name="folder" size={13} style={{color:'var(--accent-bright)'}}/>
+          <span>{it.nome}</span>
+        </button>
+        {open[it.path] && <div>{renderLevel(it.path, depth+1)}</div>}
+      </div>
+    ) : (
+      <div key={it.path} className="ftree-row file" style={{paddingLeft:8+depth*12+16}}>
+        <Icon name="file" size={12} style={{color:'var(--text-3)'}}/>
+        <span>{it.nome}</span>
+        <span className="ftree-ext">{it.tipo}</span>
+      </div>
+    ));
+  };
+
+  if (!apiOn) return <div className="faint" style={{padding:10,fontSize:11.5}}>Backend offline — arquivos reais indisponíveis.</div>;
+  return <div className="ftree">{renderLevel('', 0)}</div>;
+}
+
 function HomeWorkspace({ setView }) {
   const D = window.FORJA;
   const teams = D.equipes || [];
   const [team, setTeam] = useLocalStorage('forja.ws.team', 'orquestrador');
-  const [llm, setLLM] = useLocalStorage('forja.ws.llm', 'gemini');
-  const [msgs, setMsgs] = useState(D.chatSeed || []);
+  const [llm, setLLM] = useLocalStorage('forja.ws.llm', 'auto');
+  const [sessionId, setSessionId] = useLocalStorage('forja.ws.session', '');
+  const [msgs, setMsgs] = useState([]);   // sem seed fake — começa vazio (Zero Ghost)
   const [draft, setDraft] = useState('');
   const [pane, setPane] = useState('preview'); // preview | arquivos | terminal
   const [chatStatus, setChatStatus] = useState({ online: null, status_text: 'Verificando...', available: [] });
   const bodyRef = useRef(null);
   const teamObj = teams.find(t=>t.id===team) || teams[0] || {};
-  const llmObj = (D.llms || []).find(l=>l.id===llm) || (D.llms || [])[0] || {};
+  const llmIds = (D.llms || []).map(l=>l.id);
+  const llmSel = (llm && llmIds.includes(llm)) ? llm : 'auto';   // migra valores antigos (ex.: 'gemini')
+  const llmObj = (D.llms || []).find(l=>l.id===llmSel) || {};
 
   useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [msgs]);
 
@@ -745,22 +1272,45 @@ function HomeWorkspace({ setView }) {
     return () => clearInterval(interval);
   }, []);
 
+  // Garante session_id e carrega o histórico real da conversa (memória)
+  useEffect(() => {
+    let sid = sessionId;
+    if (!sid) { sid = 'sess-' + Math.random().toString(36).slice(2) + '-' + Date.now().toString(36); setSessionId(sid); }
+    if (window.ForjaAPI && window.ForjaAPI.getChatSession) {
+      window.ForjaAPI.getChatSession(sid).then(s => {
+        if (s && Array.isArray(s.messages) && s.messages.length) {
+          setMsgs(s.messages.map(mm => ({
+            de: mm.sender === 'USER' ? 'voce' : (mm.sender === 'system' ? 'sistema' : (mm.sender || 'sistema')),
+            txt: mm.content,
+            provider: mm.provider_key || undefined,
+          })));
+        }
+      });
+    }
+  }, []);
+
+  const novaConversa = () => {
+    const sid = 'sess-' + Math.random().toString(36).slice(2) + '-' + Date.now().toString(36);
+    setSessionId(sid); setMsgs([]);
+  };
+
   const send = async () => {
     const t = draft.trim(); if (!t) return;
     setMsgs(m => [...m, { de:'voce', txt:t }]);
     setDraft('');
-    
+
     // Mostra loading
     const loadingId = Date.now();
-    setMsgs(m => [...m, { id: loadingId, de:'sistema', preview:true, loading:true, txt:'Processando pelo ' + teamObj.nome + '...' }]);
+    setMsgs(m => [...m, { id: loadingId, de:'sistema', preview:true, loading:true, txt:'Processando pelo ' + (teamObj.nome || 'agente') + '...' }]);
 
     try {
       const res = await fetch('/api/chat/message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: t, agent_key: team, agent_name: teamObj.nome, provider: llm })
+        body: JSON.stringify({ session_id: sessionId || undefined, message: t, agent_key: team, agent_name: teamObj.nome, provider: (llmSel === 'auto' ? undefined : llmSel) })
       });
       const data = await res.json();
+      if (res.ok && data.session_id && data.session_id !== sessionId) setSessionId(data.session_id);
       
       if (!res.ok) {
         setMsgs(m => {
@@ -783,6 +1333,34 @@ function HomeWorkspace({ setView }) {
       setMsgs(m => {
         const withoutLoading = m.filter(msg => msg.id !== loadingId);
         return [...withoutLoading, { de:'sistema', preview:true, error:true, txt: 'Erro de rede ao conectar com o backend.' }];
+      });
+    }
+  };
+
+  // MODO AGÊNTICO: o agente raciocina (ReAct) e usa ferramentas reais
+  const agir = async () => {
+    const t = draft.trim(); if (!t) return;
+    if (!window.ForjaAPI || !window.ForjaAPI.actAgent) { return; }
+    setMsgs(m => [...m, { de:'voce', txt:t }]);
+    setDraft('');
+    const loadingId = Date.now();
+    setMsgs(m => [...m, { id: loadingId, de:'sistema', preview:true, loading:true, txt:'Agente agindo (raciocinando e usando ferramentas)…' }]);
+    try {
+      const data = await window.ForjaAPI.actAgent(team, t);
+      setMsgs(m => {
+        const without = m.filter(x => x.id !== loadingId);
+        return [...without, {
+          de: team, preview:false,
+          txt: data.result || ('(' + (data.status || 'sem resposta') + ')'),
+          provider: 'agêntico',
+          steps: data.log || [],
+          agentStatus: data.status,
+        }];
+      });
+    } catch (err) {
+      setMsgs(m => {
+        const without = m.filter(x => x.id !== loadingId);
+        return [...without, { de:'sistema', preview:true, error:true, txt: 'Falha na ação agêntica: ' + err.message }];
       });
     }
   };
@@ -819,7 +1397,8 @@ function HomeWorkspace({ setView }) {
           <div className="ws-chat-head">
             <Icon name="chat" size={14} style={{color:'var(--accent-bright)'}}/>
             <span style={{fontWeight:600,fontSize:13}}>Chat operacional</span>
-            <span className="pill" style={{marginLeft:'auto'}}><span className={'zg-dot ' + statusDotClass} style={{background: statusColor}}/> {chatStatus.status_text}</span>
+            <button className="btn ghost sm" style={{marginLeft:'auto'}} onClick={novaConversa} title="Limpar e iniciar nova conversa"><Icon name="plus" size={12}/> Nova conversa</button>
+            <span className="pill"><span className={'zg-dot ' + statusDotClass} style={{background: statusColor}}/> {chatStatus.status_text}</span>
           </div>
 
           <div className="ws-chat-body scroll-y" ref={bodyRef}>
@@ -834,6 +1413,18 @@ function HomeWorkspace({ setView }) {
                   </div>
                 )}
                 <div className={'cp-bubble' + (m.preview?' preview':'') + (m.loading?' pulse':'')}>{m.txt}</div>
+                {m.steps && m.steps.length > 0 && (
+                  <details style={{marginTop:6}}>
+                    <summary style={{cursor:'pointer', fontSize:11, color:'var(--text-3)'}}>
+                      <Icon name="terminal" size={11}/> {m.steps.length} passo(s) do agente {m.agentStatus ? ('· ' + m.agentStatus) : ''}
+                    </summary>
+                    <div className="term" style={{marginTop:6, maxHeight:260, overflow:'auto'}}>
+                      {m.steps.map((s,si)=>(
+                        <div key={si} className="ln"><span className="t">{si+1}</span><span className="lv-info" style={{whiteSpace:'pre-wrap'}}>{String(s).slice(0,600)}</span></div>
+                      ))}
+                    </div>
+                  </details>
+                )}
               </div>
             ))}
           </div>
@@ -848,18 +1439,20 @@ function HomeWorkspace({ setView }) {
               </label>
               <label className="ws-sel">
                 <span className="ws-sel-lb"><Icon name="zap" size={11}/> Modelo</span>
-                <select value={llm} onChange={e=>setLLM(e.target.value)}>
-                  {(D.llms || []).map(l=><option key={l.id} value={l.id}>{l.nome || l.provider} · {l.ativo?'ativa':'inativa'}</option>)}
+                <select value={llmSel} onChange={e=>setLLM(e.target.value)}>
+                  <option value="auto">Automático (recomendado)</option>
+                  {(D.llms || []).map(l=><option key={l.id} value={l.id}>{l.provider || l.nome || l.id} · {l.ativo?'online':'fora'}</option>)}
                 </select>
               </label>
             </div>
             <div className="ws-input">
-              <textarea rows={2} placeholder="Instrua a Fábrica… (Enter envia · Shift+Enter nova linha)" value={draft}
+              <textarea rows={2} placeholder="Converse ou instrua… (Enter conversa · Shift+Enter nova linha · botão Agir = modo agêntico)" value={draft}
                 onChange={e=>setDraft(e.target.value)}
                 onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();} }} />
-              <button className="btn primary icon" onClick={send} title="Enviar"><Icon name="send" size={14}/></button>
+              <button className="btn" onClick={agir} disabled={!draft.trim()} title="Agir: o agente raciocina e usa ferramentas reais"><Icon name="zap" size={13}/> Agir</button>
+              <button className="btn primary icon" onClick={send} title="Conversar (com memória e cordialidade)"><Icon name="send" size={14}/></button>
             </div>
-            <div className="ws-hint">Roteia para <b>{teamObj.nome || 'Agente'}</b> via <b>{llmObj.nome || llmObj.provider || 'Padrão'}</b> · <span className="faint" style={{color: statusColor}}>{chatStatus.online ? 'Pronto' : chatStatus.online === null ? 'Verificando...' : 'Offline'}</span></div>
+            <div className="ws-hint">Roteia para <b>{teamObj.nome || 'Agente'}</b> via <b>{llmSel === 'auto' ? 'Automático' : (llmObj.provider || llmObj.nome || 'Automático')}</b> · <span className="faint" style={{color: statusColor}}>{chatStatus.online ? 'Pronto' : chatStatus.online === null ? 'Verificando...' : 'Offline'}</span></div>
           </div>
         </section>
 
@@ -882,40 +1475,53 @@ function HomeWorkspace({ setView }) {
             )}
             {pane==='arquivos' && (
               <div className="ws-files scroll-y">
-                <div className="ws-files-head"><span className="eyebrow">PROJETO · a-fabrica</span><StatusPill status="DEV" size="sm"/></div>
-                <FileTree nodes={D.arvore || []} />
+                <div className="ws-files-head"><span className="eyebrow">REPOSITÓRIO · arquivos reais</span><StatusPill status="IMPL" size="sm"/></div>
+                <RealFiles />
               </div>
             )}
-            {pane==='terminal' && (
+            {pane==='terminal' && (() => {
+              const dash = D.dashboard || {}; const ms = dash.missions || {}; const ag = dash.agents || {};
+              const onlineNames = (chatStatus.available || []).map(a=>a.label || a.id).join(', ');
+              return (
               <div className="term ws-term">
                 <div className="ln"><span className="t">$</span><span className="lv-acc">fabrica status</span></div>
-                <div className="ln"><span className="t"> </span><span className="lv-info">plataforma: A FÁBRICA · build dev</span></div>
-                <div className="ln"><span className="t"> </span><span className="lv-ok">workspace: pronto</span></div>
-                <div className="ln"><span className="t"> </span><span className={chatStatus.online ? 'lv-ok' : 'lv-warn'}>llms: {chatStatus.online ? chatStatus.status_text : 'verificando ou indisponível'}</span></div>
-                <div className="ln"><span className="t"> </span><span className="lv-warn">runtime: em desenvolvimento</span></div>
-                <div className="ln"><span className="t"> </span><span className="lv-info">zero-ghost: ativo · 0 violações</span></div>
+                <div className="ln"><span className="t"> </span><span className="lv-info">backend: FastAPI · dados reais do nexus.db</span></div>
+                <div className="ln"><span className="t"> </span><span className="lv-ok">missões: {ms.total || 0} · agentes: {ag.total || 0} · evidências: {(dash.evidences||{}).total || 0}</span></div>
+                <div className="ln"><span className="t"> </span><span className={chatStatus.online ? 'lv-ok' : 'lv-warn'}>llms online: {chatStatus.online ? (chatStatus.available||[]).length : '—'}{onlineNames ? (' · ' + onlineNames) : ''}</span></div>
+                <div className="ln"><span className="t"> </span><span className="lv-info">sessão: {sessionId || '—'}</span></div>
                 <div className="ln"><span className="t">$</span><span className="lv-acc blink">_</span></div>
               </div>
-            )}
+              );
+            })()}
           </div>
         </section>
       </div>
 
       {/* rodapé do workspace: evidências / alertas reais */}
+      {(() => {
+        const dash = D.dashboard || {}; const ms = dash.missions || {}; const byS = ms.by_status || {};
+        const evid = (dash.evidences || {}).total || 0;
+        const running = byS.RUNNING || 0;
+        const online = (chatStatus.available || []).length;
+        return (
       <div className="ws-foot">
         <div className="ws-foot-col">
-          <span className="eyebrow"><Icon name="doc" size={11}/> Evidências recentes</span>
-          <span className="faint" style={{fontSize:11.5}}>Nenhuma evidência registrada ainda · <StatusPill status="NIMPL" size="sm"/></span>
+          <span className="eyebrow"><Icon name="doc" size={11}/> Evidências</span>
+          <span className="faint" style={{fontSize:11.5}}>{evid > 0 ? (evid + ' evidências reais no banco') : 'Nenhuma evidência ainda'} · <StatusPill status={evid>0?'IMPL':'NIMPL'} size="sm"/></span>
         </div>
         <div className="ws-foot-col">
-          <span className="eyebrow"><Icon name="alert" size={11}/> Alertas reais</span>
-          <span style={{fontSize:11.5}}>2 itens precisam de configuração: <button className="lnk" onClick={()=>setView('llms')}>LLMs</button> · <button className="lnk" onClick={()=>setView('integracoes')}>Integrações</button></span>
+          <span className="eyebrow"><Icon name="zap" size={11}/> LLMs</span>
+          <span style={{fontSize:11.5}}>{online > 0
+            ? <>{online} provedor(es) online · <button className="lnk" onClick={()=>setView('llms')}>gerenciar</button></>
+            : <>nenhum online · <button className="lnk" onClick={()=>setView('llms')}>configurar</button></>}</span>
         </div>
         <div className="ws-foot-col">
-          <span className="eyebrow"><Icon name="target" size={11}/> Missão atual</span>
-          <span className="faint" style={{fontSize:11.5}}>Nenhuma missão em andamento</span>
+          <span className="eyebrow"><Icon name="target" size={11}/> Missões</span>
+          <span className="faint" style={{fontSize:11.5}}>{(ms.total||0)} no banco · {running} em execução · <button className="lnk" onClick={()=>setView('missoes')}>abrir</button></span>
         </div>
       </div>
+        );
+      })()}
     </div>
   );
 }
@@ -987,50 +1593,70 @@ function RadialGauge({ value, size = 132, stroke = 12, label, sub }) {
 function ExecutiveHome({ setView }) {
   const D = window.FORJA;
 
-  /* ---- métricas REAIS derivadas do estado da plataforma ---- */
+  /* ---- dados REAIS vindos do backend (hidratados por api.js) ---- */
+  const dash = D.dashboard || {};
+  const dMiss = dash.missions || {};
+  const dByStatus = dMiss.by_status || {};
+  const chat = D.chatStatus || {};
+  const provDisponiveis = (chat.available || []).length;
+  const missTotal   = dMiss.total || 0;
+  const missRunning = dByStatus.RUNNING || 0;
+  const missDone    = dByStatus.COMPLETED || 0;
+  const missFail    = dByStatus.FAILED || 0;
+  const missWait    = (dByStatus.PENDING || 0) + (dByStatus.QUEUED || 0);
+  const agentesReais  = (dash.agents || {}).total || (D.agentes ? D.agentes.length : 0);
+  const evidReais     = (dash.evidences || {}).total || 0;
+  const projetosReais = (dash.projects || {}).total || 0;
+
+  /* ---- métricas de prontidão (estrutura da plataforma) ---- */
   const implCount  = D.modulos.filter(m => m.status === 'IMPL' || m.status === 'CERT').length;
   const devCount   = D.modulos.filter(m => m.status === 'DEV'  || m.status === 'PARCIAL').length;
   const equipesEstrut = D.equipes.length;
   const intConect  = D.integracoes.filter(i => i.status === 'IMPL' || i.status === 'CERT').length;
-  const llmAtivos  = D.llms.filter(l => l.status === 'IMPL' || l.status === 'CERT').length;
   const prontidao  = implCount / D.modulos.length;  /* índice real de prontidão */
 
-  /* status geral honesto: nada crítico, mas há itens aguardando → Atenção */
-  const overall = (llmAtivos === 0 || intConect === 0) ? 'warn' : (devCount > 0 ? 'warn' : 'ok');
-  const overallLabel = overall === 'ok' ? 'Operacional' : overall === 'warn' ? 'Atenção' : 'Crítico';
-  const overallDesc = 'Plataforma em construção · LLMs e integrações aguardando configuração';
+  /* status geral honesto baseado em providers de IA realmente disponíveis */
+  const overall = provDisponiveis === 0 ? 'warn' : 'ok';
+  const overallLabel = overall === 'ok' ? 'Operacional' : 'Atenção';
+  const overallDesc = provDisponiveis > 0
+    ? (provDisponiveis + ' provedor(es) de IA disponível(is) · ' + missTotal + ' missões · ' + agentesReais + ' agentes')
+    : 'Nenhum provedor de IA disponível · configure no cofre de chaves';
 
-  /* contadores reais (zero quando não há dado) */
+  /* contadores reais do banco (Zero Ghost: vêm do backend) */
   const resumo = [
-    { k: 'Projetos',     v: 0,             sub: 'nenhum criado' },
-    { k: 'Missões',      v: 0,             sub: 'nenhuma ativa' },
-    { k: 'Artefatos',    v: 0,             sub: 'nenhum gerado' },
+    { k: 'Projetos',     v: projetosReais, sub: projetosReais ? 'no banco' : 'nenhum criado' },
+    { k: 'Missões',      v: missTotal,     sub: missRunning + ' em execução' },
+    { k: 'Agentes',      v: agentesReais,  sub: 'registrados' },
+    { k: 'Evidências',   v: evidReais,     sub: 'execuções reais' },
     { k: 'Equipes',      v: equipesEstrut, sub: 'estrutura criada' },
-    { k: 'Integrações',  v: intConect,     sub: intConect ? 'conectadas' : 'nenhuma conectada' },
   ];
 
-  /* saúde dos sistemas (real: derivado de operações + integrações) */
-  const sistemas = [
-    { nome: 'Banco de Dados',     icon: 'db',       st: 'DEV',    nota: 'não provisionado' },
-    { nome: 'API Core',           icon: 'zap',      st: 'DEV',    nota: 'em desenvolvimento' },
-    { nome: 'GitHub',             icon: 'git',      st: 'IMPL',   nota: '2 contas conectadas' },
-    { nome: 'Sistema de Arquivos',icon: 'folder',   st: 'IMPL',   nota: 'operacional' },
-    { nome: 'Scheduler',          icon: 'clock',    st: 'NIMPL',  nota: 'não configurado' },
-    { nome: 'Runtime',            icon: 'cpu',      st: 'DEV',    nota: 'em desenvolvimento' },
-    { nome: 'Logs',               icon: 'terminal', st: 'DEV',    nota: 'coletando local' },
-    { nome: 'Auditoria',          icon: 'shield',   st: 'IMPL',   nota: 'operacional' },
+  /* saúde dos sistemas — REAL, vinda do backend (/api/system/health) */
+  const sistemas = (D.systemHealth && D.systemHealth.length) ? D.systemHealth : [
+    { nome: 'Banco de Dados',     icon: 'db',       st: 'NTEST', nota: 'verificando…' },
+    { nome: 'API Core',           icon: 'zap',      st: 'NTEST', nota: 'verificando…' },
+    { nome: 'Runtime',            icon: 'cpu',      st: 'NTEST', nota: 'verificando…' },
+    { nome: 'Logs',               icon: 'terminal', st: 'NTEST', nota: 'verificando…' },
+    { nome: 'Auditoria',          icon: 'shield',   st: 'NTEST', nota: 'verificando…' },
   ];
 
   const hora = new Date().toTimeString().slice(0,8);
   const tone = (st) => (D.ST[st] || {}).tone || 'idle';
 
-  /* alertas REAIS (derivados de configuração pendente) */
-  const alertas = [
-    { sev: 'warn', txt: 'Nenhum provedor LLM configurado', acao: 'llms' },
-    { sev: 'warn', txt: 'GitHub não testado / não conectado', acao: 'integracoes' },
-    { sev: 'info', txt: 'Banco de dados não provisionado', acao: 'operacoes' },
-    { sev: 'info', txt: 'Backups não configurados', acao: 'operacoes' },
-  ];
+  /* alertas REAIS derivados do estado vivo do backend */
+  const alertas = [];
+  if (provDisponiveis === 0)
+    alertas.push({ sev: 'warn', txt: 'Nenhum provedor de IA disponível — configure no cofre', acao: 'configuracoes' });
+  else
+    alertas.push({ sev: 'info', txt: provDisponiveis + ' provedor(es) de IA disponível(is)', acao: 'llms' });
+  if (missFail > 0)
+    alertas.push({ sev: 'warn', txt: missFail + ' missão(ões) com falha — revisar', acao: 'missoes' });
+  if (missWait > 0)
+    alertas.push({ sev: 'info', txt: missWait + ' missão(ões) aguardando execução', acao: 'missoes' });
+  if (intConect === 0)
+    alertas.push({ sev: 'info', txt: 'Nenhuma integração conectada', acao: 'integracoes' });
+  if (!alertas.length)
+    alertas.push({ sev: 'info', txt: 'Sistema operacional — sem alertas pendentes', acao: 'auditoria' });
 
   const equipesView = D.equipes.slice(0, 9);
 
@@ -1078,30 +1704,39 @@ function ExecutiveHome({ setView }) {
               </div>
               <div className="exec-syscard-nm">{s.nome}</div>
               <div className="exec-syscard-st"><StatusPill status={s.st} size="sm"/></div>
-              <div className="exec-syscard-meta mono">últ. verif. {hora}</div>
+              <div className="exec-syscard-meta" style={{fontSize:10.5}}>{s.nota || ('últ. verif. ' + hora)}</div>
             </div>
           ))}
         </div>
       </ExecSection>
 
       {/* ===== BLOCO 3 · LLM COMMAND CENTER ===== */}
-      <ExecSection icon="zap" title="LLM Command Center" right={<StatusPill status="CONFIG" size="sm"/>}>
+      <ExecSection icon="zap" title="LLM Command Center"
+        right={<span className={'pill ' + (provDisponiveis>0?'ok':'warn')}>{provDisponiveis} disponível(is)</span>}>
         <div className="exec-llm-grid">
-          {D.llms.map(l => (
-            <div className="exec-llm" key={l.id}>
-              <div className="exec-llm-top">
-                <span className={'dot ' + tone(l.status)} />
-                <span className="exec-llm-nm">{l.nome}</span>
+          {D.llms.map(l => {
+            const nome   = l.nome || l.provider || l.id;
+            const modelo = l.modelo || (l.modelos && l.modelos[0]) || '—';
+            const lat    = l.latencia || l.ultimoHealth || '—';
+            const ult    = l.ultimoTeste || l.ultimoHealth || '—';
+            const prov   = (l.conexao && l.conexao[0]) || l.tipo || '—';
+            const ativo  = l.status === 'active_real' || l.ativo;
+            return (
+              <div className="exec-llm" key={l.id}>
+                <div className="exec-llm-top">
+                  <span className={'dot ' + (ativo ? 'ok' : tone(l.status))} />
+                  <span className="exec-llm-nm">{nome}</span>
+                </div>
+                <div className="exec-llm-model mono">{modelo}</div>
+                <div className="exec-llm-rows">
+                  <div><span className="faint">Saúde</span><span className="mono">{lat}</span></div>
+                  <div><span className="faint">Últ. check</span><span className="mono">{ult}</span></div>
+                  <div><span className="faint">Tipo</span><span className="mono">{prov}</span></div>
+                </div>
+                <span className={'pill ' + (ativo?'ok':'warn')}>{l.statusLabel || (ativo?'Ativa real':'Não validada')}</span>
               </div>
-              <div className="exec-llm-model mono">{l.modelo}</div>
-              <div className="exec-llm-rows">
-                <div><span className="faint">Latência</span><span className="mono">{l.latencia}</span></div>
-                <div><span className="faint">Últ. exec.</span><span className="mono">{l.ultimoTeste}</span></div>
-                <div><span className="faint">Provider</span><span className="mono">{l.conexao[0]}</span></div>
-              </div>
-              <StatusPill status={l.status} size="sm"/>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </ExecSection>
 
@@ -1109,7 +1744,7 @@ function ExecutiveHome({ setView }) {
         {/* ===== BLOCO 4 · MISSÕES ===== */}
         <ExecSection icon="target" title="Missões" right={<button className="btn ghost sm" onClick={()=>setView('missoes')}>Abrir <Icon name="chevR" size={12}/></button>}>
           <div className="exec-mini-grid">
-            {[['Em execução','ok',0],['Concluídas','info',0],['Bloqueadas','err',0],['Aguardando','idle',0]].map(([l,c,v])=>(
+            {[['Em execução','ok',missRunning],['Concluídas','info',missDone],['Com falha','err',missFail],['Aguardando','idle',missWait]].map(([l,c,v])=>(
               <div className="exec-mini" key={l}>
                 <div className="exec-mini-v"><CountUp value={v} /></div>
                 <div className="exec-mini-l"><span className={'dot '+c}/> {l}</div>
@@ -1117,7 +1752,9 @@ function ExecutiveHome({ setView }) {
               </div>
             ))}
           </div>
-          <div className="exec-empty-note"><Icon name="target" size={13}/> Nenhuma missão registrada — crie a primeira na FORJA.</div>
+          {missTotal === 0
+            ? <div className="exec-empty-note"><Icon name="target" size={13}/> Nenhuma missão registrada — crie a primeira em Missões.</div>
+            : <div className="exec-empty-note"><Icon name="target" size={13}/> {missTotal} missões no banco · clique em "Abrir" para gerenciar.</div>}
         </ExecSection>
 
         {/* ===== BLOCO 6 · GITHUB COMMAND CENTER ===== */}
@@ -1228,8 +1865,8 @@ function EquipesCenter({ setView }) {
   return (
     <div className="center">
       <PageHead icon="users" crumb="Operação" title="Equipes" status="DEV"
-        sub={D.equipes.length + ' equipes · estrutura criada · agentes não implementados (Zero Ghost)'}>
-        <button className="btn"><Icon name="plus" size={13}/> Nova equipe</button>
+        sub={D.equipes.length + ' equipes · cada uma conversa e executa tarefas de verdade (abra uma equipe para acionar)'}>
+        <button className="btn" onClick={()=>avisoEmDev('Equipes')}><Icon name="plus" size={13}/> Nova equipe</button>
       </PageHead>
       <div className="center-body">
         <div className="card" style={{padding:'12px 16px', marginBottom:16, display:'flex', alignItems:'center', gap:12}}>
@@ -1261,6 +1898,19 @@ function EquipesCenter({ setView }) {
 
 function EquipePage({ team, onBack, setView }) {
   const t = team;
+  const [obj, setObj] = useState('');
+  const [res, setRes] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [brain, setBrain] = useState(null);
+  useEffect(() => { if (window.ForjaAPI && window.ForjaAPI.getAgentBrain) window.ForjaAPI.getAgentBrain(t.id).then(setBrain).catch(() => {}); }, []);
+  const conversar = () => { try { localStorage.setItem('forja.ws.team', JSON.stringify(t.id)); } catch (e) {} setView('forja'); };
+  const agir = async () => {
+    if (!obj.trim() || !window.ForjaAPI || !window.ForjaAPI.actAgent) return;
+    setBusy(true); setRes(null);
+    try { setRes(await window.ForjaAPI.actAgent(t.id, obj.trim())); }
+    catch (e) { setRes({ ok: false, result: 'Erro: ' + e.message }); }
+    finally { setBusy(false); }
+  };
   const Section = ({ icon, title, children, status }) => (
     <div className="panel">
       <div className="panel-head"><Icon name={icon} size={14} style={{color:'var(--text-2)'}}/><h3>{title}</h3>{status && <StatusPill status={status} size="sm"/>}</div>
@@ -1285,15 +1935,31 @@ function EquipePage({ team, onBack, setView }) {
           </div>
           <div className="ch-actions">
             <button className="btn" onClick={()=>setView('missoes')}><Icon name="target" size={13}/> Missões</button>
-            <button className="btn primary"><Icon name="play2" size={12}/> Ativar equipe</button>
+            <button className="btn primary" onClick={conversar}><Icon name="chat" size={12}/> Conversar</button>
           </div>
         </div>
       </div>
 
       <div className="center-body">
-        <div className="card" style={{padding:'12px 16px', marginBottom:16, display:'flex', alignItems:'center', gap:12, borderColor:'var(--warn)', background:'var(--warn-soft)'}}>
-          <Icon name="alert" size={16} style={{color:'var(--warn)'}}/>
-          <span style={{fontSize:12.5}}>Estrutura operacional criada. Agentes e métricas <b>não implementados</b> — nenhum dado de execução é exibido (Zero Ghost Law).</span>
+        <div className="card" style={{padding:'12px 16px', marginBottom:16}}>
+          <div className="eyebrow" style={{marginBottom:6, color:'var(--accent-bright)'}}>Acionar a equipe {t.nome} (executa de verdade)</div>
+          <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center'}}>
+            <input style={{flex:1, minWidth:220, background:'var(--bg-1)', border:'1px solid var(--border)', borderRadius:'var(--r-md)', color:'var(--text-1)', padding:'8px 10px', fontSize:12.5}}
+              placeholder={'Dê uma tarefa para a equipe ' + t.nome + '…'} value={obj} onChange={e=>setObj(e.target.value)}
+              onKeyDown={e=>{ if(e.key==='Enter'){ agir(); } }} />
+            <button className="btn primary" disabled={busy || !obj.trim()} onClick={agir}><Icon name="zap" size={13}/> {busy ? 'Agindo…' : 'Agir'}</button>
+            <button className="btn" onClick={conversar}><Icon name="chat" size={13}/> Conversar</button>
+          </div>
+          {res && (
+            <div className="card" style={{marginTop:10, padding:10, borderColor: res.ok ? 'var(--ok)' : 'var(--warn)'}}>
+              <div style={{fontSize:12.5, whiteSpace:'pre-wrap'}}>{res.result || res.status || '—'}</div>
+              {res.log && res.log.length > 0 && (
+                <details style={{marginTop:6}}><summary style={{cursor:'pointer', fontSize:11, color:'var(--text-3)'}}><Icon name="terminal" size={11}/> {res.log.length} passo(s)</summary>
+                  <div className="term" style={{marginTop:6, maxHeight:200, overflow:'auto'}}>{res.log.map((s,i)=><div key={i} className="ln"><span className="t">{i+1}</span><span className="lv-info" style={{whiteSpace:'pre-wrap'}}>{String(s).slice(0,400)}</span></div>)}</div>
+                </details>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="grid-2" style={{alignItems:'start', gap:14}}>
@@ -1303,6 +1969,16 @@ function EquipePage({ team, onBack, setView }) {
             </Section>
             <Section icon="check" title="Responsabilidades">
               <ul className="bul">{t.responsabilidades.map(r=><li key={r}>{r}</li>)}</ul>
+            </Section>
+            <Section icon="book" title="Biblioteca & Conhecimento (ON)" status="IMPL">
+              {brain ? (
+                <div>
+                  <p style={{margin:0, fontSize:12.5, lineHeight:1.6}}>{brain.biblioteca}</p>
+                  <div className="eyebrow" style={{marginTop:10}}>Ferramentas do agente</div>
+                  <div className="tags">{(brain.ferramentas||[]).map(f=><span key={f} className="tag mono">{f}</span>)}</div>
+                  <div className="faint" style={{fontSize:11, marginTop:8}}>{brain.aprendizados} aprendizado(s) na memória · biblioteca ativa</div>
+                </div>
+              ) : <span className="faint" style={{fontSize:12}}>carregando biblioteca…</span>}
             </Section>
             <Section icon="target" title="Missões da equipe" status="NIMPL">
               <EmptyState icon="target" title="Sem missões atribuídas" sub="As missões aparecerão aqui quando a equipe for ativada." />
@@ -1348,21 +2024,213 @@ Object.assign(window, { EquipesCenter, EquipePage });
    Inteligência, LLMs, Ferramentas, Integrações, Conhecimento
    ============================================================ */
 
-/* ---------- CLIENTES ---------- */
+/* aviso honesto para módulos sem backend (Zero Ghost: não finge ação) */
+function avisoEmDev(modulo) {
+  alert('Módulo "' + modulo + '" ainda não tem backend real.\n\nConforme a Lei Zero Fantasma, esta ação não foi simulada. '
+    + 'O módulo será ativado quando sua tabela/serviço real existir no nexus.db.');
+}
+
+/* ---------- CLIENTES (multi-cliente: cada cliente com suas contas/integrações) ---------- */
+const _connTone = (s) => ({CONNECTED:'ok', ERROR:'err'}[(s||'').toUpperCase()] || 'warn');
+
 function ClientesCenter({ setView }) {
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.listClients);
+  const [clientes, setClientes] = useState([]);
+  const [aberto, setAberto] = useState(null);
+  const [connectors, setConnectors] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [agObj, setAgObj] = useState('');
+  const [agRes, setAgRes] = useState(null);
+  const [agBusy, setAgBusy] = useState(false);
+
+  const agirComoCliente = async () => {
+    if (!agObj.trim() || !window.ForjaAPI || !window.ForjaAPI.actAgent || !aberto) return;
+    setAgBusy(true); setAgRes(null);
+    try { setAgRes(await window.ForjaAPI.actAgent('orquestrador', agObj.trim(), aberto.id)); }
+    catch (e) { setAgRes({ ok: false, result: 'Erro: ' + e.message }); }
+    finally { setAgBusy(false); }
+  };
+
+  const carregar = async () => {
+    if (!apiOn) return;
+    try {
+      const r = await window.ForjaAPI.listClients(); setClientes(r.items || []);
+      const cc = await window.ForjaAPI.listConnectors('client'); setConnectors(cc.items || []);
+    } catch (e) { setMsg('Falha: ' + e.message); }
+  };
+  useEffect(() => { carregar(); }, []);
+
+  const abrir = async (id) => {
+    setBusy(true);
+    try { setAberto(await window.ForjaAPI.getClient(id)); }
+    catch (e) { setMsg('Falha ao abrir: ' + e.message); }
+    finally { setBusy(false); }
+  };
+
+  const novoCliente = async () => {
+    const nome = window.prompt('Nome do cliente:'); if (!nome || !nome.trim()) return;
+    const desc = window.prompt('Descrição/segmento (opcional):') || '';
+    setBusy(true); setMsg('Criando cliente…');
+    try { const r = await window.ForjaAPI.createClient(nome.trim(), desc); await carregar(); setMsg('Cliente criado: ' + r.id); }
+    catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); }
+  };
+
+  const conectar = async (con) => {
+    if (!aberto) return;
+    const cred = window.prompt('Cole a credencial — ' + con.field + ':'); if (cred === null) return;
+    const meta = {};
+    for (const f of (con.extra || [])) {
+      const v = window.prompt(f.label + ':');
+      if (v) meta[f.key] = v.trim();
+    }
+    setBusy(true); setMsg('Conectando ' + con.kind + '…');
+    try {
+      const r = await window.ForjaAPI.addConnection(aberto.id, con.kind, con.kind, cred.trim(), meta);
+      await abrir(aberto.id);
+      setMsg(con.kind + ': ' + r.status + (r.detail ? (' · ' + r.detail) : ''));
+    } catch (e) { setMsg('Falha ao conectar: ' + e.message); } finally { setBusy(false); }
+  };
+
+  const testar = async (connId) => {
+    setBusy(true);
+    try { const r = await window.ForjaAPI.testConnection(connId); await abrir(aberto.id); setMsg('Teste: ' + r.status + (r.detail ? (' · ' + r.detail) : '')); }
+    catch (e) { setMsg('Falha no teste: ' + e.message); } finally { setBusy(false); }
+  };
+
+  const remover = async (connId) => {
+    setBusy(true);
+    try { await window.ForjaAPI.deleteConnection(connId); await abrir(aberto.id); setMsg('Conexão removida.'); }
+    catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); }
+  };
+
+  const novoProjetoCliente = async () => {
+    if (!aberto) return;
+    const nome = window.prompt('Nome do projeto para ' + aberto.nome + ':'); if (!nome || !nome.trim()) return;
+    const desc = window.prompt('Descrição (opcional):') || '';
+    setBusy(true); setMsg('Criando projeto…');
+    try { await window.ForjaAPI.createProject(nome.trim(), desc, aberto.id); await abrir(aberto.id); setMsg('Projeto criado. Abra em Projetos para rodar missões.'); }
+    catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); }
+  };
+
+  // ===== DETALHE DO CLIENTE =====
+  if (aberto) {
+    const conectados = {}; (aberto.conexoes || []).forEach(c => { conectados[c.kind] = c; });
+    return (
+      <div className="center">
+        <div className="center-head hud-grid">
+          <div className="ch-top">
+            <button className="btn ghost icon" onClick={()=>{setAberto(null);carregar();}} title="Voltar"><Icon name="chevR" size={16} style={{transform:'rotate(180deg)'}}/></button>
+            <div className="ch-icon"><Icon name="building" size={19}/></div>
+            <div className="ch-titles">
+              <div className="ch-crumb">A FÁBRICA · Cliente {aberto.id}</div>
+              <h1 className="ch-title">{aberto.nome}</h1>
+              {aberto.descricao && <div className="ch-sub">{aberto.descricao}</div>}
+            </div>
+            <div className="ch-actions">
+              <button className="btn primary" onClick={novoProjetoCliente} disabled={busy}><Icon name="plus" size={13}/> Novo projeto</button>
+            </div>
+          </div>
+        </div>
+        <div className="center-body section-gap">
+          {msg && <div className="card" style={{padding:'9px 13px',fontSize:12,borderColor:'var(--accent-line)',background:'var(--accent-soft)'}}>{msg}</div>}
+
+          <SectionCard icon="link" title="Integrações do cliente (contas dele)">
+            <div className="card" style={{padding:10, display:'flex',gap:8,alignItems:'center', borderColor:'var(--info)', background:'var(--info-soft)', marginBottom:12}}>
+              <Icon name="lock" size={14} style={{color:'var(--info)'}}/><span style={{fontSize:11.5}}>As credenciais ficam no cofre por cliente — nunca exibidas. Conectado = token validado na API oficial.</span>
+            </div>
+            <div className="team-grid">
+              {connectors.map(con => {
+                const c = conectados[con.kind];
+                return (
+                  <div key={con.kind} className="team-card" style={{cursor:'default'}}>
+                    <div className="team-card-top">
+                      <span className="ch-icon" style={{width:32,height:32}}><Icon name="link" size={15}/></span>
+                      <div style={{minWidth:0,flex:1}}>
+                        <div className="team-card-name">{con.label}</div>
+                        <span className={'pill ' + (c ? _connTone(c.status) : '')} style={{fontSize:10}}>{c ? c.status : 'não conectado'}</span>
+                      </div>
+                    </div>
+                    <div className="faint" style={{fontSize:10.5, margin:'4px 0 8px'}}>{con.how}</div>
+                    <div className="team-card-foot" style={{justifyContent:'flex-end', gap:6}}>
+                      {c && <button className="btn ghost sm" disabled={busy} onClick={()=>testar(c.id)}>Testar</button>}
+                      {c && <button className="btn ghost sm" disabled={busy} onClick={()=>remover(c.id)}>Remover</button>}
+                      <button className="btn sm primary" disabled={busy} onClick={()=>conectar(con)}>{c ? 'Atualizar' : 'Conectar'}</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </SectionCard>
+
+          <SectionCard icon="zap" title="Agir como este cliente (agente usa as contas dele)">
+            <div style={{display:'flex', gap:8, alignItems:'flex-start', flexWrap:'wrap'}}>
+              <textarea rows={2} placeholder={'Ex.: poste no Instagram do cliente a imagem URL com a legenda "..." · ou: envie um aviso no Telegram'}
+                value={agObj} onChange={e=>setAgObj(e.target.value)}
+                style={{flex:1, minWidth:240, background:'var(--bg-1)', border:'1px solid var(--border)', borderRadius:'var(--r-md)', color:'var(--text-1)', padding:'8px 10px', fontSize:12.5}} />
+              <button className="btn primary" disabled={agBusy || !agObj.trim()} onClick={agirComoCliente}><Icon name="zap" size={13}/> {agBusy ? 'Agindo…' : 'Agir'}</button>
+            </div>
+            {agRes && (
+              <div className="card" style={{padding:11, marginTop:10, borderColor: agRes.ok?'var(--ok)':'var(--err)'}}>
+                <div style={{fontSize:12.5, whiteSpace:'pre-wrap'}}>{agRes.result || ('status: ' + (agRes.status||'—'))}</div>
+                {agRes.log && agRes.log.length > 0 && (
+                  <details style={{marginTop:6}}><summary style={{cursor:'pointer', fontSize:11, color:'var(--text-3)'}}><Icon name="terminal" size={11}/> {agRes.log.length} passo(s)</summary>
+                    <div className="term" style={{marginTop:6, maxHeight:220, overflow:'auto'}}>{agRes.log.map((s,i)=><div key={i} className="ln"><span className="t">{i+1}</span><span className="lv-info" style={{whiteSpace:'pre-wrap'}}>{String(s).slice(0,500)}</span></div>)}</div>
+                  </details>
+                )}
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard icon="folder" title={'Projetos do cliente (' + (aberto.projetos||[]).length + ')'} flush>
+            <div className="tbl-wrap"><table className="tbl"><thead><tr><th>ID</th><th>Projeto</th><th>Missões</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {(aberto.projetos||[]).map(p=>(
+                <tr key={p.id}>
+                  <td className="id-cell">{p.id}</td>
+                  <td className="cell-strong">{p.nome}</td>
+                  <td className="mono">{p.missoes}</td>
+                  <td><StatusPill status="IMPL" size="sm"/></td>
+                  <td><button className="btn sm" onClick={()=>setView('projetos')}>Abrir em Projetos</button></td>
+                </tr>
+              ))}
+              {!(aberto.projetos||[]).length && <tr><td colSpan={5} className="faint" style={{padding:12}}>Sem projetos. Crie um em "Novo projeto".</td></tr>}
+            </tbody></table></div>
+          </SectionCard>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== LISTA DE CLIENTES =====
   return (
     <div className="center">
-      <PageHead icon="building" crumb="Negócio" title="Clientes" status="NIMPL"
-        sub="Organização de clientes atuais e futuros">
-        <button className="btn primary"><Icon name="plus" size={13}/> Novo cliente</button>
+      <PageHead icon="building" crumb="Negócio" title="Clientes" status={apiOn ? 'IMPL' : 'NIMPL'}
+        sub="Multi-cliente · cada cliente com suas contas (Instagram, Canva, GitHub…) e projetos">
+        <button className="btn" onClick={carregar} disabled={busy}><Icon name="refresh" size={13}/> Atualizar</button>
+        <button className="btn primary" onClick={novoCliente} disabled={busy || !apiOn}><Icon name="plus" size={13}/> Novo cliente</button>
       </PageHead>
-      <div className="center-body">
-        <EmptyState icon="building" title="Sem clientes cadastrados" status="NIMPL"
-          sub="Nenhum cliente foi cadastrado. Cada cliente poderá ter dados gerais, projetos e missões vinculadas, status, entregas e histórico."
-          action="Cadastrar primeiro cliente" onAction={()=>{}} />
-        <div className="grid-3" style={{marginTop:18}}>
-          {['Dados gerais','Projetos vinculados','Missões vinculadas','Entregas','Histórico','Status'].map(s=>(
-            <div className="panel" key={s} style={{opacity:.7}}><div className="panel-body" style={{display:'flex',alignItems:'center',gap:10}}><Icon name="folder" size={14} style={{color:'var(--text-3)'}}/><span style={{fontSize:12.5}}>{s}</span><span style={{marginLeft:'auto'}}><StatusPill status="NIMPL" size="sm"/></span></div></div>
+      <div className="center-body section-gap">
+        {msg && <div className="card" style={{padding:'9px 13px',fontSize:12,borderColor:'var(--accent-line)',background:'var(--accent-soft)'}}>{msg}</div>}
+        {!apiOn && <div className="card" style={{padding:'9px 13px',fontSize:12,borderColor:'var(--warn)',background:'var(--warn-soft)'}}>Backend offline — abra pelo ABRIR_PAINEL_FORJA.</div>}
+        {!clientes.length && apiOn && <EmptyState icon="building" title="Nenhum cliente ainda" sub="Cadastre o primeiro cliente, conecte as contas dele e crie projetos." action="Novo cliente" onAction={novoCliente} />}
+        <div className="team-grid">
+          {clientes.map(cl=>(
+            <button key={cl.id} className="team-card" onClick={()=>abrir(cl.id)}>
+              <div className="team-card-top">
+                <span className="ch-icon" style={{width:34,height:34}}><Icon name="building" size={17}/></span>
+                <div style={{minWidth:0,flex:1,textAlign:'left'}}>
+                  <div className="team-card-name">{cl.nome}</div>
+                  <span className="id-cell mono">{cl.id}</span>
+                </div>
+                <Icon name="chevR" size={15} style={{color:'var(--text-3)'}}/>
+              </div>
+              {cl.descricao && <div className="team-card-sobre">{cl.descricao}</div>}
+              <div className="team-card-foot" style={{justifyContent:'space-between'}}>
+                <span className="tag"><Icon name="folder" size={10}/> {cl.projetos} projetos</span>
+                <span className="tag"><Icon name="link" size={10}/> {cl.conexoes_ativas}/{cl.conexoes} contas</span>
+              </div>
+            </button>
           ))}
         </div>
       </div>
@@ -1370,58 +2238,287 @@ function ClientesCenter({ setView }) {
   );
 }
 
-/* ---------- PROJETOS ---------- */
+/* ---------- PROJETOS (fatia vertical real: projeto → missão → execução → entrega) ---------- */
+const _misCls = (s) => ({RUNNING:'ok',FAILED:'err',QUEUED:'info',COMPLETED:'ok'}[(s||'').toUpperCase()] || 'idle');
+
 function ProjetosCenter({ setView }) {
-  const estados = ['Planejado','Em andamento','Em teste','Validado','Entregue','Arquivado'];
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.listProjects);
+  const [projetos, setProjetos] = useState([]);
+  const [aberto, setAberto] = useState(null);
+  const [entregas, setEntregas] = useState([]);
+  const [arquivos, setArquivos] = useState([]);
+  const [devRes, setDevRes] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const carregar = async () => {
+    if (!apiOn) return;
+    try { const r = await window.ForjaAPI.listProjects(); setProjetos(r.items || []); }
+    catch (e) { setMsg('Falha ao listar: ' + e.message); }
+  };
+  useEffect(() => { carregar(); }, []);
+
+  const abrir = async (id) => {
+    setBusy(true); setDevRes(null);
+    try {
+      const p = await window.ForjaAPI.getProject(id);
+      setAberto(p);
+      const d = await window.ForjaAPI.getDeliverables(id);
+      setEntregas(d.items || []);
+      try { const ff = await window.ForjaAPI.listProjectFiles(id); setArquivos(ff.files || []); } catch (e) { setArquivos([]); }
+    } catch (e) { setMsg('Falha ao abrir: ' + e.message); }
+    finally { setBusy(false); }
+  };
+
+  const subirArquivos = async (fileList) => {
+    if (!fileList || !fileList.length) return;
+    setBusy(true); setMsg('Subindo arquivos…');
+    try {
+      const files = await Promise.all(Array.from(fileList).map(f => new Promise(res => {
+        const r = new FileReader(); r.onload = () => res({ name: f.name, data_url: r.result }); r.readAsDataURL(f);
+      })));
+      const up = await window.ForjaAPI.uploadProjectFiles(aberto.id, files);
+      const ff = await window.ForjaAPI.listProjectFiles(aberto.id); setArquivos(ff.files || []);
+      setMsg(up.saved + ' arquivo(s) enviados ao projeto.');
+    } catch (e) { setMsg('Falha no upload: ' + e.message); } finally { setBusy(false); }
+  };
+
+  const desenvolver = async () => {
+    setBusy(true); setMsg('A Fábrica (agente Desenvolvedor) está trabalhando no projeto…'); setDevRes(null);
+    try {
+      const r = await window.ForjaAPI.developProject(aberto.id); setDevRes(r);
+      const ff = await window.ForjaAPI.listProjectFiles(aberto.id); setArquivos(ff.files || []);
+      setMsg('Desenvolvimento: ' + (r.status || ''));
+    } catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); }
+  };
+
+  const novoProjeto = async () => {
+    const nome = window.prompt('Nome do projeto:'); if (!nome || !nome.trim()) return;
+    const desc = window.prompt('Descrição (opcional):') || '';
+    setBusy(true); setMsg('Criando projeto…');
+    try { const r = await window.ForjaAPI.createProject(nome.trim(), desc); await carregar(); setMsg('Projeto criado: ' + r.id); }
+    catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); }
+  };
+
+  const novaMissao = async () => {
+    if (!aberto) return;
+    const t = window.prompt('Título da missão:'); if (!t || !t.trim()) return;
+    const d = window.prompt('Objetivo da missão (o agente vai executar isto):') || '';
+    setBusy(true); setMsg('Criando missão…');
+    try { await window.ForjaAPI.createProjectMission(aberto.id, t.trim(), d); await abrir(aberto.id); setMsg('Missão criada.'); }
+    catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); }
+  };
+
+  const executar = async (mid) => {
+    setBusy(true); setMsg('Executando ' + mid + ' (agente real, gera evidência)…');
+    try { const r = await window.ForjaAPI.runMission(mid); await abrir(aberto.id); setMsg('Missão ' + mid + ': ' + (r.status || 'ok') + (r.provider ? (' · via ' + r.provider) : '')); }
+    catch (e) { setMsg('Falha na execução: ' + e.message); } finally { setBusy(false); }
+  };
+
+  // ===== DETALHE DO PROJETO =====
+  if (aberto) {
+    return (
+      <div className="center">
+        <div className="center-head hud-grid">
+          <div className="ch-top">
+            <button className="btn ghost icon" onClick={()=>{setAberto(null);carregar();}} title="Voltar"><Icon name="chevR" size={16} style={{transform:'rotate(180deg)'}}/></button>
+            <div className="ch-icon"><Icon name="folder" size={19}/></div>
+            <div className="ch-titles">
+              <div className="ch-crumb">A FÁBRICA · Projeto {aberto.id}</div>
+              <h1 className="ch-title">{aberto.nome}</h1>
+              {aberto.descricao && <div className="ch-sub">{aberto.descricao}</div>}
+            </div>
+            <div className="ch-actions">
+              <button className="btn primary" onClick={novaMissao} disabled={busy}><Icon name="plus" size={13}/> Nova missão</button>
+            </div>
+          </div>
+        </div>
+        <div className="center-body section-gap">
+          {msg && <div className="card" style={{padding:'9px 13px',fontSize:12,borderColor:'var(--accent-line)',background:'var(--accent-soft)'}}>{msg}</div>}
+
+          <SectionCard icon="folder" title="Arquivos & Desenvolvimento (envie o projeto e a Fábrica desenvolve)">
+            <div className="faint" style={{fontSize:12, marginBottom:8}}>Briefing (o que desenvolver): {aberto.descricao || '(defina ao criar o projeto — descreva o que a Fábrica deve fazer)'}</div>
+            <div style={{display:'flex', gap:8, flexWrap:'wrap', alignItems:'center'}}>
+              <label className="btn sm" style={{cursor:'pointer'}}><Icon name="plus" size={12}/> Subir arquivos / .zip<input type="file" multiple style={{display:'none'}} onChange={e=>subirArquivos(e.target.files)} /></label>
+              <button className="btn primary sm" disabled={busy} onClick={desenvolver}><Icon name="cpu" size={12}/> Desenvolver com a Fábrica</button>
+              <span className="faint" style={{fontSize:11}}>{arquivos.length} arquivo(s) no projeto</span>
+            </div>
+            {arquivos.length > 0 && <div className="term" style={{marginTop:8, maxHeight:160, overflow:'auto'}}>{arquivos.map((f,i)=><div key={i} className="ln"><span className="t">·</span><span className="lv-info">{f}</span></div>)}</div>}
+            {devRes && <div className="card" style={{marginTop:8, padding:10, borderColor: devRes.ok?'var(--ok)':'var(--warn)'}}><div style={{fontSize:12.5, whiteSpace:'pre-wrap'}}>{devRes.result || devRes.status}</div></div>}
+          </SectionCard>
+
+          {(() => {
+            const htmlFile = (arquivos.find(f => /index\.html$/i.test(f)) || arquivos.find(f => /\.html?$/i.test(f)) || '');
+            if (!aberto.raw_id || !htmlFile) return null;
+            const previewUrl = '/preview/projeto_' + aberto.raw_id + '/' + htmlFile;
+            return (
+              <SectionCard icon="eye" title="Preview do projeto (roda no navegador)"
+                right={<button className="btn sm primary" onClick={() => window.open(previewUrl, '_blank')}><Icon name="link" size={12} /> Abrir no navegador</button>}>
+                <iframe src={previewUrl} title="preview" style={{ width: '100%', height: 480, border: '1px solid var(--border)', borderRadius: 'var(--r-md)', background: '#fff' }} />
+              </SectionCard>
+            );
+          })()}
+
+          <SectionCard icon="target" title={'Missões (' + (aberto.missoes||[]).length + ')'} flush>
+            <div className="tbl-wrap"><table className="tbl"><thead><tr><th>ID</th><th>Missão</th><th>Status</th><th style={{width:140}}>Ação</th></tr></thead>
+            <tbody>
+              {(aberto.missoes||[]).map(ms=>(
+                <tr key={ms.id}>
+                  <td className="id-cell">{ms.id}</td>
+                  <td><div className="cell-strong">{ms.titulo}</div>{ms.description && <div className="faint" style={{fontSize:11}}>{ms.description.slice(0,80)}</div>}</td>
+                  <td><span className={'pill '+_misCls(ms.status)}>{ms.status}</span></td>
+                  <td><button className="btn sm primary" disabled={busy} onClick={()=>executar(ms.id)}><Icon name="play" size={11}/> {ms.status==='FAILED'?'Reexecutar':'Executar'}</button></td>
+                </tr>
+              ))}
+              {!(aberto.missoes||[]).length && <tr><td colSpan={4} className="faint" style={{padding:12}}>Sem missões. Crie a primeira em "Nova missão".</td></tr>}
+            </tbody></table></div>
+          </SectionCard>
+          <SectionCard icon="doc" title={'Entregas / Evidências (' + entregas.length + ')'} flush>
+            <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Missão</th><th>Descrição</th><th>Arquivo</th><th>Quando</th></tr></thead>
+            <tbody>
+              {entregas.map(e=>(
+                <tr key={e.id}>
+                  <td className="id-cell">{e.mission_id}</td>
+                  <td>{e.descricao}</td>
+                  <td className="mono faint" style={{fontSize:10.5}}>{(e.file_path||'').split(/[\\/]/).pop()}</td>
+                  <td className="faint" style={{fontSize:11}}>{e.created_at ? new Date(e.created_at).toLocaleString('pt-BR') : '—'}</td>
+                </tr>
+              ))}
+              {!entregas.length && <tr><td colSpan={4} className="faint" style={{padding:12}}>Nenhuma entrega ainda. Execute uma missão para gerar evidência real.</td></tr>}
+            </tbody></table></div>
+          </SectionCard>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== LISTA DE PROJETOS =====
   return (
     <div className="center">
-      <PageHead icon="folder" crumb="Negócio" title="Projetos" status="DEV"
-        sub="Projetos vinculados a clientes, missões, equipes e evidências">
-        <button className="btn primary"><Icon name="plus" size={13}/> Novo projeto</button>
+      <PageHead icon="folder" crumb="Negócio" title="Projetos" status={apiOn ? 'IMPL' : 'DEV'}
+        sub="Projeto → Missão → execução agêntica → entrega/evidência (fluxo real ponta a ponta)">
+        <button className="btn" onClick={carregar} disabled={busy}><Icon name="refresh" size={13}/> Atualizar</button>
+        <button className="btn primary" onClick={novoProjeto} disabled={busy || !apiOn}><Icon name="plus" size={13}/> Novo projeto</button>
       </PageHead>
       <div className="center-body section-gap">
-        <div className="kanban" style={{height:'auto'}}>
-          {estados.map(e=>(
-            <div className="kan-col" key={e}>
-              <div className="kan-head"><span className="dot idle"/><span style={{fontWeight:600,fontSize:12}}>{e}</span><span className="count">0</span></div>
-              <div className="kan-body"><div className="faint" style={{fontSize:11,padding:'10px 6px'}}>vazio</div></div>
-            </div>
+        {msg && <div className="card" style={{padding:'9px 13px',fontSize:12,borderColor:'var(--accent-line)',background:'var(--accent-soft)'}}>{msg}</div>}
+        {!apiOn && <div className="card" style={{padding:'9px 13px',fontSize:12,borderColor:'var(--warn)',background:'var(--warn-soft)'}}>Backend offline — abra pelo ABRIR_PAINEL_FORJA.</div>}
+        {!projetos.length && apiOn && <EmptyState icon="folder" title="Nenhum projeto ainda" sub="Crie o primeiro projeto e adicione missões que os agentes vão executar." action="Novo projeto" onAction={novoProjeto} />}
+        <div className="team-grid">
+          {projetos.map(p=>(
+            <button key={p.id} className="team-card" onClick={()=>abrir(p.id)}>
+              <div className="team-card-top">
+                <span className="ch-icon" style={{width:34,height:34}}><Icon name="folder" size={17}/></span>
+                <div style={{minWidth:0,flex:1,textAlign:'left'}}>
+                  <div className="team-card-name">{p.nome}</div>
+                  <span className="id-cell mono">{p.id}</span>
+                </div>
+                <Icon name="chevR" size={15} style={{color:'var(--text-3)'}}/>
+              </div>
+              {p.descricao && <div className="team-card-sobre">{p.descricao}</div>}
+              <div className="team-card-foot" style={{justifyContent:'space-between'}}>
+                <span className="tag"><Icon name="target" size={10}/> {p.missoes_total} missões</span>
+                <span className="faint" style={{fontSize:11}}>{p.missoes_concluidas} concluídas</span>
+              </div>
+            </button>
           ))}
         </div>
-        <SectionCard icon="folder" title="Estrutura de um projeto" status="DEV">
-          <div className="tags">{['Nome','Cliente','Status','Missões','Equipes','Documentos','Evidências','Auditorias','Entregas'].map(s=><span key={s} className="tag">{s}</span>)}</div>
-        </SectionCard>
       </div>
     </div>
   );
 }
 
-/* ---------- MISSÕES ---------- */
+/* ---------- MISSÕES (dados reais do nexus.db) ---------- */
+const MIS_COLS = [
+  { key: 'PENDING',   label: 'Pendentes',   dot: 'idle' },
+  { key: 'QUEUED',    label: 'Na fila',     dot: 'info' },
+  { key: 'RUNNING',   label: 'Em execução', dot: 'ok' },
+  { key: 'COMPLETED', label: 'Concluídas',  dot: 'ok' },
+  { key: 'FAILED',    label: 'Com falha',   dot: 'err' },
+];
+
 function MissoesCenter({ setView }) {
-  const cols = ['Planejamento','Desenvolvimento','Execução','Testes','Validação','Concluídas','Canceladas','Bloqueadas'];
+  const D = window.FORJA;
+  const [missoes, setMissoes] = useState(D.missoes || []);
+  const [sel, setSel] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.createMission);
+
+  const refresh = async () => {
+    if (!window.ForjaAPI || !window.ForjaAPI.refreshMissions) return;
+    await window.ForjaAPI.refreshMissions();
+    setMissoes((window.FORJA.missoes || []).slice());
+  };
+
+  const novaMissao = async () => {
+    const titulo = window.prompt('Título da nova missão:');
+    if (!titulo || !titulo.trim()) return;
+    const descricao = window.prompt('Descrição (opcional):') || '';
+    setBusy(true); setMsg('Criando missão…');
+    try {
+      const r = await window.ForjaAPI.createMission(titulo.trim(), descricao);
+      setMissoes((window.FORJA.missoes || []).slice());
+      setMsg('Missão criada: ' + (r.id || titulo));
+    } catch (e) { setMsg('Falha ao criar missão: ' + e.message); }
+    finally { setBusy(false); }
+  };
+
+  const executar = async (m) => {
+    if (!window.ForjaAPI || !window.ForjaAPI.runMission) return;
+    setBusy(true); setMsg('Executando ' + m.id + '…');
+    try {
+      const r = await window.ForjaAPI.runMission(m.id);
+      await refresh();
+      const upd = (window.FORJA.missoes || []).find(x => x.id === m.id);
+      if (upd) setSel(upd);
+      setMsg('Execução concluída: ' + (r.status || 'ok') + (r.provider ? ' · ' + r.provider : ''));
+    } catch (e) { setMsg('Falha na execução: ' + e.message); }
+    finally { setBusy(false); }
+  };
+
+  const byCol = (k) => missoes.filter(m => (m.status || '').toUpperCase() === k);
+  const stCls = (s) => ({RUNNING:'ok',FAILED:'err',QUEUED:'info',COMPLETED:'ok'}[(s||'').toUpperCase()] || 'idle');
+
   return (
     <div className="center">
-      <PageHead icon="target" crumb="Operação" title="Missões" status="DEV"
-        sub="Controle operacional · cada missão: objetivo, equipe, LLM, custo, tempo, evidências, logs, resultado">
-        <button className="btn primary"><Icon name="plus" size={13}/> Nova missão</button>
+      <PageHead icon="target" crumb="Operação" title="Missões" status={apiOn ? 'IMPL' : 'DEV'}
+        sub={missoes.length + ' missões no banco · ' + byCol('RUNNING').length + ' em execução · ' + byCol('FAILED').length + ' com falha'}>
+        <button className="btn" onClick={refresh} disabled={busy}><Icon name="refresh" size={13}/> Atualizar</button>
+        <button className="btn primary" onClick={novaMissao} disabled={busy || !apiOn}><Icon name="plus" size={13}/> Nova missão</button>
       </PageHead>
       <div className="center-body section-gap">
+        {msg && <div className="card" style={{padding:'9px 13px', fontSize:12, borderColor:'var(--accent-line)', background:'var(--accent-soft)'}}>{msg}</div>}
+        {!apiOn && <div className="card" style={{padding:'9px 13px', fontSize:12, borderColor:'var(--warn)', background:'var(--warn-soft)'}}>Backend offline — inicie pelo ABRIR_PAINEL_FORJA para criar/executar missões.</div>}
         <div className="kanban" style={{height:'auto'}}>
-          {cols.map((c,i)=>(
-            <div className="kan-col" key={c}>
-              <div className="kan-head"><span className={'dot '+(c==='Bloqueadas'?'err':c==='Concluídas'?'ok':'idle')}/><span style={{fontWeight:600,fontSize:11.5}}>{c}</span><span className="count">0</span></div>
-              <div className="kan-body"><div className="faint" style={{fontSize:11,padding:'10px 6px'}}>vazio</div></div>
+          {MIS_COLS.map(col=>(
+            <div className="kan-col" key={col.key}>
+              <div className="kan-head"><span className={'dot '+col.dot}/><span style={{fontWeight:600,fontSize:11.5}}>{col.label}</span><span className="count">{byCol(col.key).length}</span></div>
+              <div className="kan-body">
+                {byCol(col.key).map(m=>(
+                  <div key={m.id} className="kan-card" onClick={()=>setSel(m)} style={sel&&sel.id===m.id?{borderColor:'var(--accent-line)'}:{}}>
+                    <div className="kan-card-top"><span className="id-cell">{m.id}</span></div>
+                    <div className="kan-card-title">{m.titulo}</div>
+                  </div>
+                ))}
+                {byCol(col.key).length===0 && <div className="faint" style={{fontSize:11,padding:'10px 6px'}}>vazio</div>}
+              </div>
             </div>
           ))}
         </div>
-        <div className="grid-2">
-          <SectionCard icon="target" title="Campos de uma missão" status="DEV">
-            <div className="tags">{['Objetivo','Status','Equipe responsável','LLM utilizada','Custo','Tempo','Evidências','Logs','Resultado'].map(s=><span key={s} className="tag">{s}</span>)}</div>
+
+        {sel && (
+          <SectionCard icon="target" title={sel.id + ' · ' + sel.titulo} status={undefined}
+            right={<span className={'pill '+stCls(sel.status)}>{sel.status}</span>}>
+            <div style={{display:'flex', gap:8, marginBottom:10, flexWrap:'wrap'}}>
+              <button className="btn primary" disabled={busy} onClick={()=>executar(sel)}>
+                <Icon name="play" size={12}/> {sel.status==='FAILED'?'Reexecutar':'Executar missão'}
+              </button>
+              <button className="btn" disabled={busy} onClick={()=>setSel(null)}>Fechar</button>
+            </div>
+            {sel.description && <p style={{margin:0, fontSize:12.5, color:'var(--text-2)', lineHeight:1.6}}>{sel.description}</p>}
           </SectionCard>
-          <SectionCard icon="doc" title="Histórico" status="NIMPL">
-            <EmptyState icon="clock" title="Sem histórico" sub="Missões executadas aparecerão aqui." />
-          </SectionCard>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -1437,7 +2534,7 @@ function InteligenciaCenter({ setView }) {
     <div className="center">
       <PageHead icon="compass" crumb="Operação" title="Inteligência" status="NIMPL"
         sub="Inteligência de mercado · apenas fontes públicas e autorizadas · sem dados fictícios">
-        <button className="btn"><Icon name="refresh" size={13}/> Varrer mercado</button>
+        <button className="btn" onClick={()=>avisoEmDev('Inteligência')}><Icon name="refresh" size={13}/> Varrer mercado</button>
       </PageHead>
       <div className="center-body">
         <EmptyState icon="compass" title="Inteligência ainda não implementada" status="NIMPL"
@@ -1452,56 +2549,151 @@ function InteligenciaCenter({ setView }) {
   );
 }
 
-/* ---------- LLMs ---------- */
+/* ---------- LLMs (status real + teste ao vivo) ---------- */
+const _llmTone = (s) => {
+  const v = (s || '').toLowerCase();
+  if (v === 'active_real' || v === 'certified' || v === 'router_limited') return 'ok';  // ONLINE
+  if (v === 'environment_pending' || v === 'offline' || v === 'unavailable'
+      || v === 'error' || v === 'missing_key' || v.indexOf('blocked') >= 0) return 'err';  // FORA
+  return 'warn';
+};
+const _llmLabel = (l) => l.statusLabel || ({
+  active_real: 'Online', CERTIFIED: 'Online', ROUTER_LIMITED: 'Online (via router)',
+  ENVIRONMENT_PENDING: 'Fora do ar', OFFLINE: 'Fora do ar', unavailable: 'Fora do ar',
+  missing_key: 'Sem chave', BLOCKED_BY_BILLING: 'Bloqueada (billing)',
+  NOT_IMPLEMENTED: 'Não implementada', ERROR: 'Erro',
+}[l.status] || l.status || 'Não validada');
+
 function LLMsCenter({ setView }) {
   const D = window.FORJA;
-  const [sel, setSel] = useState(D.llms[0]);
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.testProvider);
+  const [llms, setLLMs] = useState(D.llms || []);
+  const [sel, setSel] = useState((D.llms || [])[0] || null);
+  const [busy, setBusy] = useState('');
+  const [res, setRes] = useState({}); // id -> resultado do teste
+
+  const reload = async () => {
+    if (!window.ForjaAPI.refreshProviders) return;
+    const ps = await window.ForjaAPI.refreshProviders();
+    if (window.FORJA._mapProvidersFallback) {} // noop
+    setLLMs(ps); window.FORJA.llms = ps;
+    if (sel) { const u = ps.find(x => x.id === sel.id); if (u) setSel(u); }
+  };
+
+  const testar = async (l) => {
+    if (!apiOn) return;
+    setBusy(l.id);
+    try {
+      const r = await window.ForjaAPI.testProvider(l.id);
+      setRes(s => ({ ...s, [l.id]: r }));
+      await reload();
+    } catch (e) {
+      setRes(s => ({ ...s, [l.id]: { ok: false, error: e.message } }));
+    } finally { setBusy(''); }
+  };
+
+  // Reconecta: tenta repetidas vezes até dar certo (buscando conexão).
+  const reconectar = async (l) => {
+    if (!apiOn || !window.ForjaAPI.reconnectProvider) return;
+    setBusy(l.id);
+    setRes(s => ({ ...s, [l.id]: { connecting: true } }));
+    try {
+      const r = await window.ForjaAPI.reconnectProvider(l.id, 3);
+      setRes(s => ({ ...s, [l.id]: r }));
+      await reload();
+    } catch (e) {
+      setRes(s => ({ ...s, [l.id]: { ok: false, error: e.message } }));
+    } finally { setBusy(''); }
+  };
+
+  const testarTodos = async () => {
+    for (const l of llms) { await reconectar(l); }
+  };
+
+  if (!sel) {
+    return (
+      <div className="center">
+        <PageHead icon="zap" crumb="Recursos" title="LLMs" status="CONFIG" sub="Provedores de IA" />
+        <div className="center-body"><EmptyState icon="zap" title="Sem provedores carregados"
+          sub="Inicie o backend pelo ABRIR_PAINEL_FORJA para ver os provedores reais." /></div>
+      </div>
+    );
+  }
+
   return (
     <div className="center">
-      <PageHead icon="zap" crumb="Recursos" title="LLMs" status="CONFIG"
-        sub="Provedores de IA · nenhum configurado · conecte por assinatura, API ou local">
+      <PageHead icon="zap" crumb="Recursos" title="LLMs"
+        status={llms.some(l=>_llmTone(l.status)==='ok') ? 'IMPL' : 'CONFIG'}
+        sub="Assinaturas (Claude, Gemini, ChatGPT) · API (OpenRouter) · Local (Ollama) · teste real ao vivo">
+        <button className="btn" onClick={testarTodos} disabled={!!busy || !apiOn}><Icon name="refresh" size={13}/> Testar todos</button>
         <button className="btn primary" onClick={()=>setView('configuracoes')}><Icon name="lock" size={13}/> Configurar no cofre</button>
       </PageHead>
       <div className="center-split wide">
         <div className="split-main">
           <div className="team-grid">
-            {D.llms.map(l=>(
-              <button key={l.id} className="team-card" onClick={()=>setSel(l)} style={sel.id===l.id?{borderColor:'var(--accent-line)',background:'var(--accent-soft)'}:null}>
+            {llms.map(l=>{
+              const ativo = _llmTone(l.status) === 'ok';
+              const r = res[l.id];
+              return (
+              <div key={l.id} className="team-card" onClick={()=>setSel(l)}
+                style={Object.assign({cursor:'pointer'}, sel.id===l.id?{borderColor:'var(--accent-line)',background:'var(--accent-soft)'}:{})}>
                 <div className="team-card-top">
                   <span className="ch-icon" style={{width:34,height:34}}><Icon name="zap" size={17}/></span>
                   <div style={{minWidth:0,flex:1,textAlign:'left'}}>
-                    <div className="team-card-name">{l.nome}</div>
-                    <StatusPill status={l.status} size="sm"/>
+                    <div className="team-card-name">{l.provider || l.display_name || l.id}</div>
+                    <span className={'pill '+_llmTone(l.status)} style={{fontSize:10}}>{_llmLabel(l)}</span>
                   </div>
                 </div>
-                <div className="team-card-sobre">Modelo: {l.modelo}</div>
-                <div className="kv" style={{fontSize:11,marginTop:4}}>
-                  <dt>Último teste</dt><dd className="faint">{l.ultimoTeste}</dd>
-                  <dt>Latência</dt><dd className="faint">{l.latencia}</dd>
-                  <dt>Custo</dt><dd className="faint">{l.custo}</dd>
+                <div className="team-card-sobre">{(l.modelos && l.modelos.length) ? ('Modelo: ' + l.modelos[0]) : (l.tipo || '')}</div>
+                <div className="team-card-foot" style={{justifyContent:'space-between', marginTop:8}}>
+                  <span className="faint" style={{fontSize:11}}>{l.tipo || '—'}</span>
+                  <button className={'btn sm '+(ativo?'':'primary')} disabled={busy===l.id || !apiOn}
+                    onClick={(e)=>{ e.stopPropagation(); reconectar(l); }}>
+                    {busy===l.id
+                      ? <><Icon name="refresh" size={11}/> Conectando…</>
+                      : ativo ? <><Icon name="refresh" size={11}/> Revalidar</>
+                              : <><Icon name="play" size={11}/> Reconectar</>}
+                  </button>
                 </div>
-              </button>
-            ))}
+                {r && !r.connecting && (
+                  <div className="faint" style={{fontSize:10.5, marginTop:5, color: r.ok?'var(--ok)':'var(--err)'}}>
+                    {r.ok ? ('✓ conectado' + (r.attempts_made ? (' (' + r.attempts_made + ' tent.)') : ''))
+                          : ('✕ ' + String(r.error || 'falhou').slice(0, 44))}
+                  </div>
+                )}
+              </div>
+              );
+            })}
           </div>
         </div>
         <div className="split-side"><div className="detail">
-          <div className="detail-head"><div className="ch-crumb">{sel.nome}</div><h2>{sel.nome}</h2><StatusPill status={sel.status}/></div>
-          <div className="detail-block"><span className="eyebrow">Métodos de conexão</span>
-            <div className="tags">{sel.conexao.map(c=><span key={c} className="tag">{c}</span>)}</div>
+          <div className="detail-head"><div className="ch-crumb">{sel.id}</div><h2>{sel.provider || sel.id}</h2><span className={'pill '+_llmTone(sel.status)}>{_llmLabel(sel)}</span></div>
+          <div className="detail-block"><span className="eyebrow">Modelos</span>
+            <div className="tags">{(sel.modelos||['—']).map(c=><span key={c} className="tag mono">{c}</span>)}</div>
           </div>
           <div className="detail-block"><span className="eyebrow">Telemetria</span>
             <div className="kv">
-              <dt>Modelo</dt><dd className="mono">{sel.modelo}</dd>
-              <dt>Último teste</dt><dd className="faint">{sel.ultimoTeste}</dd>
-              <dt>Latência</dt><dd className="faint">{sel.latencia}</dd>
-              <dt>Custo</dt><dd className="faint">{sel.custo}</dd>
-              <dt>Uso</dt><dd className="faint">{sel.uso}</dd>
+              <dt>Tipo</dt><dd className="mono">{sel.tipo || '—'}</dd>
+              <dt>Automação</dt><dd className="faint">{sel.automacao || '—'}</dd>
+              <dt>Custo incremental</dt><dd className="faint">{sel.custoIncremental || '—'}</dd>
+              <dt>Último health</dt><dd className="faint">{sel.ultimoHealth || 'não validado'}</dd>
             </div>
           </div>
-          <div className="card" style={{padding:11, display:'flex',gap:9,alignItems:'center', borderColor:'var(--info)', background:'var(--info-soft)'}}>
-            <Icon name="lock" size={15} style={{color:'var(--info)'}}/><span style={{fontSize:11.5}}>Chaves e tokens ficam no cofre seguro — nunca exibidos no painel.</span>
+          {sel.observacao && <div className="detail-block"><span className="eyebrow">Observação</span>
+            <div className="card" style={{padding:'9px 11px', fontSize:11.5}}>{sel.observacao}</div></div>}
+          {res[sel.id] && (
+            <div className="card" style={{padding:11, borderColor: res[sel.id].ok?'var(--ok)':'var(--err)', background: res[sel.id].ok?'var(--ok-soft, var(--accent-soft))':'var(--err-soft)'}}>
+              <div style={{fontSize:12, fontWeight:600, marginBottom:4}}>{res[sel.id].ok ? '✓ Teste OK' : '✕ Falhou'} {res[sel.id].latency_ms!=null?('· '+res[sel.id].latency_ms+'ms'):''}</div>
+              <div className="mono" style={{fontSize:11, whiteSpace:'pre-wrap', wordBreak:'break-word'}}>{res[sel.id].ok ? (res[sel.id].response_excerpt||'(sem texto)') : (res[sel.id].error||'erro')}</div>
+            </div>
+          )}
+          <button className="btn primary" style={{width:'100%'}} disabled={busy===sel.id || !apiOn} onClick={()=>reconectar(sel)}>
+            <Icon name="play" size={12}/> {busy===sel.id ? 'Reconectando… (tentando até conectar)' : 'Reconectar (tenta até conectar)'}
+          </button>
+          <div style={{display:'flex', gap:7}}>
+            <button className="btn" style={{flex:1}} disabled={busy===sel.id || !apiOn} onClick={()=>testar(sel)}><Icon name="refresh" size={12}/> Testar 1x</button>
+            <button className="btn" style={{flex:1}} onClick={()=>setView('configuracoes')}><Icon name="lock" size={12}/> Cofre de chaves</button>
           </div>
-          <button className="btn primary" style={{width:'100%'}} onClick={()=>setView('configuracoes')}><Icon name="plus" size={12}/> Conectar provedor</button>
         </div></div>
       </div>
     </div>
@@ -1516,7 +2708,7 @@ function FerramentasCenter({ setView }) {
     <div className="center">
       <PageHead icon="wrench" crumb="Recursos" title="Ferramentas" status="DEV"
         sub="Ferramentas de trabalho · externa · conectada · integrada · não implementada">
-        <button className="btn primary"><Icon name="plus" size={13}/> Adicionar</button>
+        <button className="btn primary" onClick={()=>setView('configuracoes')}><Icon name="lock" size={13}/> Configurar no cofre</button>
       </PageHead>
       <div className="center-body">
         <div className="team-grid">
@@ -1542,72 +2734,231 @@ function FerramentasCenter({ setView }) {
   );
 }
 
-/* ---------- INTEGRAÇÕES ---------- */
+/* ---------- INTEGRAÇÕES DA FÁBRICA (contas globais · logadas uma vez) ---------- */
 function IntegracoesCenter({ setView }) {
-  const D = window.FORJA;
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.listAgencyConnections);
+  const [connectors, setConnectors] = useState([]);
+  const [conns, setConns] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const carregar = async () => {
+    if (!apiOn) return;
+    try {
+      const cc = await window.ForjaAPI.listConnectors('global'); setConnectors(cc.items || []);
+      const r = await window.ForjaAPI.listAgencyConnections(); setConns(r.items || []);
+    } catch (e) { setMsg('Falha: ' + e.message); }
+  };
+  useEffect(() => { carregar(); }, []);
+
+  const byKind = {}; conns.forEach(c => { byKind[c.kind] = c; });
+
+  const conectar = async (con) => {
+    const cred = window.prompt('Cole a credencial da Fábrica — ' + con.field + ':'); if (cred === null) return;
+    const meta = {};
+    for (const f of (con.extra || [])) {
+      const v = window.prompt(f.label + ':');
+      if (v) meta[f.key] = v.trim();
+    }
+    setBusy(true); setMsg('Conectando ' + con.kind + '…');
+    try { const r = await window.ForjaAPI.addAgencyConnection(con.kind, con.kind, cred.trim(), meta); await carregar(); setMsg(con.kind + ': ' + r.status + (r.detail ? (' · ' + r.detail) : '')); }
+    catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); }
+  };
+  const testar = async (id) => { setBusy(true); try { const r = await window.ForjaAPI.testConnection(id); await carregar(); setMsg('Teste: ' + r.status); } catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); } };
+  const remover = async (id) => { setBusy(true); try { await window.ForjaAPI.deleteConnection(id); await carregar(); setMsg('Removida.'); } catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); } };
+
   return (
     <div className="center">
-      <PageHead icon="link" crumb="Recursos" title="Integrações" status="PARCIAL"
-        sub="Integrações técnicas e APIs · status, autenticação, permissões e logs">
-        <button className="btn primary"><Icon name="plus" size={13}/> Nova integração</button>
+      <PageHead icon="link" crumb="Recursos" title="Integrações da Fábrica" status={apiOn ? 'IMPL' : 'PARCIAL'}
+        sub="Contas da Fábrica (logadas UMA vez, usadas em todos os clientes) · ex.: seu Canva Pro, OpenRouter, GitHub, Telegram">
+        <button className="btn" onClick={carregar} disabled={busy}><Icon name="refresh" size={13}/> Atualizar</button>
       </PageHead>
-      <div className="center-body">
-        <SectionCard icon="link" title="Conexões" flush>
-          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Integração</th><th>Auth</th><th>Permissões</th><th>Último teste</th><th>Status</th></tr></thead>
-          <tbody>
-            {D.integracoes.map(i=>(
-              <tr key={i.id} style={{cursor:'default'}}>
-                <td className="cell-strong">{i.nome}</td>
-                <td className="mono muted" style={{fontSize:11}}>{i.auth}</td>
-                <td className="muted">{i.permissoes}</td>
-                <td className="faint" style={{fontSize:11}}>{i.ultimoTeste}</td>
-                <td><StatusPill status={i.status} size="sm"/></td>
-              </tr>
-            ))}
-          </tbody></table></div>
-        </SectionCard>
-        <div className="card" style={{padding:11, marginTop:14, display:'flex',gap:9,alignItems:'center', borderColor:'var(--info)', background:'var(--info-soft)'}}>
-          <Icon name="lock" size={15} style={{color:'var(--info)'}}/><span style={{fontSize:12}}>OAuth, tokens e segredos ficam no cofre seguro — nunca no frontend, código ou GitHub.</span>
+      <div className="center-body section-gap">
+        {msg && <div className="card" style={{padding:'9px 13px',fontSize:12,borderColor:'var(--accent-line)',background:'var(--accent-soft)'}}>{msg}</div>}
+        <div className="card" style={{padding:10, display:'flex',gap:8,alignItems:'center', borderColor:'var(--info)', background:'var(--info-soft)'}}>
+          <Icon name="lock" size={14} style={{color:'var(--info)'}}/><span style={{fontSize:11.5}}>Estas são as contas da <b>Fábrica</b>. As contas <b>de cada cliente</b> (ex.: Instagram dele) ficam em <button className="lnk" onClick={()=>setView('clientes')}>Clientes</button>. Credenciais nunca exibidas.</span>
+        </div>
+        {!apiOn && <div className="card" style={{padding:'9px 13px',fontSize:12,borderColor:'var(--warn)',background:'var(--warn-soft)'}}>Backend offline — abra pelo ABRIR_PAINEL_FORJA.</div>}
+        <div className="team-grid">
+          {connectors.map(con => {
+            const c = byKind[con.kind];
+            return (
+              <div key={con.kind} className="team-card" style={{cursor:'default'}}>
+                <div className="team-card-top">
+                  <span className="ch-icon" style={{width:32,height:32}}><Icon name="link" size={15}/></span>
+                  <div style={{minWidth:0,flex:1}}>
+                    <div className="team-card-name">{con.label}</div>
+                    <span className={'pill ' + (c ? _connTone(c.status) : '')} style={{fontSize:10}}>{c ? c.status : 'não conectado'}</span>
+                  </div>
+                </div>
+                <div className="faint" style={{fontSize:10.5, margin:'4px 0 8px'}}>{con.how}</div>
+                <div className="team-card-foot" style={{justifyContent:'flex-end', gap:6}}>
+                  {c && <button className="btn ghost sm" disabled={busy} onClick={()=>testar(c.id)}>Testar</button>}
+                  {c && <button className="btn ghost sm" disabled={busy} onClick={()=>remover(c.id)}>Remover</button>}
+                  <button className="btn sm primary" disabled={busy || !apiOn} onClick={()=>conectar(con)}>{c ? 'Atualizar' : 'Conectar'}</button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
   );
 }
 
-/* ---------- CONHECIMENTO ---------- */
+/* ---------- CONHECIMENTO (contagens reais do repositório) ---------- */
 function ConhecimentoCenter({ setView }) {
   const D = window.FORJA;
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.getKnowledge);
+  const [know, setKnow] = useState(D.knowledge || null);
+  const [busy, setBusy] = useState(false);
+
+  const atualizar = async () => {
+    if (!apiOn) return;
+    setBusy(true);
+    try { setKnow(await window.ForjaAPI.getKnowledge()); }
+    catch (e) { /* mantém último estado */ }
+    finally { setBusy(false); }
+  };
+  useEffect(() => { if (!know) atualizar(); }, []);
+
+  const realById = {};
+  if (know && Array.isArray(know.items)) know.items.forEach(it => { realById[it.id] = it; });
+  const total = know ? know.total_items : null;
+
   return (
     <div className="center">
-      <PageHead icon="book" crumb="Recursos" title="Conhecimento" status="DEV"
-        sub="Rules · Workflows · Skills · Templates · Biblioteca · Memória · estrutura pronta, vazia">
-        <button className="btn primary"><Icon name="plus" size={13}/> Adicionar</button>
+      <PageHead icon="book" crumb="Recursos" title="Conhecimento" status={total ? 'IMPL' : 'DEV'}
+        sub={total != null
+          ? (total + ' itens reais indexados no repositório · Rules · Workflows · Skills · Templates · Biblioteca · Memória')
+          : 'Rules · Workflows · Skills · Templates · Biblioteca · Memória'}>
+        <button className="btn primary" onClick={atualizar} disabled={busy || !apiOn}><Icon name="refresh" size={13}/> {busy?'Atualizando…':'Atualizar'}</button>
       </PageHead>
       <div className="center-body">
         <div className="team-grid">
-          {D.conhecimento.map(c=>(
-            <div key={c.id} className="team-card" style={{cursor:'default'}}>
-              <div className="team-card-top">
-                <span className="ch-icon" style={{width:34,height:34}}><Icon name={c.icon} size={16}/></span>
-                <div style={{minWidth:0,flex:1}}>
-                  <div className="team-card-name">{c.nome}</div>
-                  <span className="faint" style={{fontSize:11}}>{c.sub}</span>
+          {D.conhecimento.map(c=>{
+            const real = realById[c.id];
+            const count = real ? real.count : c.count;
+            const st = real ? (real.count > 0 ? 'IMPL' : 'DEV') : c.status;
+            return (
+              <div key={c.id} className="team-card" style={{cursor:'default'}}>
+                <div className="team-card-top">
+                  <span className="ch-icon" style={{width:34,height:34}}><Icon name={c.icon} size={16}/></span>
+                  <div style={{minWidth:0,flex:1}}>
+                    <div className="team-card-name">{c.nome}</div>
+                    <span className="faint" style={{fontSize:11}}>{c.sub}</span>
+                  </div>
+                  <StatusPill status={st} size="sm"/>
                 </div>
-                <StatusPill status={c.status} size="sm"/>
+                <div className="team-card-foot" style={{justifyContent:'space-between'}}>
+                  <span className="mono" style={{fontSize:18,fontWeight:600}}>{count}</span>
+                  <span className="faint" style={{fontSize:11}}>{real ? 'arquivos reais' : 'itens'}</span>
+                </div>
               </div>
-              <div className="team-card-foot" style={{justifyContent:'space-between'}}>
-                <span className="mono" style={{fontSize:18,fontWeight:600}}>{c.count}</span>
-                <span className="faint" style={{fontSize:11}}>itens</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
   );
 }
 
-Object.assign(window, { ClientesCenter, ProjetosCenter, MissoesCenter, InteligenciaCenter, LLMsCenter, FerramentasCenter, IntegracoesCenter, ConhecimentoCenter });
+/* ---------- ENVIAR PROJETO (página dedicada de upload + briefing) ---------- */
+function EnviarProjetoCenter({ setView }) {
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.createProject);
+  const [clientes, setClientes] = useState([]);
+  const [cli, setCli] = useState('');
+  const [nome, setNome] = useState('');
+  const [briefing, setBriefing] = useState('');
+  const [picked, setPicked] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [proj, setProj] = useState(null);
+  const [devRes, setDevRes] = useState(null);
+
+  useEffect(() => { if (apiOn && window.ForjaAPI.listClients) window.ForjaAPI.listClients().then(r => setClientes(r.items || [])).catch(() => {}); }, []);
+
+  const pickFiles = (fileList, fromFolder) => {
+    const arr = Array.from(fileList || []).map(f => ({ name: (fromFolder && f.webkitRelativePath) ? f.webkitRelativePath : f.name, file: f }));
+    setPicked(p => [...p, ...arr]);
+  };
+
+  const enviar = async () => {
+    if (!nome.trim()) { setMsg('Dê um nome ao projeto.'); return; }
+    setBusy(true); setMsg('Criando projeto…'); setDevRes(null);
+    try {
+      const pr = await window.ForjaAPI.createProject(nome.trim(), briefing.trim(), cli || undefined);
+      setProj(pr);
+      if (picked.length) {
+        setMsg('Enviando ' + picked.length + ' arquivo(s)…');
+        const files = await Promise.all(picked.map(p => new Promise(res => {
+          const r = new FileReader(); r.onload = () => res({ name: p.name, data_url: r.result }); r.readAsDataURL(p.file);
+        })));
+        const up = await window.ForjaAPI.uploadProjectFiles(pr.id, files);
+        setMsg('✓ Projeto criado (' + pr.id + ') · ' + up.saved + ' arquivo(s) enviados.');
+      } else {
+        setMsg('✓ Projeto criado (' + pr.id + '). Você pode subir arquivos depois em Projetos.');
+      }
+    } catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); }
+  };
+
+  const desenvolver = async () => {
+    if (!proj) return;
+    setBusy(true); setMsg('A Fábrica (agente Desenvolvedor) está trabalhando…');
+    try { const r = await window.ForjaAPI.developProject(proj.id); setDevRes(r); setMsg('Desenvolvimento: ' + (r.status || '')); }
+    catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); }
+  };
+
+  const inp = { background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', color: 'var(--text-1)', padding: '8px 10px', fontSize: 13, fontFamily: 'inherit' };
+  return (
+    <div className="center">
+      <PageHead icon="box" crumb="Negócio" title="Enviar projeto" status={apiOn ? 'IMPL' : 'PARCIAL'}
+        sub="Suba a pasta/arquivos do projeto e descreva o que a Fábrica deve desenvolver — tudo em uma tela" />
+      <div className="center-body section-gap" style={{ maxWidth: 840 }}>
+        {msg && <div className="card" style={{ padding: '9px 13px', fontSize: 12, borderColor: 'var(--accent-line)', background: 'var(--accent-soft)' }}>{msg}</div>}
+        {!apiOn && <div className="card" style={{ padding: '9px 13px', fontSize: 12, borderColor: 'var(--warn)', background: 'var(--warn-soft)' }}>Backend offline — abra pelo ABRIR_PAINEL_FORJA.</div>}
+
+        <SectionCard icon="folder" title="Dados do projeto">
+          <div className="section-gap">
+            <div><div className="eyebrow">Cliente (opcional)</div>
+              <select style={inp} value={cli} onChange={e => setCli(e.target.value)}>
+                <option value="">(sem cliente)</option>
+                {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </div>
+            <div><div className="eyebrow">Nome do projeto</div>
+              <input style={{ ...inp, width: '100%' }} value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex.: Site institucional da Cafeteria" />
+            </div>
+            <div><div className="eyebrow">O que desenvolver (briefing / prompt)</div>
+              <textarea rows={5} style={{ ...inp, width: '100%', resize: 'vertical' }} value={briefing} onChange={e => setBriefing(e.target.value)}
+                placeholder="Descreva o que a Fábrica deve fazer: páginas, funções, estilo, o que finalizar, exemplos…" />
+            </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard icon="box" title="Arquivos do projeto (opcional)">
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <label className="btn sm" style={{ cursor: 'pointer' }}><Icon name="plus" size={12} /> Selecionar arquivos / .zip<input type="file" multiple style={{ display: 'none' }} onChange={e => pickFiles(e.target.files, false)} /></label>
+            <label className="btn sm" style={{ cursor: 'pointer' }}><Icon name="folder" size={12} /> Selecionar pasta<input type="file" webkitdirectory="" directory="" multiple style={{ display: 'none' }} onChange={e => pickFiles(e.target.files, true)} /></label>
+            {picked.length > 0 && <button className="btn ghost sm" onClick={() => setPicked([])}>limpar ({picked.length})</button>}
+          </div>
+          {picked.length > 0 && <div className="term" style={{ marginTop: 8, maxHeight: 170, overflow: 'auto' }}>{picked.slice(0, 120).map((p, i) => <div key={i} className="ln"><span className="t">·</span><span className="lv-info">{p.name}</span></div>)}</div>}
+          <div className="faint" style={{ fontSize: 10.5, marginTop: 6 }}>Para manter a estrutura de pastas, use "Selecionar pasta" ou suba um .zip.</div>
+        </SectionCard>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn primary" disabled={busy || !apiOn} onClick={enviar}><Icon name="rocket" size={13} /> {busy ? 'Enviando…' : 'Enviar projeto'}</button>
+          {proj && <button className="btn" disabled={busy} onClick={desenvolver}><Icon name="cpu" size={13} /> Desenvolver com a Fábrica</button>}
+          {proj && proj.raw_id && <button className="btn" onClick={() => window.open('/preview/projeto_' + proj.raw_id + '/', '_blank')}><Icon name="eye" size={13} /> Ver preview</button>}
+          {proj && <button className="btn" onClick={() => setView('projetos')}>Abrir em Projetos</button>}
+        </div>
+        {devRes && <div className="card" style={{ padding: 11, borderColor: devRes.ok ? 'var(--ok)' : 'var(--warn)' }}><div style={{ fontSize: 12.5, whiteSpace: 'pre-wrap' }}>{devRes.result || devRes.status}</div></div>}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { ClientesCenter, ProjetosCenter, EnviarProjetoCenter, MissoesCenter, InteligenciaCenter, LLMsCenter, FerramentasCenter, IntegracoesCenter, ConhecimentoCenter });
 
 
 /* ============================================================
@@ -1615,23 +2966,46 @@ Object.assign(window, { ClientesCenter, ProjetosCenter, MissoesCenter, Inteligen
    Financeiro, Roadmap, Academia, Ajuda, Configurações
    ============================================================ */
 
-/* ---------- TESTES ---------- */
+/* ---------- TESTES (auto-teste real do sistema) ---------- */
 function TestesCenter() {
-  const secs = [['Executados','flask','NIMPL'],['Pendentes','clock','NIMPL'],['Aprovados','check','NIMPL'],['Reprovados','x','NIMPL'],['Histórico','doc','NIMPL']];
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.runTests);
+  const [res, setRes] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const rodar = async () => {
+    if (!apiOn) return;
+    setBusy(true);
+    try { setRes(await window.ForjaAPI.runTests()); }
+    catch (e) { setRes({ ok: false, items: [], total: 0, passed: 0, failed: 0, error: e.message }); }
+    finally { setBusy(false); }
+  };
+  useEffect(() => { rodar(); }, []);
   return (
     <div className="center">
-      <PageHead icon="flask" crumb="Garantia" title="Testes" status="NIMPL"
-        sub="Centralização de testes do sistema · execução, status, histórico, logs e relatório">
-        <button className="btn primary" disabled style={{opacity:.5}}><Icon name="play2" size={12}/> Rodar testes</button>
+      <PageHead icon="flask" crumb="Garantia" title="Testes" status={res ? (res.ok ? 'IMPL' : 'PARCIAL') : 'NTEST'}
+        sub="Verificação real do sistema · banco, agentes, provedores, conhecimento, ferramentas">
+        <button className="btn primary" disabled={busy || !apiOn} onClick={rodar}><Icon name="play2" size={12}/> {busy ? 'Rodando…' : 'Rodar testes'}</button>
       </PageHead>
-      <div className="center-body">
-        <EmptyState icon="flask" title="Nenhum teste executado" status="NIMPL"
-          sub="A suíte de testes ainda não foi implementada. Os resultados aparecerão por categoria quando ativada." />
-        <div className="grid-3" style={{marginTop:18}}>
-          {secs.map(([s,ic,st])=>(
-            <div className="panel" key={s}><div className="panel-body" style={{display:'flex',alignItems:'center',gap:10}}><Icon name={ic} size={14} style={{color:'var(--text-3)'}}/><span style={{fontSize:12.5,flex:1}}>{s}</span><span className="mono faint">0</span><StatusPill status={st} size="sm"/></div></div>
-          ))}
+      <div className="center-body section-gap">
+        {!apiOn && <div className="card" style={{padding:'9px 13px',fontSize:12,borderColor:'var(--warn)',background:'var(--warn-soft)'}}>Backend offline — abra pelo ABRIR_PAINEL_FORJA.</div>}
+        <div className="kpi-grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))'}}>
+          <div className="kpi"><div className="kpi-label">Total</div><div className="kpi-val">{res ? res.total : '—'}</div></div>
+          <div className="kpi"><div className="kpi-label"><span className="dot ok"/> Passaram</div><div className="kpi-val" style={{color:'var(--ok)'}}>{res ? res.passed : '—'}</div></div>
+          <div className="kpi"><div className="kpi-label"><span className="dot err"/> Falharam</div><div className="kpi-val" style={{color:res&&res.failed?'var(--err)':'var(--text-2)'}}>{res ? res.failed : '—'}</div></div>
+          <div className="kpi"><div className="kpi-label">Resultado</div><div className="kpi-val" style={{fontSize:16}}>{res ? (res.ok ? 'TUDO OK' : 'ATENÇÃO') : (busy ? 'rodando…' : '—')}</div></div>
         </div>
+        <SectionCard icon="flask" title="Verificações" flush>
+          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Verificação</th><th>Resultado</th><th>Detalhe</th></tr></thead>
+          <tbody>
+            {res && res.items && res.items.map((c,i)=>(
+              <tr key={i}>
+                <td className="cell-strong">{c.nome}</td>
+                <td><span className={'pill ' + (c.passou?'ok':'err')}>{c.passou?'passou':'falhou'}</span></td>
+                <td className="faint" style={{fontSize:11.5}}>{c.detalhe}</td>
+              </tr>
+            ))}
+            {(!res || !res.items || !res.items.length) && <tr><td colSpan={3} className="faint" style={{padding:12}}>{busy?'Executando verificações…':'Clique em "Rodar testes".'}</td></tr>}
+          </tbody></table></div>
+        </SectionCard>
       </div>
     </div>
   );
@@ -1670,7 +3044,11 @@ function AuditoriaCenter({ setView }) {
     <div className="center">
       <PageHead icon="shield" crumb="Garantia" title="Auditoria" status="IMPL"
         sub="A verdade do sistema · Zero Ghost Law · nunca esconde falhas">
-        <button className="btn"><Icon name="doc" size={13}/> Exportar</button>
+        <button className="btn" onClick={()=>downloadCSV('auditoria_forja.csv',
+          (D.auditoria||[]).map(a=>({ modulo:a.modulo||'', veredito:a.veredito||'', status:a.status||'',
+            hora:a.hora||a.ts||'', acao:a.acao||'', alvo:a.alvo||'' })))}>
+          <Icon name="doc" size={13}/> Exportar
+        </button>
       </PageHead>
       <div className="center-body section-gap">
         <div className="card hud-grid" style={{padding:'16px 18px', display:'flex', alignItems:'center', gap:18, borderColor:'var(--accent-line)'}}>
@@ -1705,17 +3083,80 @@ function AuditoriaCenter({ setView }) {
   );
 }
 
-/* ---------- OPERAÇÕES ---------- */
+/* ---------- OPERAÇÕES (health check real ao vivo) ---------- */
 function OperacoesCenter({ setView }) {
   const D = window.FORJA;
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.healthCheckServices);
+  const [live, setLive] = useState(D.services || []);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const check = async () => {
+    if (!apiOn) return;
+    setBusy(true); setMsg('Verificando serviços…');
+    try {
+      const r = await window.ForjaAPI.healthCheckServices();
+      setLive((r.services && r.services.items) || []);
+      const hora = new Date().toTimeString().slice(0,8);
+      setMsg('Health check concluído às ' + hora);
+    } catch (e) { setMsg('Falha no health check: ' + e.message); }
+    finally { setBusy(false); }
+  };
+  useEffect(() => { check(); }, []);
+
+  const [jobs, setJobs] = useState([]);
+  const loadJobs = async () => {
+    if (!apiOn || !window.ForjaAPI.listJobs) return;
+    try { const r = await window.ForjaAPI.listJobs(); setJobs(r.items || []); } catch (e) {}
+  };
+  useEffect(() => { loadJobs(); }, []);
+
+  const novoJob = async (kind) => {
+    if (!window.ForjaAPI.createJob) return;
+    let job = null;
+    if (kind === 'run_queue') {
+      const mins = window.prompt('Processar a fila de missões a cada quantos minutos?', '5'); if (!mins) return;
+      job = { name: 'Processar fila', kind, schedule_type: 'interval', schedule_value: mins };
+    } else if (kind === 'telegram_message') {
+      const to = window.prompt('chat_id de destino (Telegram):'); if (!to) return;
+      const texto = window.prompt('Mensagem a enviar:'); if (!texto) return;
+      const hora = window.prompt('Todo dia às (HH:MM):', '09:00'); if (!hora) return;
+      job = { name: 'Mensagem Telegram', kind, spec: { to, texto }, schedule_type: 'daily', schedule_value: hora };
+    } else if (kind === 'agent_act') {
+      const objective = window.prompt('Objetivo da tarefa (o agente vai executar):'); if (!objective) return;
+      const hora = window.prompt('Todo dia às (HH:MM):', '09:00'); if (!hora) return;
+      job = { name: 'Tarefa do agente', kind, spec: { objective }, schedule_type: 'daily', schedule_value: hora };
+    }
+    setBusy(true);
+    try { await window.ForjaAPI.createJob(job); await loadJobs(); setMsg('Agendamento criado.'); }
+    catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); }
+  };
+  const jobAcao = async (fn, id) => { setBusy(true); try { await fn(id); await loadJobs(); } catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); } };
+
+  const stTone = (s) => s==='ok' ? 'ok' : s==='err' ? 'err' : 'warn';
   return (
     <div className="center">
-      <PageHead icon="server" crumb="Infra" title="Operações" status="DEV"
-        sub="Banco · FastAPI · Runtime · Deploy · Monitoramento · Backups · Serviços">
-        <button className="btn"><Icon name="refresh" size={13}/> Health check</button>
+      <PageHead icon="server" crumb="Infra" title="Operações" status={apiOn ? 'IMPL' : 'DEV'}
+        sub="Saúde real dos serviços · FastAPI · Banco · Ollama · Missões">
+        <button className="btn" onClick={check} disabled={busy}><Icon name="refresh" size={13}/> {busy?'Verificando…':'Health check'}</button>
       </PageHead>
-      <div className="center-body">
-        <SectionCard icon="server" title="Saúde da infraestrutura" flush>
+      <div className="center-body section-gap">
+        {msg && <div className="card" style={{padding:'8px 12px', fontSize:12, borderColor:'var(--accent-line)', background:'var(--accent-soft)'}}>{msg}</div>}
+        <SectionCard icon="server" title="Serviços (verificação ao vivo)" flush>
+          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Serviço</th><th>Ping</th><th>Status</th></tr></thead>
+          <tbody>
+            {live.length ? live.map(s=>(
+              <tr key={s.id} style={{cursor:'default'}}>
+                <td className="cell-strong">{s.nome}</td>
+                <td className="faint mono" style={{fontSize:11.5}}>{s.ping}</td>
+                <td><span className={'pill ' + stTone(s.status)}>{s.status==='ok'?'operacional':s.status==='err'?'falha':'inativo'}</span></td>
+              </tr>
+            )) : (
+              <tr><td colSpan={3} className="faint" style={{padding:'12px'}}>Sem dados — clique em Health check.</td></tr>
+            )}
+          </tbody></table></div>
+        </SectionCard>
+        <SectionCard icon="box" title="Componentes da plataforma (estrutura)" flush>
           <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Serviço</th><th>Categoria</th><th>Observação</th><th>Status</th></tr></thead>
           <tbody>
             {D.operacoes.map(o=>(
@@ -1728,35 +3169,107 @@ function OperacoesCenter({ setView }) {
             ))}
           </tbody></table></div>
         </SectionCard>
+
+        <SectionCard icon="clock" title={'Agendamentos · Scheduler (' + jobs.length + ')'}
+          right={<div style={{display:'flex',gap:6}}>
+            <button className="btn ghost sm" disabled={busy} onClick={()=>novoJob('run_queue')}>+ Fila</button>
+            <button className="btn ghost sm" disabled={busy} onClick={()=>novoJob('telegram_message')}>+ Telegram</button>
+            <button className="btn primary sm" disabled={busy} onClick={()=>novoJob('agent_act')}>+ Tarefa</button>
+          </div>}>
+          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Nome</th><th>Tipo</th><th>Quando</th><th>Próx. execução</th><th>Último resultado</th><th></th></tr></thead>
+          <tbody>
+            {jobs.map(j=>(
+              <tr key={j.id} style={{opacity: j.enabled?1:0.5}}>
+                <td className="cell-strong">{j.name}</td>
+                <td className="mono" style={{fontSize:11}}>{j.kind}</td>
+                <td className="faint" style={{fontSize:11}}>{j.schedule_type==='interval'?('a cada '+j.schedule_value+'min'):j.schedule_type==='daily'?('todo dia '+j.schedule_value):j.schedule_value}</td>
+                <td className="mono faint" style={{fontSize:10.5}}>{j.next_run ? new Date(j.next_run).toLocaleString('pt-BR') : '—'}</td>
+                <td className="faint" style={{fontSize:10.5}}>{(j.last_result||'—').slice(0,40)}</td>
+                <td style={{whiteSpace:'nowrap'}}>
+                  <button className="btn ghost sm" disabled={busy} onClick={()=>jobAcao(window.ForjaAPI.runJob, j.id)}>rodar</button>
+                  <button className="btn ghost sm" disabled={busy} onClick={()=>jobAcao(window.ForjaAPI.toggleJob, j.id)}>{j.enabled?'pausar':'ativar'}</button>
+                  <button className="btn ghost sm" disabled={busy} onClick={()=>jobAcao(window.ForjaAPI.deleteJob, j.id)}>remover</button>
+                </td>
+              </tr>
+            ))}
+            {!jobs.length && <tr><td colSpan={6} className="faint" style={{padding:12}}>Sem agendamentos. Crie um acima (ex.: "+ Tarefa" todo dia às 9h).</td></tr>}
+          </tbody></table></div>
+          <div className="faint" style={{fontSize:10.5, marginTop:8}}>O agendador roda em background enquanto o servidor está ligado. Para 24/7 de verdade, publique no VPS.</div>
+        </SectionCard>
       </div>
     </div>
   );
 }
 
-/* ---------- FINANCEIRO ---------- */
+/* ---------- FINANCEIRO (livro-caixa real + custo de IA medido) ---------- */
 function FinanceiroCenter() {
-  const cats = [['Custos de LLM','zap'],['Custos de APIs','link'],['Infraestrutura','server'],['Assinaturas','dollar'],['Despesas','chart'],['Limites & alertas','alert']];
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.getFinance);
+  const [fin, setFin] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const carregar = async () => {
+    if (!apiOn) return;
+    try { setFin(await window.ForjaAPI.getFinance()); }
+    catch (e) { setMsg('Falha: ' + e.message); }
+  };
+  useEffect(() => { carregar(); }, []);
+
+  const lancar = async (kind) => {
+    const desc = window.prompt((kind === 'receita' ? 'Receita' : 'Despesa') + ' — descrição:'); if (!desc || !desc.trim()) return;
+    const val = window.prompt('Valor (R$):'); if (!val) return;
+    setBusy(true); setMsg('Salvando lançamento…');
+    try { await window.ForjaAPI.addFinance(kind, desc.trim(), val.trim()); await carregar(); setMsg('Lançamento salvo.'); }
+    catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); }
+  };
+  const remover = async (id) => {
+    setBusy(true);
+    try { await window.ForjaAPI.deleteFinance(id); await carregar(); }
+    catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(false); }
+  };
+
+  const brl = (v) => 'R$ ' + (Number(v || 0)).toFixed(2);
+  const usd = (v) => '$' + (Number(v || 0)).toFixed(4);
+  const f = fin || {};
+  const resultado = Number(f.resultado || 0);
+
   return (
     <div className="center">
-      <PageHead icon="dollar" crumb="Negócio" title="Financeiro" status="NIMPL"
-        sub="Custos, assinaturas e finanças · sem receitas inventadas">
+      <PageHead icon="dollar" crumb="Negócio" title="Financeiro" status={apiOn ? 'IMPL' : 'PARCIAL'}
+        sub="Livro-caixa real (receitas/despesas que você registra) + custo de IA medido automaticamente">
+        <button className="btn" onClick={()=>lancar('despesa')} disabled={busy || !apiOn}><Icon name="plus" size={13}/> Despesa</button>
+        <button className="btn primary" onClick={()=>lancar('receita')} disabled={busy || !apiOn}><Icon name="plus" size={13}/> Receita</button>
       </PageHead>
       <div className="center-body section-gap">
-        <div className="grid-2">
-          <SectionCard icon="dollar" title="Receitas" status="NIMPL">
-            <EmptyState icon="dollar" title="Sem receitas cadastradas" sub="Nenhuma receita registrada. A Fábrica está em uso próprio." />
-          </SectionCard>
-          <SectionCard icon="chart" title="Custos medidos" status="NTEST">
-            <EmptyState icon="activity" title="Sem medição de custos" sub="Custos de LLM/API só aparecem após provedores configurados e em uso." />
-          </SectionCard>
+        {msg && <div className="card" style={{padding:'9px 13px',fontSize:12,borderColor:'var(--accent-line)',background:'var(--accent-soft)'}}>{msg}</div>}
+        {!apiOn && <div className="card" style={{padding:'9px 13px',fontSize:12,borderColor:'var(--warn)',background:'var(--warn-soft)'}}>Backend offline — abra pelo ABRIR_PAINEL_FORJA.</div>}
+
+        <div className="kpi-grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))'}}>
+          <div className="kpi"><div className="kpi-label"><span className="dot ok"/> Receitas</div><div className="kpi-val" style={{color:'var(--ok)'}}>{brl(f.receitas_total)}</div></div>
+          <div className="kpi"><div className="kpi-label"><span className="dot err"/> Despesas</div><div className="kpi-val" style={{color:'var(--err)'}}>{brl(f.despesas_total)}</div></div>
+          <div className="kpi"><div className="kpi-label">Resultado</div><div className="kpi-val" style={{color: resultado>=0?'var(--ok)':'var(--err)'}}>{brl(resultado)}</div><div className="kpi-sub">receitas − despesas</div></div>
+          <div className="kpi"><div className="kpi-label">Custo de IA (mês)</div><div className="kpi-val">{usd(f.ia_custo_mes_usd)}</div><div className="kpi-sub">{f.ia_source==='real_usage'?'uso real medido':'sem dados reais'} · teto ${(Number(f.ia_budget_mes_usd||30)).toFixed(0)}</div></div>
         </div>
-        <SectionCard icon="dollar" title="Categorias financeiras (estrutura)" status="DEV">
-          <div className="grid-3">
-            {cats.map(([c,ic])=>(
-              <div key={c} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:'var(--bg-1)',border:'1px solid var(--border)',borderRadius:'var(--r-md)'}}><Icon name={ic} size={14} style={{color:'var(--text-3)'}}/><span style={{fontSize:12.5,flex:1}}>{c}</span><StatusPill status="NIMPL" size="sm"/></div>
+
+        <SectionCard icon="dollar" title={'Lançamentos (' + ((f.items||[]).length) + ')'} flush>
+          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Tipo</th><th>Descrição</th><th>Cliente</th><th>Valor</th><th>Data</th><th></th></tr></thead>
+          <tbody>
+            {(f.items||[]).map(e=>(
+              <tr key={e.id}>
+                <td><span className={'pill ' + (e.kind==='receita'?'ok':'err')}>{e.kind}</span></td>
+                <td className="cell-strong">{e.description || '—'}</td>
+                <td className="muted">{e.cliente || '—'}</td>
+                <td className="mono" style={{color: e.kind==='receita'?'var(--ok)':'var(--err)'}}>{brl(e.amount)}</td>
+                <td className="faint" style={{fontSize:11}}>{e.created_at ? new Date(e.created_at).toLocaleDateString('pt-BR') : '—'}</td>
+                <td><button className="btn ghost sm" disabled={busy} onClick={()=>remover(e.id)}>remover</button></td>
+              </tr>
             ))}
-          </div>
+            {!(f.items||[]).length && <tr><td colSpan={6} className="faint" style={{padding:12}}>Sem lançamentos. Registre uma Receita ou Despesa real acima.</td></tr>}
+          </tbody></table></div>
         </SectionCard>
+        <div className="card" style={{padding:10, display:'flex',gap:8,alignItems:'center', borderColor:'var(--info)', background:'var(--info-soft)'}}>
+          <Icon name="shield" size={14} style={{color:'var(--info)'}}/><span style={{fontSize:11.5}}>Dados reais: receitas/despesas são os valores que você registra; o custo de IA é medido de verdade pelo uso. Nada é inventado (Lei Zero Fantasma).</span>
+        </div>
       </div>
     </div>
   );
@@ -1812,19 +3325,19 @@ function AcademiaCenter() {
 }
 
 /* ---------- AJUDA ---------- */
-function AjudaCenter() {
+function AjudaCenter({ setView }) {
   const secs = [['Consultor','help'],['FAQ','book'],['Documentação','doc'],['Chamados','chat'],['Suporte','users']];
   return (
     <div className="center">
-      <PageHead icon="help" crumb="Plataforma" title="Ajuda" status="DEV"
+      <PageHead icon="help" crumb="Plataforma" title="Ajuda" status="IMPL"
         sub="Suporte, FAQ, documentação e orientação de uso">
       </PageHead>
       <div className="center-body section-gap">
-        <SectionCard icon="help" title="Consultor da Fábrica" status="DEV">
+        <SectionCard icon="help" title="Consultor da Fábrica" status="IMPL">
           <div style={{display:'flex',alignItems:'center',gap:12}}>
             <span className="ch-icon" style={{width:36,height:36}}><Icon name="chat" size={18}/></span>
-            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:500}}>Assistente de uso da plataforma</div><div className="muted" style={{fontSize:11.5}}>Tira dúvidas sobre módulos e fluxos. Requer LLM configurada.</div></div>
-            <button className="btn" disabled style={{opacity:.5}}>Abrir</button>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:500}}>Assistente de uso da plataforma</div><div className="muted" style={{fontSize:11.5}}>Tire dúvidas sobre módulos e fluxos no chat — usa as IAs já conectadas.</div></div>
+            <button className="btn primary" onClick={()=>setView&&setView('forja')}><Icon name="chat" size={13}/> Abrir consultor</button>
           </div>
         </SectionCard>
         <div className="grid-3">
@@ -1833,6 +3346,77 @@ function AjudaCenter() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ---------- COFRE DE CHAVES (real · /api/config/keys) ---------- */
+const VAULT_KEYS = [
+  { key: 'ANTHROPIC_API_KEY',  label: 'Anthropic (Claude)' },
+  { key: 'OPENAI_API_KEY',     label: 'OpenAI (ChatGPT)' },
+  { key: 'GOOGLE_API_KEY',     label: 'Google (Gemini)' },
+  { key: 'DEEPSEEK_API_KEY',   label: 'DeepSeek' },
+  { key: 'OPENROUTER_API_KEY', label: 'OpenRouter' },
+  { key: 'OLLAMA_MODEL',       label: 'Ollama (modelo local)' },
+];
+
+function KeyVault() {
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.getConfigKeys);
+  const [status, setStatus] = useState({});
+  const [draft, setDraft] = useState({});
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState('');
+
+  const load = async () => {
+    if (!apiOn) return;
+    try { const r = await window.ForjaAPI.getConfigKeys(); setStatus(r.keys || {}); }
+    catch (e) { setMsg('Falha ao ler status do cofre: ' + e.message); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const salvar = async (key) => {
+    const value = (draft[key] || '').trim();
+    setBusy(key); setMsg('');
+    try {
+      const r = await window.ForjaAPI.setConfigKey(key, value);
+      setMsg((r.action === 'removed' ? 'Removida' : 'Salva') + ': ' + key);
+      setDraft(d => ({ ...d, [key]: '' }));
+      await load();
+    } catch (e) { setMsg('Falha ao salvar ' + key + ': ' + e.message); }
+    finally { setBusy(''); }
+  };
+
+  if (!apiOn) {
+    return (
+      <div className="card" style={{padding:11, display:'flex',gap:9,alignItems:'center', borderColor:'var(--warn)', background:'var(--warn-soft)'}}>
+        <Icon name="alert" size={15} style={{color:'var(--warn)'}}/>
+        <span style={{fontSize:12}}>Backend offline — inicie pelo ABRIR_PAINEL_FORJA para configurar chaves.</span>
+      </div>
+    );
+  }
+  return (
+    <div className="section-gap">
+      <div className="card" style={{padding:11, display:'flex',gap:9,alignItems:'center', borderColor:'var(--info)', background:'var(--info-soft)'}}>
+        <Icon name="lock" size={15} style={{color:'var(--info)'}}/>
+        <span style={{fontSize:12}}>As chaves são gravadas no <b>.env</b> do servidor. O painel só mostra se está configurada — <b>nunca</b> o valor.</span>
+      </div>
+      {msg && <div className="card" style={{padding:'8px 12px', fontSize:12, borderColor:'var(--accent-line)', background:'var(--accent-soft)'}}>{msg}</div>}
+      {VAULT_KEYS.map(k => (
+        <div key={k.key} className="health-row" style={{padding:'10px 0', gap:10, alignItems:'center', flexWrap:'wrap'}}>
+          <div style={{minWidth:170}}>
+            <div style={{fontSize:12.5, fontWeight:500}}>{k.label}</div>
+            <div className="mono faint" style={{fontSize:10.5}}>{k.key}</div>
+          </div>
+          <span className={'pill ' + (status[k.key] ? 'ok' : '')} style={{flex:'none'}}>{status[k.key] ? 'configurada' : 'não configurada'}</span>
+          <div className="field" style={{flex:1, minWidth:160, height:30}}>
+            <input type="password" placeholder={k.key === 'OLLAMA_MODEL' ? 'ex: llama3.1' : '••• colar valor •••'}
+              value={draft[k.key] || ''} onChange={e=>setDraft(d=>({ ...d, [k.key]: e.target.value }))} />
+          </div>
+          <button className="btn sm" disabled={busy===k.key} onClick={()=>salvar(k.key)}>
+            {busy===k.key ? '…' : ((draft[k.key]||'').trim() ? 'Salvar' : 'Remover')}
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1862,10 +3446,8 @@ function ConfiguracoesCenter({ setView, theme, setTheme }) {
           </div>
         </SectionCard>
 
-        <SectionCard icon="lock" title="Cofre de segredos" status="DEV">
-          <div className="card" style={{padding:11, display:'flex',gap:9,alignItems:'center', borderColor:'var(--info)', background:'var(--info-soft)'}}>
-            <Icon name="lock" size={15} style={{color:'var(--info)'}}/><span style={{fontSize:12}}>Toda chave/token/OAuth fica no cofre seguro. Nunca exibido no painel, em código ou no GitHub.</span>
-          </div>
+        <SectionCard icon="lock" title="Cofre de segredos · chaves de IA" status="IMPL">
+          <KeyVault />
         </SectionCard>
 
         <SectionCard icon="gear" title="Áreas administrativas">
@@ -1885,7 +3467,142 @@ function ConfiguracoesCenter({ setView, theme, setTheme }) {
   );
 }
 
-Object.assign(window, { TestesCenter, ValidacaoCenter, AuditoriaCenter, OperacoesCenter, FinanceiroCenter, RoadmapCenter, AcademiaCenter, AjudaCenter, ConfiguracoesCenter });
+/* ---------- CONTEÚDO (estúdio de posts/reels para redes sociais) ---------- */
+function ConteudoCenter({ setView }) {
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.listContent);
+  const [clientes, setClientes] = useState([]);
+  const [cli, setCli] = useState('');
+  const [items, setItems] = useState([]);
+  const [tipo, setTipo] = useState('post');
+  const [network, setNetwork] = useState('instagram');
+  const [briefing, setBriefing] = useState('');
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState('');
+
+  const carregarClientes = async () => { try { const r = await window.ForjaAPI.listClients(); setClientes(r.items || []); } catch (e) {} };
+  const carregar = async () => { if (!apiOn) return; try { const r = await window.ForjaAPI.listContent(cli || undefined); setItems(r.items || []); } catch (e) { setMsg('Falha: ' + e.message); } };
+  useEffect(() => { carregarClientes(); }, []);
+  useEffect(() => { carregar(); }, [cli]);
+
+  const criar = async () => {
+    setBusy('criar'); setMsg('Criando…');
+    try { await window.ForjaAPI.createContent({ client_id: cli || undefined, network, tipo, briefing }); setBriefing(''); await carregar(); setMsg('Conteúdo criado. Agora clique "Desenvolver com IA".'); }
+    catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(''); }
+  };
+  const desenvolver = async (id) => { setBusy('dev' + id); setMsg('IA desenvolvendo o conteúdo…'); try { await window.ForjaAPI.developContent(id); await carregar(); setMsg('Conteúdo desenvolvido pela IA (legenda, @ e #).'); } catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(''); } };
+  const subir = (id, file) => { if (!file) return; const r = new FileReader(); r.onload = async () => { setBusy('up' + id); setMsg('Enviando e ajustando ao tamanho certo…'); try { const res = await window.ForjaAPI.uploadContentMedia(id, r.result); await carregar(); setMsg('Imagem pronta no tamanho ' + res.size + '.'); } catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(''); } }; r.readAsDataURL(file); };
+  const publicar = async (id) => { setBusy('pub' + id); try { const res = await window.ForjaAPI.publishContent(id); await carregar(); setMsg(res.result || (res.ok ? 'Publicado.' : 'Não publicado.')); } catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(''); } };
+  const agendar = async (id) => { const h = window.prompt('Publicar todo dia às (HH:MM):', '09:00'); if (!h) return; setBusy('ag' + id); try { const r = await window.ForjaAPI.scheduleContent(id, 'daily', h); await carregar(); setMsg('Agendado para ' + h + ' (próx.: ' + (r.next_run || '') + ').'); } catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(''); } };
+  const remover = async (id) => { setBusy('rm' + id); try { await window.ForjaAPI.deleteContent(id); await carregar(); } catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(''); } };
+  const editar = async (id, atual) => { const t = window.prompt('Editar conteúdo/legenda:', atual || ''); if (t === null) return; setBusy('ed' + id); try { await window.ForjaAPI.updateContent(id, { output: t }); await carregar(); } catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(''); } };
+
+  const [tema, setTema] = useState('');
+  const [estilo, setEstilo] = useState('');
+  const [marca, setMarca] = useState('');
+  const [periodo, setPeriodo] = useState('semana');
+  const [qtd, setQtd] = useState(7);
+  const [nets, setNets] = useState({ instagram: true });
+  const maxQtd = periodo === 'dia' ? 3 : 21;
+  const toggleNet = (n) => setNets(o => ({ ...o, [n]: !o[n] }));
+  const planejar = async () => {
+    const networks = Object.keys(nets).filter(k => nets[k]);
+    if (!networks.length) { setMsg('Escolha pelo menos uma rede.'); return; }
+    const q = Math.max(1, Math.min(parseInt(qtd) || 1, maxQtd));
+    setBusy('plan'); setMsg('Equipe de Redes + Designer planejando ' + q + ' publicação(ões) × ' + networks.length + ' rede(s)…');
+    try { const r = await window.ForjaAPI.planContent({ client_id: cli || undefined, networks, tema, estilo, marca, periodo, qtd: q }); await carregar(); setMsg('Plano gerado: ' + r.criados + ' conteúdos (já no tamanho de cada rede).'); }
+    catch (e) { setMsg('Falha: ' + e.message); } finally { setBusy(''); }
+  };
+  const gerarImagem = async (id) => {
+    setBusy('img' + id); setMsg('Gerando imagem com IA…');
+    try { const r = await window.ForjaAPI.generateImage(id); await carregar(); setMsg('Imagem gerada (' + r.size + ').'); }
+    catch (e) { const em = ('' + e.message).includes('402') ? 'Geração de imagem precisa de créditos no OpenRouter (modelo pago).' : e.message; setMsg('Imagem: ' + em); }
+    finally { setBusy(''); }
+  };
+
+  const sel = { background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', color: 'var(--text-1)', padding: '6px 8px', fontSize: 12.5 };
+  return (
+    <div className="center">
+      <PageHead icon="megaphone" crumb="Trabalho" title="Conteúdo · Posts & Reels" status={apiOn ? 'IMPL' : 'PARCIAL'}
+        sub="A IA desenvolve post/reel/story/carrossel no tamanho certo, com legenda, @ e #, e agenda a postagem na rede escolhida">
+      </PageHead>
+      <div className="center-body section-gap">
+        {msg && <div className="card" style={{ padding: '9px 13px', fontSize: 12, borderColor: 'var(--accent-line)', background: 'var(--accent-soft)' }}>{msg}</div>}
+        {!apiOn && <div className="card" style={{ padding: '9px 13px', fontSize: 12, borderColor: 'var(--warn)', background: 'var(--warn-soft)' }}>Backend offline — abra pelo ABRIR_PAINEL_FORJA.</div>}
+
+        <SectionCard icon="megaphone" title="Planejar campanha (equipe Redes + Designer)">
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input style={{ ...sel, flex: '1 1 150px' }} placeholder="Tema (ex.: inverno, lançamento)" value={tema} onChange={e => setTema(e.target.value)} />
+            <input style={{ ...sel, flex: '1 1 130px' }} placeholder="Estilo/tom" value={estilo} onChange={e => setEstilo(e.target.value)} />
+            <input style={{ ...sel, flex: '1 1 130px' }} placeholder="Marca/logo (cores, nome)" value={marca} onChange={e => setMarca(e.target.value)} />
+            <select style={sel} value={periodo} onChange={e => { setPeriodo(e.target.value); setQtd(e.target.value === 'dia' ? 1 : 7); }}>
+              <option value="dia">Por dia</option>
+              <option value="semana">Por semana</option>
+            </select>
+            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>Qtd:
+              <input type="number" min={1} max={maxQtd} style={{ ...sel, width: 64 }} value={qtd} onChange={e => setQtd(e.target.value)} />
+              <span className="faint" style={{ fontSize: 10.5 }}>(1–{maxQtd})</span>
+            </label>
+            <button className="btn primary" disabled={busy === 'plan' || !apiOn} onClick={planejar}><Icon name="zap" size={13} /> {busy === 'plan' ? 'Planejando…' : 'Gerar plano'}</button>
+          </div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+            <span className="faint" style={{ fontSize: 11 }}>Redes (cada uma sai no tamanho certo):</span>
+            {['instagram', 'facebook', 'tiktok', 'linkedin'].map(n => (
+              <label key={n} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!nets[n]} onChange={() => toggleNet(n)} /> {n}
+              </label>
+            ))}
+          </div>
+          <div className="faint" style={{ fontSize: 10.5, marginTop: 6 }}>A equipe cria os conteúdos já desenvolvidos (legenda, @ e #) para cada rede escolhida. Depois é só subir/gerar a imagem e agendar.</div>
+        </SectionCard>
+
+        <SectionCard icon="plus" title="Novo conteúdo (avulso)">
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <select style={sel} value={cli} onChange={e => setCli(e.target.value)}>
+              <option value="">(sem cliente)</option>
+              {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+            <select style={sel} value={network} onChange={e => setNetwork(e.target.value)}>
+              {['instagram', 'facebook'].map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <select style={sel} value={tipo} onChange={e => setTipo(e.target.value)}>
+              {['post', 'reel', 'story', 'carrossel'].map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <input style={{ ...sel, flex: 1, minWidth: 200 }} placeholder="Briefing / ideia (o que postar)" value={briefing} onChange={e => setBriefing(e.target.value)} />
+            <button className="btn primary" disabled={busy === 'criar' || !apiOn} onClick={criar}><Icon name="plus" size={13} /> Criar</button>
+          </div>
+        </SectionCard>
+
+        {items.map(it => (
+          <SectionCard key={it.id} icon="megaphone"
+            title={it.tipo.toUpperCase() + ' · ' + it.network + ' · ' + (it.cliente || 'sem cliente')}
+            right={<span className={'pill ' + (it.status === 'publicado' ? 'ok' : it.status === 'agendado' ? 'info' : '')}>{it.status}</span>}>
+            {it.briefing && <div className="faint" style={{ fontSize: 12, marginBottom: 8 }}>Briefing: {it.briefing}</div>}
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 300px', minWidth: 240 }}>
+                <div style={{ whiteSpace: 'pre-wrap', fontSize: 12.5, maxHeight: 240, overflow: 'auto', background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: 10 }}>
+                  {it.output || '(ainda não desenvolvido — clique "Desenvolver com IA")'}
+                </div>
+              </div>
+              {it.media_url && <div style={{ flex: '0 0 auto' }}><img src={it.media_url} alt="" style={{ width: 130, height: 130, objectFit: 'cover', borderRadius: 'var(--r-md)', border: '1px solid var(--border)' }} /></div>}
+            </div>
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 10 }}>
+              <button className="btn primary sm" disabled={busy === 'dev' + it.id} onClick={() => desenvolver(it.id)}><Icon name="zap" size={12} /> {busy === 'dev' + it.id ? 'IA…' : 'Desenvolver com IA'}</button>
+              <button className="btn sm" disabled={busy === 'img' + it.id} onClick={() => gerarImagem(it.id)}><Icon name="flame" size={12} /> {busy === 'img' + it.id ? 'Gerando…' : 'Gerar imagem (IA)'}</button>
+              <label className="btn sm" style={{ cursor: 'pointer' }}><Icon name="eye" size={12} /> Subir imagem<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => subir(it.id, e.target.files[0])} /></label>
+              <button className="btn sm" onClick={() => editar(it.id, it.output)}>Editar</button>
+              <button className="btn sm" disabled={busy === 'pub' + it.id} onClick={() => publicar(it.id)}><Icon name="send" size={12} /> Publicar</button>
+              <button className="btn sm" disabled={busy === 'ag' + it.id} onClick={() => agendar(it.id)}><Icon name="clock" size={12} /> Agendar</button>
+              <button className="btn ghost sm" onClick={() => remover(it.id)}>Remover</button>
+            </div>
+          </SectionCard>
+        ))}
+        {!items.length && <EmptyState icon="megaphone" title="Sem conteúdos ainda" sub="Crie o primeiro acima: escolha cliente, rede e tipo, dê um briefing e clique Criar." />}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { TestesCenter, ValidacaoCenter, AuditoriaCenter, OperacoesCenter, FinanceiroCenter, RoadmapCenter, AcademiaCenter, AjudaCenter, ConfiguracoesCenter, ConteudoCenter });
 
 
 /* ============================================================
@@ -1898,6 +3615,13 @@ function App() {
   const [cmdOpen, setCmdOpen] = useState(false);
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
+  // Deep-link: abrir direto numa tela via hash (ex.: /painel#llms)
+  useEffect(() => {
+    const apply = () => { const h = (location.hash || '').replace('#', '').trim(); if (h && ROUTES[h]) setView(h); };
+    apply();
+    window.addEventListener('hashchange', apply);
+    return () => window.removeEventListener('hashchange', apply);
+  }, []);
   useEffect(() => {
     const h = (e) => {
       const cmd = e.metaKey || e.ctrlKey;
@@ -1911,8 +3635,10 @@ function App() {
   const ROUTES = {
     home: ExecutiveHome,
     forja: HomeWorkspace,
+    conteudo: ConteudoCenter,
     clientes: ClientesCenter,
     projetos: ProjetosCenter,
+    enviar: EnviarProjetoCenter,
     missoes: MissoesCenter,
     equipes: EquipesCenter,
     inteligencia: InteligenciaCenter,
@@ -1955,4 +3681,17 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+/* Boot: hidrata dados REAIS do backend (api.js) ANTES de renderizar,
+   para que os componentes inicializem já com o estado real do nexus.db.
+   Sem backend, segue com o fallback estático de window.FORJA. */
+async function bootForja() {
+  try {
+    if (window.ForjaAPI && window.ForjaAPI.hydrate) {
+      await window.ForjaAPI.hydrate();
+    }
+  } catch (e) {
+    console.warn('[FORJA] hydrate falhou, usando fallback:', e);
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+}
+bootForja();

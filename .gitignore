@@ -28,3 +28,7 @@ backups/
 agent_execution_test.db
 __pycache__/
 *.pyc
+
+# Banco operacional (guarda tokens de clientes) - nunca versionar
+nexus.db
+

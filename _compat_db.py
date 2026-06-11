@@ -30,7 +30,30 @@ def init_db():
     """Inicializa o banco criando tabelas que não existem ainda."""
     import _compat_models as models
     Base.metadata.create_all(bind=engine)
+    _migrate_projects()
     _seed_v006_governance(models)
+
+
+def _migrate_projects():
+    """Migração idempotente: project_id em missions e client_id em projects."""
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            mcols = [r[1] for r in conn.execute(text("PRAGMA table_info(missions)")).fetchall()]
+            if "project_id" not in mcols:
+                conn.execute(text("ALTER TABLE missions ADD COLUMN project_id INTEGER"))
+            pcols = [r[1] for r in conn.execute(text("PRAGMA table_info(projects)")).fetchall()]
+            if pcols and "client_id" not in pcols:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN client_id INTEGER"))
+            ccols = [r[1] for r in conn.execute(text("PRAGMA table_info(client_connections)")).fetchall()]
+            if ccols and "scope" not in ccols:
+                conn.execute(text("ALTER TABLE client_connections ADD COLUMN scope VARCHAR DEFAULT 'client'"))
+            ncols = [r[1] for r in conn.execute(text("PRAGMA table_info(content_items)")).fetchall()]
+            if ncols and "network" not in ncols:
+                conn.execute(text("ALTER TABLE content_items ADD COLUMN network VARCHAR DEFAULT 'instagram'"))
+            conn.commit()
+    except Exception:
+        pass
 
 
 def _seed_v006_governance(models):

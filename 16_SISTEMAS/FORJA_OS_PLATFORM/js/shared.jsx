@@ -215,6 +215,26 @@ function SectionCard({ icon, title, status, right, children, flush }) {
   );
 }
 
+/* ---------- exportação CSV real (download client-side) ---------- */
+function downloadCSV(filename, rows) {
+  if (!rows || !rows.length) { alert('Nada para exportar.'); return; }
+  const cols = Object.keys(rows[0]);
+  const esc = (v) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const csv = [cols.join(';')]
+    .concat(rows.map(r => cols.map(c => esc(r[c])).join(';')))
+    .join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 Object.assign(window, { Icon, Sparkline, Bars, Donut, Progress, useLocalStorage, STATUS_CLASS,
-  StatusPill, EmptyState, PageHead, SectionCard,
+  StatusPill, EmptyState, PageHead, SectionCard, downloadCSV,
   useState, useEffect, useRef, useCallback, createContext, useContext });

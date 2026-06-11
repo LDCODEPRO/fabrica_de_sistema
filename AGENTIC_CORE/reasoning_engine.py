@@ -1,85 +1,89 @@
-import json
+import re
+
 
 class Reasoner:
     """
-    Motor ReAct Básico.
-    Faz o agente 'pensar', escolher uma 'acao' (ferramenta) e observar o 'resultado'
-    antes de dar a resposta final.
+    Motor ReAct: o agente 'pensa' (Thought), escolhe uma 'Action' (ferramenta),
+    observa o resultado (Observation) e repete até dar a 'Answer' final.
+    Mantém o TRANSCRITO completo a cada passo (contexto real).
     """
     def __init__(self, provider_router, tools_registry):
         self.router = provider_router
         self.tools = tools_registry
 
-    def run_react_loop(self, system_prompt, user_objective, max_steps=3):
-        
-        # O prompt ReAct instrui a IA a raciocinar em formato estrito
-        react_prompt = f"""
-{system_prompt}
+    def _instructions(self, system_prompt, user_objective):
+        return (
+            f"{system_prompt}\n\n"
+            "Você opera em um loop ReAct. A cada passo escreva UMA das opções:\n"
+            "  Thought: <seu raciocínio>\n"
+            "  Action: <nome_da_ferramenta>\n"
+            "  ActionInput: <parâmetro> (ou vazio)\n"
+            "  PAUSE\n"
+            "...e PARE. O sistema executa a ferramenta e devolve 'Observation:'.\n"
+            "Quando tiver a resposta final, escreva:\n"
+            "  Answer: <resposta final completa em português>\n\n"
+            "Ferramentas disponíveis:\n"
+            f"{self.tools.get_tool_descriptions()}\n\n"
+            f"Objetivo final: {user_objective}\n"
+            "Comece agora (Thought/Action ou Answer)."
+        )
 
-Você opera em um loop de Thought, Action, PAUSE, Observation.
-No final do loop, você imprime a Answer final.
+    def run_react_loop(self, system_prompt, user_objective, max_steps=8):
+        transcript = self._instructions(system_prompt, user_objective)
+        steps_log = []
 
-1. Thought: Descreva o que você precisa fazer.
-2. Action: Escolha uma ferramenta. APENAS ferramentas válidas listadas abaixo.
-3. PAUSE: Pare de escrever e aguarde.
-4. Observation: (O sistema retornará o resultado da ação para você).
-
-Ferramentas disponíveis:
-{self.tools.get_tool_descriptions()}
-
-Formato EXATO para chamar a Action:
-Action: nome_da_ferramenta
-ActionInput: parametro1 (se houver, caso contrario deixe em branco)
-PAUSE
-
----
-Seu objetivo final é: {user_objective}
-Comece!
-"""
-        messages = [{"role": "user", "content": react_prompt}]
-        
         for step in range(max_steps):
-            # Pedimos para a LLM completar
-            # Passamos max_tokens pequeno porque ela tem que parar no PAUSE
             response = self.router.execute_with_fallback(
-                prompt=messages[-1]["content"],
-                system="Você é um motor de raciocínio. Siga estritamente o formato de Thought/Action/PAUSE.",
-                max_tokens=200
+                prompt=transcript,
+                system="Você é um motor de raciocínio ReAct. Siga o formato Thought/Action/ActionInput/PAUSE, ou Answer.",
+                max_tokens=2000,
             )
-
             if not response.get("ok"):
-                return {"status": "error", "message": response.get("error")}
+                return {"status": "error", "message": response.get("error"),
+                        "steps": step, "log": steps_log}
 
-            llm_text = response.get("response", "")
-            messages.append({"role": "assistant", "content": llm_text})
+            llm_text = (response.get("response") or "").strip()
+            transcript += "\n" + llm_text
+            steps_log.append(llm_text)
 
-            # Analisa se a IA chamou uma ferramenta
+            # 1) Resposta final?
+            if "Answer:" in llm_text:
+                final = llm_text.split("Answer:", 1)[1].strip()
+                return {"status": "completed", "steps": step + 1,
+                        "final_answer": final, "log": steps_log}
+
+            # 2) Chamada de ferramenta?
             if "Action:" in llm_text:
-                # Extrai a Action
-                lines = llm_text.split('\n')
+                lines = llm_text.splitlines()
                 action_name = ""
-                action_input = ""
                 for line in lines:
-                    if line.startswith("Action:"):
-                        action_name = line.replace("Action:", "").strip()
-                    elif line.startswith("ActionInput:"):
-                        action_input = line.replace("ActionInput:", "").strip()
-
+                    if line.strip().startswith("Action:"):
+                        action_name = line.split("Action:", 1)[1].strip()
+                        break
+                # ActionInput pode ter MÚLTIPLAS linhas (ex.: conteúdo de arquivo)
+                action_input = ""
+                for i, line in enumerate(lines):
+                    if line.strip().startswith("ActionInput:"):
+                        buf = [line.split("ActionInput:", 1)[1]]
+                        for nxt in lines[i + 1:]:
+                            st = nxt.strip()
+                            if st == "PAUSE" or st.startswith(("Observation", "Thought:", "Action:", "Answer")):
+                                break
+                            buf.append(nxt)
+                        action_input = "\n".join(buf).strip()
+                        break
                 if action_name:
-                    # Executa a ferramenta do nosso Python local
                     observation = self.tools.execute(action_name, action_input)
-                    
-                    # Devolve a observação para a IA continuar pensando
-                    messages.append({"role": "user", "content": f"Observation: {observation}\nContinue com Thought ou Answer."})
-                else:
-                    messages.append({"role": "user", "content": "Observation: Nenhuma acao extraida. Escreva 'Answer: ' se terminou."})
-            
-            elif "Answer:" in llm_text or "Answer" in llm_text:
-                # O agente concluiu a tarefa
-                return {"status": "completed", "steps": step + 1, "final_answer": llm_text}
-            
-            else:
-                 # Falhou em seguir o loop, força a resposta
-                 messages.append({"role": "user", "content": "Observation: Formato invalido. Você deve usar 'Action: ' e 'PAUSE', ou escrever 'Answer: ' com o resultado final."})
+                    transcript += f"\nObservation: {observation}\n"
+                    continue
+                transcript += "\nObservation: Nenhuma ação extraída. Use 'Action:' ou 'Answer:'.\n"
+                continue
 
-        return {"status": "max_steps_reached", "history": messages}
+            # 3) Formato inválido — orienta
+            transcript += ("\nObservation: Formato inválido. Use 'Action: <ferramenta>' + 'ActionInput:' + 'PAUSE', "
+                           "ou 'Answer: <resposta>'.\n")
+
+        # Atingiu o limite de passos: devolve o último raciocínio como resposta parcial
+        last = steps_log[-1] if steps_log else ""
+        return {"status": "max_steps_reached", "steps": max_steps,
+                "final_answer": last, "log": steps_log}
