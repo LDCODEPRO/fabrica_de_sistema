@@ -26,6 +26,7 @@ PROVIDER_EXECUTION_MAP = {
     "gemini_subscription": "gemini_sub",
     "deepseek_v4_router": "openrouter",
     "kimi_k26_router": "openrouter",
+    "claude_fable5_router": "openrouter",
     "ollama_local": "ollama",
 }
 
@@ -33,6 +34,8 @@ PROVIDER_EXECUTION_MAP = {
 PROVIDER_MODEL_OVERRIDE = {
     "deepseek_v4_router": "deepseek/deepseek-v4-pro",
     "kimi_k26_router": "moonshotai/kimi-k2.6",
+    # Claude Fable 5 (Mythos-class, lançado 09/06/2026) via OpenRouter.
+    "claude_fable5_router": "anthropic/claude-fable-5",
 }
 
 
@@ -104,7 +107,7 @@ def execution_order(provider_keys: Iterable[str]) -> list[str]:
 
 def status_from_result(provider_key: str, result: dict) -> str:
     if result.get("ok"):
-        if provider_key in {"deepseek_v4_router", "kimi_k26_router"}:
+        if provider_key in {"deepseek_v4_router", "kimi_k26_router", "claude_fable5_router"}:
             return STATUS_ROUTER_LIMITED
         return STATUS_CERTIFIED
 
@@ -170,7 +173,7 @@ def check_provider(provider_key: str, prompt: str = "Responda apenas PROVIDER_OK
         }
 
     # Verify if configuration is missing / placeholder in environment
-    if provider_key in {"deepseek_v4_router", "kimi_k26_router"}:
+    if provider_key in {"deepseek_v4_router", "kimi_k26_router", "claude_fable5_router"}:
         router_key = os.environ.get("OPENROUTER_API_KEY", "")
         if not router_key or "CHANGE_ME" in router_key:
             return {
@@ -211,10 +214,13 @@ def check_provider(provider_key: str, prompt: str = "Responda apenas PROVIDER_OK
             "checked_at": now_iso(),
         }
 
-    if provider_key == "kimi_k26_router":
+    # Para qualquer provider de router com modelo específico (Kimi, Fable 5, etc.),
+    # checa exatamente aquele modelo, sem fallbacks (evita resposta de outro modelo).
+    _model_ovr = PROVIDER_MODEL_OVERRIDE.get(provider_key)
+    if exec_key == "openrouter" and _model_ovr and provider_key != "deepseek_v4_router":
         original = provider_router.PROVIDER_CONFIG["openrouter"]["model"]
         original_fallback = provider_router.PROVIDER_CONFIG["openrouter"].get("fallback_models", [])
-        provider_router.PROVIDER_CONFIG["openrouter"]["model"] = "moonshotai/kimi-k2.6"
+        provider_router.PROVIDER_CONFIG["openrouter"]["model"] = _model_ovr
         provider_router.PROVIDER_CONFIG["openrouter"]["fallback_models"] = []
     else:
         original = original_fallback = None
@@ -230,7 +236,7 @@ def check_provider(provider_key: str, prompt: str = "Responda apenas PROVIDER_OK
             "response": None,
         }
     finally:
-        if provider_key == "kimi_k26_router":
+        if exec_key == "openrouter" and _model_ovr and provider_key != "deepseek_v4_router":
             provider_router.PROVIDER_CONFIG["openrouter"]["model"] = original
             provider_router.PROVIDER_CONFIG["openrouter"]["fallback_models"] = original_fallback
 

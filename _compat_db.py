@@ -69,6 +69,7 @@ def _seed_v006_governance(models):
             ("deepseek_v4_router", "DeepSeek V4 Pro via Router", "ROUTER_PROVIDER", 4, True, "ENVIRONMENT_PENDING", "ROUTER_KEY", "ROUTER_CONTROLLED", "router", {"model": "deepseek/deepseek-v4-pro"}),
             ("kimi_k26_router", "Kimi K2.6 via Router", "ROUTER_PROVIDER", 5, True, "ENVIRONMENT_PENDING", "ROUTER_KEY", "ROUTER_CONTROLLED", "router", {"model": "moonshotai/kimi-k2.6"}),
             ("ollama_local", "Ollama Local", "LOCAL_PROVIDER", 6, True, "ENVIRONMENT_PENDING", "LOCAL_DAEMON", "FREE_LOCAL", "local", {}),
+            ("claude_fable5_router", "Claude Fable 5 (novo) via Router", "ROUTER_PROVIDER", 7, True, "ENVIRONMENT_PENDING", "ROUTER_KEY", "ROUTER_CONTROLLED", "router", {"model": "anthropic/claude-fable-5", "notes": "Mythos-class, lancado 09/06/2026. Ativa quando o OpenRouter listar o modelo (+creditos) ou via ANTHROPIC_API_KEY. Premium/pago - opt-in."}),
         ]
         for key, name, ptype, prio, enabled, status, auth, cost, group, meta in providers:
             row = db.query(models.LLMProvider).filter(models.LLMProvider.provider_key == key).first()

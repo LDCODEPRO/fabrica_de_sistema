@@ -445,6 +445,8 @@ def _provider_to_dict(row: m.LLMProvider) -> dict:
         models = ["deepseek/deepseek-v4-pro"]
     if row.provider_key == "kimi_k26_router":
         models = ["moonshotai/kimi-k2.6"]
+    if row.provider_key == "claude_fable5_router":
+        models = ["anthropic/claude-fable-5"]
     if row.provider_key == "gemini_subscription":
         models = ["gemini-subscription"]
     if row.provider_key == "ollama_local":
