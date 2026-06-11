@@ -185,34 +185,20 @@ def check_provider(provider_key: str, prompt: str = "Responda apenas PROVIDER_OK
                 "checked_at": now_iso(),
             }
 
-    # Verify if CLI is available for subscription CLIs
-    if provider_key == "claude_subscription" and not provider_router._cli_available("claude"):
-        return {
-            "provider_key": provider_key,
-            "status": STATUS_ENV_PENDING,
-            "ok": False,
-            "error": "Claude CLI (claude) não disponível no PATH",
-            "latency_ms": 0,
-            "checked_at": now_iso(),
-        }
-    if provider_key == "openai_subscription" and not provider_router._cli_available("codex"):
-        return {
-            "provider_key": provider_key,
-            "status": STATUS_ENV_PENDING,
-            "ok": False,
-            "error": "ChatGPT/Codex CLI (codex) não disponível no PATH",
-            "latency_ms": 0,
-            "checked_at": now_iso(),
-        }
-    if provider_key == "gemini_subscription" and not provider_router._cli_available("gemini"):
-        return {
-            "provider_key": provider_key,
-            "status": STATUS_ENV_PENDING,
-            "ok": False,
-            "error": "Gemini CLI (gemini) não disponível no PATH",
-            "latency_ms": 0,
-            "checked_at": now_iso(),
-        }
+    # Verifica se a assinatura está disponível por QUALQUER caminho desta máquina
+    # (CLI oficial OU script de automação). Cobre as duas máquinas.
+    if provider_key in {"claude_subscription", "openai_subscription", "gemini_subscription"}:
+        if provider_router.provider_status(exec_key) == "AUSENTE":
+            _bin = {"claude_subscription": "claude", "openai_subscription": "codex",
+                    "gemini_subscription": "gemini"}[provider_key]
+            return {
+                "provider_key": provider_key,
+                "status": STATUS_ENV_PENDING,
+                "ok": False,
+                "error": f"Assinatura {_bin} indisponível (sem CLI no PATH nem script de automação)",
+                "latency_ms": 0,
+                "checked_at": now_iso(),
+            }
 
     # Para qualquer provider de router com modelo específico (Kimi, Fable 5, etc.),
     # checa exatamente aquele modelo, sem fallbacks (evita resposta de outro modelo).

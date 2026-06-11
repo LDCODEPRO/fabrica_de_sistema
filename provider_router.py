@@ -64,7 +64,10 @@ def _is_provider_healthy(provider_id: str) -> bool:
             data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
             p = data.get("providers", {}).get(registry_id, {})
             status = p.get("health_status", "unknown")
-            if status in {"unavailable", "missing_key", "offline"}:
+            # Só bloqueia em estados HARD do registry. "missing_key" NÃO bloqueia aqui:
+            # a checagem real (provider_status==AUSENTE) em execute_with_fallback já
+            # pula providers sem chave/CLI, e o registry costuma estar desatualizado.
+            if status in {"unavailable", "offline"}:
                 return False
     except Exception:
         pass
@@ -77,15 +80,21 @@ def _is_provider_healthy(provider_id: str) -> bool:
 # 2. Gemini (assinatura, CLI oficial `gemini`)
 # 3. ChatGPT/Codex (assinatura, CLI `codex`)
 # 4. Ollama local (último recurso grátis)
-PREFERRED_ORDER = ["claude_sub", "gemini_sub", "codex_sub", "openrouter", "ollama"]
+# Cadeia padrão: ASSINATURAS primeiro (custo R$ 0, nas duas máquinas) → APIs como
+# fallback (OpenRouter gateway + APIs diretas) → local (Ollama). Providers sem
+# chave/CLI são pulados automaticamente (provider_status==AUSENTE).
+PREFERRED_ORDER = ["claude_sub", "gemini_sub", "codex_sub",
+                   "openrouter", "openai", "gemini", "deepseek", "claude", "ollama"]
 
 GROUP_ORDERS = {
-    # OpenRouter (gateway autorizado, active_real) vem logo após o Claude para
-    # servir de fallback confiável ANTES das automações de navegador (gemini/codex),
-    # que são intermitentes. Zero Ghost: nada de erro de automação virar "resposta".
-    "conversation": ["claude_sub", "openrouter", "gemini_sub", "codex_sub", "ollama"],
-    "engineering": ["claude_sub", "gemini_sub", "codex_sub", "openrouter", "ollama"],
-    "low_cost": ["gemini_sub", "openrouter", "ollama", "claude_sub", "codex_sub"],
+    # Assinaturas (CLI/script oficial) primeiro; depois APIs como rede de segurança;
+    # por fim o local. Zero Ghost: erros de CLI nunca viram "resposta".
+    "conversation": ["claude_sub", "gemini_sub", "codex_sub",
+                     "openrouter", "openai", "gemini", "deepseek", "claude", "ollama"],
+    "engineering": ["claude_sub", "gemini_sub", "codex_sub",
+                    "openrouter", "openai", "deepseek", "gemini", "claude", "ollama"],
+    "low_cost": ["gemini_sub", "codex_sub", "claude_sub",
+                 "openrouter", "gemini", "deepseek", "openai", "ollama"],
 }
 
 # Providers de ASSINATURA via CLI oficial (custo incremental R$ 0, sem API key)
@@ -95,11 +104,40 @@ SUBSCRIPTION_CLIS = {
     "gemini_sub": {"bin": "gemini", "label": "Gemini (assinatura)"},
 }
 
+def _candidate_scripts(plugin, fname):
+    """Caminhos possíveis dos scripts de automação de assinatura, p/ funcionar
+    em ambas as máquinas. Retorna lista de candidatos (ordem de preferência)."""
+    cands = [
+        # Outra máquina (usuário Servdia) — caminho histórico conhecido
+        rf"C:\Users\Servdia\.gemini\config\plugins\{plugin}\scripts\{fname}",
+    ]
+    user_profile = os.environ.get("USERPROFILE", "")
+    if user_profile:
+        # Variante relativa ao usuário atual (qualquer máquina)
+        cands.append(os.path.join(user_profile, ".gemini", "config", "plugins", plugin, "scripts", fname))
+    return cands
+
+
+def _first_existing_script(cfg):
+    """Primeiro python_script existente dentre os candidatos (ou None)."""
+    for path in cfg.get("python_scripts", []):
+        if path and os.path.exists(path):
+            return path
+    return None
+
+
 PROVIDER_CONFIG = {
     # Assinaturas via CLI/Browser Scripts (usam a sessão do usuário no Chrome)
+    # Cada assinatura tem DOIS caminhos para funcionar em QUALQUER máquina:
+    #   1) "cli": CLI oficial instalado (ex.: esta máquina, usuário `conta`).
+    #   2) "python_scripts": scripts de automação da outra máquina (usuário `Servdia`)
+    #      e variante relativa ao USERPROFILE atual. Usado se o CLI não existir.
+    # _codex_cli/_gemini_cli tentam o CLI primeiro e caem no script se preciso.
     "claude_sub": {"env": None, "model": "claude-subscription", "cli": "claude"},
-    "codex_sub":  {"env": None, "model": "chatgpt-subscription", "python_script": r"C:\Users\Servdia\.gemini\config\plugins\openai-integration\scripts\openai_cli.py"},
-    "gemini_sub": {"env": None, "model": "gemini-subscription", "python_script": r"C:\Users\Servdia\.gemini\config\plugins\gemini-advanced\scripts\gemini_cli.py"},
+    "codex_sub":  {"env": None, "model": "chatgpt-subscription", "cli": "codex",
+                   "python_scripts": _candidate_scripts("openai-integration", "openai_cli.py")},
+    "gemini_sub": {"env": None, "model": "gemini-subscription", "cli": "gemini",
+                   "python_scripts": _candidate_scripts("gemini-advanced", "gemini_cli.py")},
     # Local grátis
     "ollama":   {"env": None, "model": os.getenv("OLLAMA_MODEL", "llama3.2:latest")},
     # APIs diretas legadas (NÃO usadas por padrão — assinaturas têm prioridade)
@@ -166,38 +204,85 @@ def _claude_cli(cfg, prompt, system, max_tokens):
 
 
 def _codex_cli(cfg, prompt, system, max_tokens):
-    """ChatGPT via assinatura (browser automation)."""
+    """ChatGPT/Codex via assinatura. Caminho 1: CLI oficial `codex exec` (login
+    ChatGPT). Caminho 2 (fallback p/ outra máquina): script de automação Python."""
     full = (system + "\n\n" + prompt) if system else prompt
-    script = cfg["python_script"]
-    proc = subprocess.run(
-        ["python", script, full],
-        capture_output=True, text=True, timeout=50, encoding='utf-8', errors='replace'
-    )
-    raw = (proc.stdout or "")
-    if proc.returncode != 0 and not raw.strip():
-        raise RuntimeError(((proc.stderr or "").strip() or "openai_cli falhou")[:160])
-    if _looks_like_cli_error(raw):
-        first = (raw.strip().splitlines() or ["codex CLI sem resposta válida"])[0]
-        raise RuntimeError(("CLI_AUTOMATION_ERROR: " + first)[:160])
-    return raw.strip()
+
+    # Caminho 1 — CLI oficial desta máquina
+    if _cli_available("codex"):
+        proc = subprocess.run(
+            [_resolve_bin("codex"), "exec", full],
+            input="",                   # fecha o stdin (codex exec aguardaria input)
+            capture_output=True, text=True, timeout=120, encoding='utf-8', errors='replace'
+        )
+        raw = (proc.stdout or "")
+        if proc.returncode == 0 or raw.strip():
+            text = _parse_codex_output(raw)
+            if text and not _looks_like_cli_error(text):
+                return text
+        # CLI presente mas falhou → tenta o script antes de desistir
+
+    # Caminho 2 — script de automação da outra máquina (Servdia/USERPROFILE)
+    script = _first_existing_script(cfg)
+    if script:
+        proc = subprocess.run(
+            ["python", script, full],
+            capture_output=True, text=True, timeout=60, encoding='utf-8', errors='replace'
+        )
+        raw = (proc.stdout or "")
+        if proc.returncode != 0 and not raw.strip():
+            raise RuntimeError(((proc.stderr or "").strip() or "openai_cli falhou")[:160])
+        if _looks_like_cli_error(raw):
+            first = (raw.strip().splitlines() or ["codex sem resposta válida"])[0]
+            raise RuntimeError(("CLI_AUTOMATION_ERROR: " + first)[:160])
+        return raw.strip()
+
+    raise RuntimeError("codex indisponível: nem CLI nem script de assinatura encontrados")
 
 
 def _gemini_cli(cfg, prompt, system, max_tokens):
-    """Gemini via assinatura Google One (browser automation)."""
+    """Gemini via assinatura (CLI oficial `gemini`, OAuth pessoal/Google One).
+
+    Usa o GEMINI_CLI_HOME local (.gemini-forja) e REMOVE GEMINI_API_KEY/GOOGLE_API_KEY
+    do ambiente do subprocesso, forçando o uso da ASSINATURA (oauth-personal) em vez
+    de cobrar via API key.
+    """
     full = (system + "\n\n" + prompt) if system else prompt
-    script = cfg["python_script"]
-    proc = subprocess.run(
-        ["python", script, full],
-        capture_output=True, text=True, timeout=50, encoding='utf-8', errors='replace'
-    )
-    raw = (proc.stdout or "").strip()
-    err = (proc.stderr or "").strip()
-    if proc.returncode != 0 or not raw:
-        raise RuntimeError((err or raw or "gemini_cli sem saída")[:160])
-    if _looks_like_cli_error(raw):
-        first = (raw.splitlines() or ["gemini CLI sem resposta válida"])[0]
-        raise RuntimeError(("CLI_AUTOMATION_ERROR: " + first)[:160])
-    return raw
+
+    # Caminho 1 — CLI oficial desta máquina (gemini.cmd portátil + OAuth assinatura)
+    if _cli_available("gemini"):
+        env = os.environ.copy()
+        env["GEMINI_CLI_HOME"] = str(Path(__file__).resolve().parent / ".gemini-forja")
+        env.pop("GEMINI_API_KEY", None)
+        env.pop("GOOGLE_API_KEY", None)
+        proc = subprocess.run(
+            [_resolve_bin("gemini"), "-p", full],
+            input="",
+            capture_output=True, text=True, timeout=120, encoding='utf-8', errors='replace',
+            env=env,
+        )
+        raw = (proc.stdout or "").strip()
+        if proc.returncode == 0 and raw and not _looks_like_cli_error(raw):
+            return raw
+        # CLI presente mas falhou → tenta o script
+
+    # Caminho 2 — script de automação da outra máquina (Servdia/USERPROFILE)
+    script = _first_existing_script(cfg)
+    if script:
+        proc = subprocess.run(
+            ["python", script, full],
+            capture_output=True, text=True, timeout=60, encoding='utf-8', errors='replace'
+        )
+        raw = (proc.stdout or "").strip()
+        err = (proc.stderr or "").strip()
+        if proc.returncode != 0 or not raw:
+            raise RuntimeError((err or raw or "gemini_cli sem saída")[:160])
+        if _looks_like_cli_error(raw):
+            first = (raw.splitlines() or ["gemini sem resposta válida"])[0]
+            raise RuntimeError(("CLI_AUTOMATION_ERROR: " + first)[:160])
+        return raw
+
+    raise RuntimeError("gemini indisponível: nem CLI nem script de assinatura encontrados")
 
 
 def _parse_codex_output(raw):
@@ -260,11 +345,14 @@ def provider_status(provider):
     cfg = PROVIDER_CONFIG.get(provider)
     if not cfg:
         return "DESCONHECIDO"
-    # Assinatura via CLI: CONFIGURADO se a CLI estiver instalada
-    if cfg.get("cli"):
-        return "CONFIGURADO" if _cli_available(cfg["cli"]) else "AUSENTE"
-    if cfg.get("python_script"):
-        return "CONFIGURADO" if os.path.exists(cfg["python_script"]) else "AUSENTE"
+    # Assinatura: CONFIGURADO se houver QUALQUER caminho disponível nesta máquina
+    # (CLI oficial instalado OU script de automação existente).
+    if cfg.get("cli") or cfg.get("python_scripts"):
+        if cfg.get("cli") and _cli_available(cfg["cli"]):
+            return "CONFIGURADO"
+        if _first_existing_script(cfg):
+            return "CONFIGURADO"
+        return "AUSENTE"
     if cfg["env"] is None:  # local
         return "CONFIGURADO"
     v = os.environ.get(cfg["env"], "")

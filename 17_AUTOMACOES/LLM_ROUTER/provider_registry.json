@@ -55,7 +55,7 @@
       "cost_incremental": 0,
       "requires_api_key": false,
       "requires_director_approval": false,
-      "health_status": "unavailable",
+      "health_status": "active_real",
       "last_health_check": "2026-06-11T12:00:00.000000",
       "allowed_for_agents": false,
       "model_id": "chatgpt-plus",
