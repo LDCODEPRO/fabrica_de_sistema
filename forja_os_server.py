@@ -69,6 +69,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── PORTÃO PÚBLICO (hospedagem local via túnel) ──────────────────────────────
+# Quando o request chega pela internet (túnel Cloudflare injeta CF-Connecting-IP),
+# exige o token FORJA_PUBLIC_TOKEN (do .env): primeiro acesso via /painel?key=TOKEN
+# grava cookie e os próximos passam direto. Acesso local (sem túnel) continua livre.
+_PUBLIC_TOKEN = os.getenv("FORJA_PUBLIC_TOKEN", "")
+_GATE_FREE_PATHS = {"/api/health", "/health.json", "/favicon.svg"}
+
+
+@app.middleware("http")
+async def public_gate(request: Request, call_next):
+    if not _PUBLIC_TOKEN or not request.headers.get("cf-connecting-ip"):
+        return await call_next(request)          # local/LAN ou portão desativado
+    if request.url.path in _GATE_FREE_PATHS:
+        return await call_next(request)
+    if request.cookies.get("forja_key") == _PUBLIC_TOKEN:
+        return await call_next(request)
+    if request.query_params.get("key") == _PUBLIC_TOKEN:
+        resp = await call_next(request)
+        resp.set_cookie("forja_key", _PUBLIC_TOKEN, max_age=30 * 24 * 3600,
+                        httponly=True, secure=True, samesite="lax")
+        return resp
+    return JSONResponse({"detail": "Acesso restrito. Abra /painel?key=SEU_TOKEN."},
+                        status_code=401)
+
+
 # Mídia de conteúdo (imagens redimensionadas) servida estaticamente
 _CONTENT_MEDIA_DIR = Path(__file__).parent / "18_EXPORTS" / "content_media"
 _CONTENT_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
@@ -1888,9 +1913,16 @@ def system_health(db: Session = Depends(get_db)):
     except Exception:
         comps.append({"id": "auditoria", "nome": "Auditoria", "icon": "shield", "st": "DEV", "nota": "—"})
 
-    # Scheduler — honesto (ainda não implementado)
-    comps.append({"id": "scheduler", "nome": "Scheduler", "icon": "clock", "st": "NIMPL",
-                  "nota": "não configurado"})
+    # Scheduler — estado real: roda em background (loop 30s) com jobs no banco
+    try:
+        import scheduler_engine
+        jtot = db.query(m.ScheduledJob).count()
+        jon = db.query(m.ScheduledJob).filter(m.ScheduledJob.enabled == True).count()  # noqa: E712
+        st = "CERT" if (scheduler_engine._started and jon > 0) else ("DEV" if jtot else "CONFIG")
+        comps.append({"id": "scheduler", "nome": "Scheduler", "icon": "clock", "st": st,
+                      "nota": f"{jon} job(s) ativo(s) de {jtot} · loop 30s"})
+    except Exception:
+        comps.append({"id": "scheduler", "nome": "Scheduler", "icon": "clock", "st": "DEV", "nota": "—"})
 
     return {"items": comps, "generated_at": datetime.now(timezone.utc).isoformat(), "source": "real_health_check"}
 

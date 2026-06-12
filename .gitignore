@@ -32,3 +32,5 @@ __pycache__/
 # Banco operacional (guarda tokens de clientes) - nunca versionar
 nexus.db
 
+.runtime_path_cache.json
+logs/

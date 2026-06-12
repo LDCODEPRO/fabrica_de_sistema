@@ -15,10 +15,24 @@ import os
 import re
 import json
 import shutil
+import threading
 import subprocess
 import urllib.request
 import urllib.error
 from pathlib import Path
+
+# Serializa o acesso a cada CLI de assinatura: chamadas concorrentes ao MESMO
+# CLI (gemini/codex/claude) disputam sessão/recursos e geram timeouts em série,
+# que derrubavam o provider no painel. Um lock por CLI elimina a contenção.
+_CLI_LOCKS = {"claude": threading.Lock(), "codex": threading.Lock(), "gemini": threading.Lock()}
+
+# 1 retry em falha transitória (timeout/saída vazia) antes de propagar o erro.
+_TRANSIENT_MARKERS = ("timeout", "timed out", "sem saída", "expired", "sem resposta")
+
+
+def _is_transient(msg):
+    m = str(msg).lower()
+    return any(k in m for k in _TRANSIENT_MARKERS)
 
 
 def _load_local_env():
@@ -103,6 +117,64 @@ SUBSCRIPTION_CLIS = {
     "codex_sub":  {"bin": "codex",  "label": "ChatGPT/Codex (assinatura)"},
     "gemini_sub": {"bin": "gemini", "label": "Gemini (assinatura)"},
 }
+
+# ---------------------------------------------------------------------------
+# CACHE DO CAMINHO CERTO (por máquina): memoriza qual variante de cada
+# assinatura funcionou por último (ex.: gemini_sub -> "cli_flash") para ir
+# direto nela e não ficar tentando caminhos errados a cada chamada.
+# ---------------------------------------------------------------------------
+_PATH_CACHE_FILE = Path(__file__).resolve().parent / ".runtime_path_cache.json"
+_path_cache_lock = threading.Lock()
+
+
+def _path_cache_load():
+    try:
+        if _PATH_CACHE_FILE.exists():
+            return json.loads(_PATH_CACHE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _path_cache_get(provider):
+    return _path_cache_load().get(provider)
+
+
+def _path_cache_set(provider, variant):
+    with _path_cache_lock:
+        data = _path_cache_load()
+        if variant is None:
+            data.pop(provider, None)
+        elif data.get(provider) == variant:
+            return
+        else:
+            data[provider] = variant
+        try:
+            _PATH_CACHE_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+
+_QUOTA_COOLDOWN_MIN = 30  # re-tenta o provider a cada 30 min após cota esgotada
+
+
+def _quota_cooldown_set(provider):
+    """Marca cota esgotada: o provider é pulado por _QUOTA_COOLDOWN_MIN minutos."""
+    import time as _t
+    with _path_cache_lock:
+        data = _path_cache_load()
+        data[provider + ":quota_until"] = _t.time() + _QUOTA_COOLDOWN_MIN * 60
+        try:
+            _PATH_CACHE_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+
+def _quota_cooldown_active(provider):
+    import time as _t
+    until = _path_cache_load().get(provider + ":quota_until")
+    return bool(until and _t.time() < float(until))
+
 
 def _candidate_scripts(plugin, fname):
     """Caminhos possíveis dos scripts de automação de assinatura, p/ funcionar
@@ -204,12 +276,13 @@ def _claude_cli(cfg, prompt, system, max_tokens):
 
 
 def _codex_cli(cfg, prompt, system, max_tokens):
-    """ChatGPT/Codex via assinatura. Caminho 1: CLI oficial `codex exec` (login
-    ChatGPT). Caminho 2 (fallback p/ outra máquina): script de automação Python."""
+    """ChatGPT/Codex via assinatura, com o mesmo DISPOSITIVO DE CAMINHO CERTO
+    do gemini: memoriza a variante que funciona nesta máquina (CLI ou script)
+    e vai direto nela; se falhar, esquece e redescobre."""
     full = (system + "\n\n" + prompt) if system else prompt
+    errors = []
 
-    # Caminho 1 — CLI oficial desta máquina
-    if _cli_available("codex"):
+    def _try_cli():
         proc = subprocess.run(
             [_resolve_bin("codex"), "exec", full],
             input="",                   # fecha o stdin (codex exec aguardaria input)
@@ -219,72 +292,126 @@ def _codex_cli(cfg, prompt, system, max_tokens):
         if proc.returncode == 0 or raw.strip():
             text = _parse_codex_output(raw)
             if text and not _looks_like_cli_error(text):
-                return text
-        # CLI presente mas falhou → tenta o script antes de desistir
+                return text, None
+        err = (proc.stderr or "").strip()
+        return None, (err.splitlines()[-1] if err else "codex CLI sem resposta válida")[:120]
 
-    # Caminho 2 — script de automação da outra máquina (Servdia/USERPROFILE)
-    script = _first_existing_script(cfg)
-    if script:
-        proc = subprocess.run(
-            ["python", script, full],
-            capture_output=True, text=True, timeout=60, encoding='utf-8', errors='replace'
-        )
+    def _try_script():
+        script = _first_existing_script(cfg)
+        if not script:
+            return None, "sem script de automação nesta máquina"
+        proc = subprocess.run(["python", script, full], capture_output=True,
+                              text=True, timeout=60, encoding='utf-8', errors='replace')
         raw = (proc.stdout or "")
-        if proc.returncode != 0 and not raw.strip():
-            raise RuntimeError(((proc.stderr or "").strip() or "openai_cli falhou")[:160])
-        if _looks_like_cli_error(raw):
-            first = (raw.strip().splitlines() or ["codex sem resposta válida"])[0]
-            raise RuntimeError(("CLI_AUTOMATION_ERROR: " + first)[:160])
-        return raw.strip()
+        if (proc.returncode == 0 or raw.strip()) and raw.strip() and not _looks_like_cli_error(raw):
+            return raw.strip(), None
+        return None, ((proc.stderr or "").strip() or "openai_cli falhou")[:120]
 
-    raise RuntimeError("codex indisponível: nem CLI nem script de assinatura encontrados")
+    variants = {}
+    if _cli_available("codex"):
+        variants["cli"] = _try_cli
+    if _first_existing_script(cfg):
+        variants["script"] = _try_script
+    if not variants:
+        raise RuntimeError("codex indisponível: nem CLI nem script de assinatura nesta máquina")
+
+    order = list(variants.keys())
+    cached = _path_cache_get("codex_sub")
+    if cached in order:
+        order.remove(cached)
+        order.insert(0, cached)
+
+    for variant in order:
+        out, err = variants[variant]()
+        if out is not None:
+            _path_cache_set("codex_sub", variant)
+            return out
+        errors.append(f"{variant}: {err}")
+        if variant == cached:
+            _path_cache_set("codex_sub", None)
+
+    raise RuntimeError("codex falhou em todos os caminhos — " + " | ".join(errors)[:200])
 
 
 def _gemini_cli(cfg, prompt, system, max_tokens):
     """Gemini via assinatura (CLI oficial `gemini`, OAuth pessoal/Google One).
 
-    Usa o GEMINI_CLI_HOME local (.gemini-forja) e REMOVE GEMINI_API_KEY/GOOGLE_API_KEY
-    do ambiente do subprocesso, forçando o uso da ASSINATURA (oauth-personal) em vez
-    de cobrar via API key.
+    DISPOSITIVO DE CAMINHO CERTO: descobre qual variante funciona NESTA máquina
+    (CLI modelo padrão → CLI flash → script de automação), MEMORIZA em
+    .runtime_path_cache.json e vai direto nela nas próximas chamadas. Se a
+    variante memorizada falhar, esquece e redescobre — nada de cair toda hora.
+    Cota esgotada no modelo pro ("exhausted your capacity") troca para o flash
+    automaticamente (cotas separadas na assinatura).
     """
     full = (system + "\n\n" + prompt) if system else prompt
+    errors = []
 
-    # Caminho 1 — CLI oficial desta máquina (gemini.cmd portátil + OAuth assinatura)
-    if _cli_available("gemini"):
+    # Cota esgotada recentemente? Pula instantâneo (a cadeia segue pro próximo)
+    # e re-tenta sozinho depois do cooldown — sem travar o chat por ~20s à toa.
+    if _quota_cooldown_active("gemini_sub"):
+        raise RuntimeError("gemini em cooldown de cota (re-tenta automaticamente em breve)")
+
+    def _try_cli(model=None):
         env = os.environ.copy()
         env["GEMINI_CLI_HOME"] = str(Path(__file__).resolve().parent / ".gemini-forja")
         env.pop("GEMINI_API_KEY", None)
         env.pop("GOOGLE_API_KEY", None)
-        # Prompt via STDIN (não -p): linha de comando no Windows estoura ~32k chars
-        # com transcripts grandes (ReAct), stdin não tem esse limite.
-        proc = subprocess.run(
-            [_resolve_bin("gemini")],
-            input=full,
-            capture_output=True, text=True, timeout=120, encoding='utf-8', errors='replace',
-            env=env,
-        )
-        raw = (proc.stdout or "").strip()
-        if proc.returncode == 0 and raw and not _looks_like_cli_error(raw):
-            return raw
-        # CLI presente mas falhou → tenta o script
-
-    # Caminho 2 — script de automação da outra máquina (Servdia/USERPROFILE)
-    script = _first_existing_script(cfg)
-    if script:
-        proc = subprocess.run(
-            ["python", script, full],
-            capture_output=True, text=True, timeout=60, encoding='utf-8', errors='replace'
-        )
+        args = [_resolve_bin("gemini")] + (["-m", model] if model else [])
+        # Prompt via STDIN (não -p): linha de comando no Windows estoura ~32k chars.
+        proc = subprocess.run(args, input=full, capture_output=True, text=True,
+                              timeout=120, encoding='utf-8', errors='replace', env=env)
         raw = (proc.stdout or "").strip()
         err = (proc.stderr or "").strip()
-        if proc.returncode != 0 or not raw:
-            raise RuntimeError((err or raw or "gemini_cli sem saída")[:160])
-        if _looks_like_cli_error(raw):
-            first = (raw.splitlines() or ["gemini sem resposta válida"])[0]
-            raise RuntimeError(("CLI_AUTOMATION_ERROR: " + first)[:160])
-        return raw
+        if proc.returncode == 0 and raw and not _looks_like_cli_error(raw):
+            return raw, None
+        low = (err + " " + raw).lower()
+        if "exhausted your capacity" in low or "terminalquotaerror" in low or "quota" in low:
+            return None, "QUOTA:" + (model or "default")
+        return None, (err.splitlines()[-1] if err else "gemini CLI sem saída")[:120]
 
-    raise RuntimeError("gemini indisponível: nem CLI nem script de assinatura encontrados")
+    def _try_script():
+        script = _first_existing_script(cfg)
+        if not script:
+            return None, "sem script de automação nesta máquina"
+        proc = subprocess.run(["python", script, full], capture_output=True,
+                              text=True, timeout=60, encoding='utf-8', errors='replace')
+        raw = (proc.stdout or "").strip()
+        err = (proc.stderr or "").strip()
+        if proc.returncode == 0 and raw and not _looks_like_cli_error(raw):
+            return raw, None
+        return None, (err or raw or "script gemini sem saída")[:120]
+
+    # Variantes possíveis nesta máquina, em ordem de preferência
+    variants = {}
+    if _cli_available("gemini"):
+        variants["cli"] = lambda: _try_cli()
+        variants["cli_flash"] = lambda: _try_cli("gemini-2.5-flash")
+    if _first_existing_script(cfg):
+        variants["script"] = _try_script
+    if not variants:
+        raise RuntimeError("gemini indisponível: nem CLI nem script de assinatura nesta máquina")
+
+    # 1) Caminho memorizado primeiro (reconhecimento automático do caminho certo)
+    order = list(variants.keys())
+    cached = _path_cache_get("gemini_sub")
+    if cached in order:
+        order.remove(cached)
+        order.insert(0, cached)
+
+    for variant in order:
+        out, err = variants[variant]()
+        if out is not None:
+            _path_cache_set("gemini_sub", variant)
+            return out
+        errors.append(f"{variant}: {err}")
+        if variant == cached:
+            _path_cache_set("gemini_sub", None)  # caminho memorizado falhou → esquece
+
+    # Nada funcionou e houve QUOTA → liga o cooldown (pula nas próximas chamadas)
+    if any("QUOTA" in e for e in errors):
+        _quota_cooldown_set("gemini_sub")
+
+    raise RuntimeError("gemini falhou em todos os caminhos — " + " | ".join(errors)[:200])
 
 
 def _parse_codex_output(raw):
@@ -479,22 +606,41 @@ def execute_llm(provider, prompt, system=None, max_tokens=500):
         result["error"] = "provider desconhecido"
         return result
     result["model"] = cfg["model"]
-    try:
-        fn = _DISPATCH[provider]
-        output = fn(cfg, prompt, system, max_tokens)
-        if isinstance(output, tuple):
-            text, actual_model = output
-            result["model"] = actual_model
-        else:
-            text = output
-        result["ok"] = True
-        result["response"] = text
-        result["tokens_estimated"] = _estimate_tokens(prompt) + _estimate_tokens(text)
-    except urllib.error.HTTPError as e:
-        # Nunca inclui corpo que possa conter eco de credencial
-        result["error"] = f"HTTP {e.code} em {provider}"
-    except Exception as e:
-        result["error"] = f"{type(e).__name__}: {e}"
+    # Assinaturas (CLI): serializa o acesso e dá 1 retry em falha transitória.
+    cli_name = cfg.get("cli")
+    lock = _CLI_LOCKS.get(cli_name) if cli_name else None
+    attempts = 2 if cli_name else 1
+    for attempt in range(attempts):
+        try:
+            fn = _DISPATCH[provider]
+            if lock:
+                with lock:
+                    output = fn(cfg, prompt, system, max_tokens)
+            else:
+                output = fn(cfg, prompt, system, max_tokens)
+            if isinstance(output, tuple):
+                text, actual_model = output
+                result["model"] = actual_model
+            else:
+                text = output
+            result["ok"] = True
+            result["response"] = text
+            result["error"] = None
+            result["tokens_estimated"] = _estimate_tokens(prompt) + _estimate_tokens(text)
+            return result
+        except urllib.error.HTTPError as e:
+            # Nunca inclui corpo que possa conter eco de credencial
+            result["error"] = f"HTTP {e.code} em {provider}"
+            return result
+        except subprocess.TimeoutExpired:
+            result["error"] = f"timeout do CLI em {provider}"
+            if attempt + 1 < attempts:
+                continue
+        except Exception as e:
+            result["error"] = f"{type(e).__name__}: {e}"
+            if attempt + 1 < attempts and _is_transient(e):
+                continue
+            return result
     return result
 
 

@@ -53,6 +53,32 @@ def execute_job(job):
         r = agent_runtime.tick()
         return f"fila: executed={r.get('executed')} status={r.get('status')}"
 
+    if kind == "provider_watchdog":
+        # Auto-recuperação: revalida providers CAÍDOS e restaura o status no
+        # banco quando voltam — sem o usuário precisar clicar "Reconectar".
+        import provider_governance as pg
+        from _compat_db import SessionLocal
+        import _compat_models as mm
+        bad = {"ENVIRONMENT_PENDING", "OFFLINE", "ERROR", "TEMPORARILY_UNAVAILABLE"}
+        db = SessionLocal()
+        recovered, still_down = [], []
+        try:
+            rows = db.query(mm.LLMProvider).filter(mm.LLMProvider.enabled == True).all()  # noqa: E712
+            for row in rows:
+                if (row.status or "").upper() not in bad:
+                    continue
+                res = pg.check_provider(row.provider_key)
+                row.last_health_check = datetime.now()
+                if res.get("ok"):
+                    row.status = res["status"]
+                    recovered.append(row.provider_key)
+                else:
+                    still_down.append(row.provider_key)
+                db.commit()
+        finally:
+            db.close()
+        return f"watchdog: recuperados={recovered or 'nenhum'} ainda_fora={still_down or 'nenhum'}"
+
     if kind == "telegram_message":
         from AGENTIC_CORE.tools_registry import ToolRegistry
         tr = ToolRegistry()
@@ -141,9 +167,32 @@ def _loop():
         time.sleep(30)
 
 
+def _seed_default_jobs():
+    """Garante os jobs de sistema (idempotente). Hoje: watchdog de providers."""
+    from _compat_db import SessionLocal
+    import _compat_models as m
+    db = SessionLocal()
+    try:
+        name = "Watchdog de providers (auto-reconexão)"
+        if not db.query(m.ScheduledJob).filter(m.ScheduledJob.kind == "provider_watchdog").first():
+            db.add(m.ScheduledJob(
+                name=name, kind="provider_watchdog", spec="{}",
+                schedule_type="interval", schedule_value="10",
+                enabled=True, next_run=compute_next_run("interval", "10"),
+            ))
+            db.commit()
+            logger.info("scheduler: job '%s' criado (a cada 10 min).", name)
+    except Exception as e:
+        logger.warning("scheduler seed erro: %s", e)
+        db.rollback()
+    finally:
+        db.close()
+
+
 def start_scheduler():
     global _started
     if _started:
         return
     _started = True
+    _seed_default_jobs()
     threading.Thread(target=_loop, daemon=True, name="forja-scheduler").start()
