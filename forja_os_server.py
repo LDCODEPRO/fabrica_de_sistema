@@ -2634,6 +2634,30 @@ def knowledge_endpoint():
     }
 
 
+@app.post("/api/knowledge")
+async def add_knowledge(request: Request, db: Session = Depends(get_db)):
+    """Adiciona uma nota de conhecimento REAL: grava um .md numa das categorias
+    (rules/workflows/skills/templates/library/memory) — os agentes leem do disco."""
+    body = await request.json()
+    cat = (body.get("category") or "library").strip().lower()
+    titulo = (body.get("titulo") or body.get("title") or "").strip()
+    conteudo = (body.get("conteudo") or body.get("content") or "").strip()
+    if not titulo or not conteudo:
+        raise HTTPException(status_code=400, detail="Informe título e conteúdo.")
+    if cat not in _KNOWLEDGE_DIRS:
+        cat = "library"
+    base = Path(__file__).parent / _KNOWLEDGE_DIRS[cat][0]
+    base.mkdir(parents=True, exist_ok=True)
+    slug = re.sub(r"[^a-z0-9]+", "-", titulo.lower()).strip("-")[:50] or "nota"
+    fname = f"{slug}-{int(datetime.now().timestamp())}.md"
+    md = f"# {titulo}\n\n> Adicionado pelo painel em {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n{conteudo}\n"
+    (base / fname).write_text(md, encoding="utf-8")
+    db.add(m.AuditLog(event_type="KNOWLEDGE_ADDED", details=json.dumps(
+        {"category": cat, "file": fname, "titulo": titulo[:80]}, ensure_ascii=False)))
+    db.commit()
+    return {"ok": True, "category": cat, "file": f"{_KNOWLEDGE_DIRS[cat][0]}/{fname}", "titulo": titulo}
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PAINEL — serve o Monitor 1 (HTML + JS + CSS) diretamente do FastAPI
 # ══════════════════════════════════════════════════════════════════════════════

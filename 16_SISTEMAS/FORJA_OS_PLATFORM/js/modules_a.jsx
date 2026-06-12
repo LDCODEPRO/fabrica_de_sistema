@@ -801,6 +801,20 @@ function ConhecimentoCenter({ setView }) {
   };
   useEffect(() => { if (!know) atualizar(); }, []);
 
+  const adicionar = async () => {
+    if (!window.ForjaAPI || !window.ForjaAPI.addKnowledge) return;
+    const titulo = window.prompt('Título da nota de conhecimento:'); if (!titulo || !titulo.trim()) return;
+    const categoria = (window.prompt('Categoria (rules, workflows, skills, templates, library, memory):', 'library') || 'library').trim();
+    const conteudo = window.prompt('Conteúdo da nota:'); if (!conteudo || !conteudo.trim()) return;
+    setBusy(true);
+    try {
+      const r = await window.ForjaAPI.addKnowledge(categoria, titulo, conteudo);
+      await atualizar();
+      alert('Conhecimento adicionado: ' + (r.file || titulo));
+    } catch (e) { alert('Falha ao adicionar: ' + (e.message || e)); }
+    finally { setBusy(false); }
+  };
+
   const realById = {};
   if (know && Array.isArray(know.items)) know.items.forEach(it => { realById[it.id] = it; });
   const total = know ? know.total_items : null;
@@ -811,6 +825,7 @@ function ConhecimentoCenter({ setView }) {
         sub={total != null
           ? (total + ' itens reais indexados no repositório · Rules · Workflows · Skills · Templates · Biblioteca · Memória')
           : 'Rules · Workflows · Skills · Templates · Biblioteca · Memória'}>
+        <button className="btn" onClick={adicionar} disabled={busy || !apiOn}><Icon name="plus" size={13}/> Adicionar</button>
         <button className="btn primary" onClick={atualizar} disabled={busy || !apiOn}><Icon name="refresh" size={13}/> {busy?'Atualizando…':'Atualizar'}</button>
       </PageHead>
       <div className="center-body">

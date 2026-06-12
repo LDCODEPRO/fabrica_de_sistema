@@ -400,6 +400,11 @@
     return k;
   }
 
+  // POST /api/knowledge — adiciona nota de conhecimento real (vira .md no disco)
+  async function addKnowledge(category, titulo, conteudo) {
+    return postJSON('/api/knowledge', { category: category, titulo: titulo, conteudo: conteudo });
+  }
+
   // GET/POST /api/config/keys — cofre de chaves (status e gravação)
   async function getConfigKeys() { return getJSON('/api/config/keys'); }
   async function setConfigKey(key, value) {
@@ -437,7 +442,7 @@
   window.ForjaAPI = {
     getJSON, hydrate, postJSON,
     runMission, getEvidences, getRuntimeStatus, refreshMissions,
-    createMission, getKnowledge, getConfigKeys, setConfigKey, healthCheckServices,
+    createMission, getKnowledge, addKnowledge, getConfigKeys, setConfigKey, healthCheckServices,
     testProvider, refreshProviders, reconnectProvider,
     getChatSession, listFiles, actAgent, getAgentBrain, runTests,
     getFinance, addFinance, deleteFinance,
