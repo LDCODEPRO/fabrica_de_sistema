@@ -142,10 +142,27 @@ function StatusBar({ view, setView }) {
   const impl = D.modulos.filter(m => m.status === 'IMPL' || m.status === 'CERT').length;
   const dev = D.modulos.filter(m => m.status === 'DEV' || m.status === 'PARCIAL').length;
   const [clock, setClock] = useState('');
+  const [llmInfo, setLLMInfo] = useState({ online: null, count: 0 });
   useEffect(() => {
     const t = () => { const d = new Date(); setClock(d.toTimeString().slice(0,8)); };
     t(); const id = setInterval(t, 1000); return () => clearInterval(id);
   }, []);
+  // Status REAL das LLMs no rodapé (Zero Ghost: nada de texto fixo)
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch('/api/chat/status');
+        if (res.ok) {
+          const d = await res.json();
+          setLLMInfo({ online: !!d.online, count: (d.available || []).length });
+        } else setLLMInfo({ online: false, count: 0 });
+      } catch { setLLMInfo({ online: false, count: 0 }); }
+    };
+    check(); const id = setInterval(check, 60000); return () => clearInterval(id);
+  }, []);
+  const llmLabel = llmInfo.online === null ? 'LLMs: verificando…'
+    : llmInfo.online ? (llmInfo.count + ' LLM' + (llmInfo.count > 1 ? 's' : '') + ' online')
+    : 'LLMs indisponíveis';
   return (
     <div className="statusbar">
       <div className="sb-left">
@@ -156,7 +173,7 @@ function StatusBar({ view, setView }) {
         <span className="sb-svc"><span className="dot idle" /><span className="sb-svc-nm">{D.modulos.length} módulos</span></span>
       </div>
       <div className="sb-right">
-        <span className="sb-item" onClick={()=>setView&&setView('llms')} style={{cursor:'pointer'}}><Icon name="zap" size={12}/> LLMs não configuradas</span>
+        <span className="sb-item" onClick={()=>setView&&setView('llms')} style={{cursor:'pointer'}} title="IA · Provedores (LLMs)"><span className={'dot ' + (llmInfo.online === null ? 'idle' : llmInfo.online ? 'ok' : 'err')} style={{marginRight:4}} /><Icon name="zap" size={12}/> {llmLabel}</span>
         <span className="sb-item" onClick={()=>setView&&setView('auditoria')} style={{cursor:'pointer'}}><Icon name="shield" size={12}/> Auditoria</span>
         <span className="sb-item mono">{clock}</span>
         <span className="sb-item acc"><Icon name="flame" size={12} /> A FÁBRICA</span>

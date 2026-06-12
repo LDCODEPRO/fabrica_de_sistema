@@ -349,8 +349,8 @@
   // POST /api/agents/{key}/act — execução AGÊNTICA (ReAct + ferramentas)
   async function getAgentBrain(agentKey) { return getJSON('/api/agents/' + encodeURIComponent(agentKey) + '/brain'); }
 
-  async function actAgent(agentKey, objective, clientId) {
-    return postJSON('/api/agents/' + encodeURIComponent(agentKey || 'orquestrador') + '/act', { objective: objective, client_id: clientId });
+  async function actAgent(agentKey, objective, clientId, sessionId) {
+    return postJSON('/api/agents/' + encodeURIComponent(agentKey || 'orquestrador') + '/act', { objective: objective, client_id: clientId, session_id: sessionId });
   }
 
   // POST /api/tests/run — auto-teste real do sistema

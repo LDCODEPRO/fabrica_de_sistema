@@ -255,9 +255,11 @@ def _gemini_cli(cfg, prompt, system, max_tokens):
         env["GEMINI_CLI_HOME"] = str(Path(__file__).resolve().parent / ".gemini-forja")
         env.pop("GEMINI_API_KEY", None)
         env.pop("GOOGLE_API_KEY", None)
+        # Prompt via STDIN (não -p): linha de comando no Windows estoura ~32k chars
+        # com transcripts grandes (ReAct), stdin não tem esse limite.
         proc = subprocess.run(
-            [_resolve_bin("gemini"), "-p", full],
-            input="",
+            [_resolve_bin("gemini")],
+            input=full,
             capture_output=True, text=True, timeout=120, encoding='utf-8', errors='replace',
             env=env,
         )

@@ -183,7 +183,7 @@ function HomeWorkspace({ setView }) {
     const loadingId = Date.now();
     setMsgs(m => [...m, { id: loadingId, de:'sistema', preview:true, loading:true, txt:'Agente agindo (raciocinando e usando ferramentas)…' }]);
     try {
-      const data = await window.ForjaAPI.actAgent(team, t);
+      const data = await window.ForjaAPI.actAgent(team, t, undefined, sessionId);
       setMsgs(m => {
         const without = m.filter(x => x.id !== loadingId);
         return [...without, {

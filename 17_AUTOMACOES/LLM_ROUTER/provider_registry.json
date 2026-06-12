@@ -34,7 +34,7 @@
       "cost_incremental": 0,
       "requires_api_key": false,
       "requires_director_approval": false,
-      "health_status": "active_real",
+      "health_status": "unavailable",
       "last_health_check": "2026-06-11T12:00:00.000000",
       "allowed_for_agents": true,
       "model_id": "claude-pro",
@@ -44,7 +44,7 @@
         "review",
         "analysis"
       ],
-      "notes": "Assinatura/interface exige validação humana ou conector real; sem health automático nesta execução"
+      "notes": "Org Anthropic desabilitou assinatura headless do Claude Code (testado 2026-06-11). Revalidar pelo painel se a org reabilitar."
     },
     "chatgpt_plus": {
       "provider_name": "chatgpt_plus",
@@ -97,7 +97,7 @@
       "cost_incremental": 0,
       "requires_api_key": false,
       "requires_director_approval": false,
-      "health_status": "unavailable",
+      "health_status": "active_real",
       "last_health_check": "2026-06-09T04:30:20.427947",
       "allowed_for_agents": false,
       "base_url": "http://127.0.0.1:11434",

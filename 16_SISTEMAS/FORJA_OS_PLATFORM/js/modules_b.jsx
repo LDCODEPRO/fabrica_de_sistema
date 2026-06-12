@@ -72,7 +72,10 @@ function ValidacaoCenter() {
 /* ---------- AUDITORIA (a verdade) ---------- */
 function AuditoriaCenter({ setView }) {
   const D = window.FORJA;
-  const veredCount = (v) => D.auditoria.filter(a=>a.veredito===v).length;
+  // Conta vereditos pelos MÓDULOS (estado declarado), não pelo log de auditoria —
+  // o log vindo da API são eventos e não tem campo "veredito" (contava 0 sempre).
+  const VERED = {IMPL:'Funciona', CERT:'Funciona', DEV:'Parcial', PARCIAL:'Parcial', NTEST:'Não testado', CONFIG:'Aguardando config.', NIMPL:'Não implementado', BLOCK:'Bloqueado', ESTRUT:'Estrutura'};
+  const veredCount = (v) => (D.modulos||[]).filter(m=>VERED[m.status]===v).length;
   const buckets = [
     ['Funciona','ok'], ['Parcial','warn'], ['Não testado','info'],
     ['Aguardando config.','info'], ['Não implementado','idle'], ['Bloqueado','err'],

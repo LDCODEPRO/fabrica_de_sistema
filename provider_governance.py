@@ -26,7 +26,6 @@ PROVIDER_EXECUTION_MAP = {
     "gemini_subscription": "gemini_sub",
     "deepseek_v4_router": "openrouter",
     "kimi_k26_router": "openrouter",
-    "claude_fable5_router": "openrouter",
     "ollama_local": "ollama",
 }
 
@@ -35,7 +34,6 @@ PROVIDER_MODEL_OVERRIDE = {
     "deepseek_v4_router": "deepseek/deepseek-v4-pro",
     "kimi_k26_router": "moonshotai/kimi-k2.6",
     # Claude Fable 5 (Mythos-class, lançado 09/06/2026) via OpenRouter.
-    "claude_fable5_router": "anthropic/claude-fable-5",
 }
 
 
@@ -107,7 +105,7 @@ def execution_order(provider_keys: Iterable[str]) -> list[str]:
 
 def status_from_result(provider_key: str, result: dict) -> str:
     if result.get("ok"):
-        if provider_key in {"deepseek_v4_router", "kimi_k26_router", "claude_fable5_router"}:
+        if provider_key in {"deepseek_v4_router", "kimi_k26_router"}:
             return STATUS_ROUTER_LIMITED
         return STATUS_CERTIFIED
 
@@ -173,7 +171,7 @@ def check_provider(provider_key: str, prompt: str = "Responda apenas PROVIDER_OK
         }
 
     # Verify if configuration is missing / placeholder in environment
-    if provider_key in {"deepseek_v4_router", "kimi_k26_router", "claude_fable5_router"}:
+    if provider_key in {"deepseek_v4_router", "kimi_k26_router"}:
         router_key = os.environ.get("OPENROUTER_API_KEY", "")
         if not router_key or "CHANGE_ME" in router_key:
             return {

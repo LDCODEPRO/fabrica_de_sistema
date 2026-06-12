@@ -445,18 +445,19 @@ def _provider_to_dict(row: m.LLMProvider) -> dict:
         models = ["deepseek/deepseek-v4-pro"]
     if row.provider_key == "kimi_k26_router":
         models = ["moonshotai/kimi-k2.6"]
-    if row.provider_key == "claude_fable5_router":
-        models = ["anthropic/claude-fable-5"]
+    if row.provider_key == "claude_subscription":
+        models = ["claude (CLI assinatura)"]
+    if row.provider_key == "openai_subscription":
+        models = ["gpt-5.5 (codex CLI assinatura)"]
     if row.provider_key == "gemini_subscription":
-        models = ["gemini-subscription"]
+        models = ["gemini (CLI assinatura)"]
     if row.provider_key == "ollama_local":
         models = _check_ollama_health().get("models", [])
     import provider_router
+    # Zero Ghost: o status exibido é o do último health-check REAL persistido no
+    # banco. Ter CLI instalado não significa "online" (ex.: org pode bloquear a
+    # assinatura headless) — então NÃO forçamos active_real aqui.
     row_status = row.status
-    if row.provider_key in ["claude_subscription", "chatgpt_subscription", "gemini_subscription"]:
-        map_p = {"claude_subscription": "claude_sub", "chatgpt_subscription": "codex_sub", "gemini_subscription": "gemini_sub"}
-        if provider_router.provider_status(map_p[row.provider_key]) == "CONFIGURADO":
-            row_status = "active_real"
 
     return {
         "id": row.provider_key,
@@ -622,6 +623,16 @@ async def agent_act(agent_id: str, request: Request, db: Session = Depends(get_d
         raise HTTPException(status_code=500, detail=f"Falha no núcleo agêntico: {type(e).__name__}: {e}")
 
     ok = result.get("status") in ("completed", "max_steps_reached")
+    # Persiste a conversa na sessão de chat (memória entre navegações de tela)
+    session_id = (payload.get("session_id") or "").strip()
+    if session_id:
+        _ensure_chat_session(session_id, db)
+        db.add(m.ChatMessage(session_key=session_id, sender="USER", content=objective))
+        db.add(m.ChatMessage(
+            session_key=session_id, sender=key,
+            content=result.get("final_answer") or f"({result.get('status') or 'sem resposta'})",
+            provider_key="agentic_core", provider_status="OK" if ok else "ERROR",
+        ))
     db.add(m.AuditLog(event_type="AGENT_ACT", details=json.dumps(
         {"agent": key, "status": result.get("status"), "steps": result.get("steps")}, ensure_ascii=False)))
     db.commit()
@@ -1055,7 +1066,9 @@ def runtime_queue_endpoint():
 def chat_session(session_id: str, db: Session = Depends(get_db)):
     session = db.query(m.ChatSession).filter(m.ChatSession.session_key == session_id).first()
     if not session:
-        raise HTTPException(status_code=404, detail="Sessão não encontrada")
+        # Sessão ainda sem mensagens persistidas: devolve histórico vazio (200).
+        # 404 fazia o frontend zerar a conversa ao navegar entre telas.
+        return {"session_id": session_id, "status": "OPEN", "messages": [], "source": "chat_messages"}
     messages = (
         db.query(m.ChatMessage)
         .filter(m.ChatMessage.session_key == session_id)

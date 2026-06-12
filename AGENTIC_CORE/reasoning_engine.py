@@ -31,6 +31,7 @@ class Reasoner:
     def run_react_loop(self, system_prompt, user_objective, max_steps=8):
         transcript = self._instructions(system_prompt, user_objective)
         steps_log = []
+        invalid_streak = 0  # respostas seguidas fora do formato Thought/Action/Answer
 
         for step in range(max_steps):
             response = self.router.execute_with_fallback(
@@ -73,15 +74,22 @@ class Reasoner:
                         action_input = "\n".join(buf).strip()
                         break
                 if action_name:
+                    invalid_streak = 0
                     observation = self.tools.execute(action_name, action_input)
                     transcript += f"\nObservation: {observation}\n"
                     continue
                 transcript += "\nObservation: Nenhuma ação extraída. Use 'Action:' ou 'Answer:'.\n"
                 continue
 
-            # 3) Formato inválido — orienta
+            # 3) Formato inválido — orienta uma vez; na 2ª seguida, aceita o texto
+            # como resposta direta. Sem isso, um pedido conversacional simples
+            # ("Responda apenas X") ficava em loop até max_steps (10+ min de espera).
+            invalid_streak += 1
+            if invalid_streak >= 2 and llm_text:
+                return {"status": "completed", "steps": step + 1,
+                        "final_answer": llm_text, "log": steps_log}
             transcript += ("\nObservation: Formato inválido. Use 'Action: <ferramenta>' + 'ActionInput:' + 'PAUSE', "
-                           "ou 'Answer: <resposta>'.\n")
+                           "ou 'Answer: <resposta>'. Se já tem a resposta final, use 'Answer: <resposta>'.\n")
 
         # Atingiu o limite de passos: devolve o último raciocínio como resposta parcial
         last = steps_log[-1] if steps_log else ""
