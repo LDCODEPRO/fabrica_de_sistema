@@ -50,7 +50,9 @@ while ($true) {
         } else {
             $envTxt = $envTxt.TrimEnd() + "`nPUBLIC_BASE_URL=$url`n"
         }
-        Set-Content -Path $envPath -Value $envTxt -Encoding UTF8
+        # UTF8 SEM BOM: Set-Content -Encoding UTF8 grava BOM e corrompe a 1a
+        # variavel do .env (a chave vira "﻿NOME" e o parser nao acha).
+        [System.IO.File]::WriteAllText($envPath, $envTxt, (New-Object System.Text.UTF8Encoding $false))
         # Atualiza o arquivo de acesso com o link completo (token do .env)
         $tok = ([regex]::Match($envTxt, 'FORJA_PUBLIC_TOKEN=(\S+)')).Groups[1].Value
         Set-Content -Path (Join-Path $root 'logs\ACESSO_PUBLICO.txt') -Encoding UTF8 -Value @(

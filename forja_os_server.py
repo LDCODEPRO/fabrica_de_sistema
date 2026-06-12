@@ -209,7 +209,14 @@ def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
         "MANTENHA O CONTEXTO: leia o histórico abaixo e dê CONTINUIDADE ao que já foi dito; "
         "lembre o nome do usuário e detalhes mencionados. Faça perguntas de acompanhamento "
         "quando ajudar. Seja útil e objetivo, sem encher linguiça nem se repetir. "
-        "Não narre arquivos do git nem invente informação."
+        "Não narre arquivos do git nem invente informação. "
+        "REGRA DE OURO — EXECUTE AGORA: quando o usuário pedir algo (pesquisa, análise, "
+        "texto, plano, ideia), ENTREGUE o resultado NESTA resposta usando seu conhecimento. "
+        "É PROIBIDO responder apenas 'pronto', 'envie a tarefa', 'aguardando' ou variações — "
+        "isso é considerado falha. Se faltar um dado essencial, entregue a melhor versão "
+        "possível e pergunte só o que for indispensável no fim. Se o pedido for de outra "
+        "especialidade, responda mesmo assim com o melhor do seu conhecimento e sugira a "
+        "equipe ideal (ex.: Inteligência de Mercado para pesquisas de nicho)."
     )
     try:
         from AGENTIC_CORE import agent_profiles, agent_memory
@@ -291,13 +298,24 @@ def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
     )
     db.add(agent_msg)
 
-    # Memória de conversa: o agente aprende a conversar/dar continuidade entre sessões
+    # Memória de conversa: o agente aprende a conversar/dar continuidade entre sessões.
+    # FILTRO ANTI-CONTAMINAÇÃO: não grava saudações, testes nem respostas-eco curtas
+    # ("Pronto...", "Envie a tarefa") — senão o agente aprende a enrolar (ciclo vicioso).
     try:
         from AGENTIC_CORE import agent_memory
-        agent_memory.add_learning(
-            req.agent_key or "COMMUNICATION",
-            f"Conversa — usuário: {req.message[:100]} | respondi: {agent_text[:120]}",
-            kind="conversa")
+        _msg_low = (req.message or "").lower()
+        _resp_low = (agent_text or "").lower()
+        _trivial = (
+            len(req.message or "") < 15
+            or len(agent_text or "") < 60
+            or _msg_low.startswith(("teste", "responda apenas", "diga apenas", "oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"))
+            or _resp_low.startswith(("pronto", "ok", "entendido", "envie a tarefa"))
+        )
+        if not _trivial:
+            agent_memory.add_learning(
+                req.agent_key or "COMMUNICATION",
+                f"Conversa — usuário: {req.message[:100]} | respondi: {agent_text[:120]}",
+                kind="conversa")
     except Exception:
         pass
 
@@ -2409,70 +2427,46 @@ async def upload_content_media(content_id: int, request: Request, db: Session = 
 
 @app.post("/api/content/{content_id}/generate-image")
 async def generate_image(content_id: int, request: Request, db: Session = Depends(get_db)):
-    """Gera a imagem por IA (OpenRouter → modelo de imagem, ex.: Gemini Nano Banana),
-    redimensiona ao tamanho do tipo e salva. Modelo é pago (precisa de créditos no OpenRouter)."""
+    """Gera a imagem por IA com cadeia de fallback (Gemini grátis → OpenAI →
+    OpenRouter), redimensiona ao tamanho do tipo/rede e salva no conteúdo."""
     from starlette.concurrency import run_in_threadpool
     ci = db.query(m.ContentItem).filter(m.ContentItem.id == content_id).first()
     if not ci:
         raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
     body = await request.json()
     prompt = (body.get("prompt") or ci.briefing or "imagem profissional para post de rede social").strip()
+    full_prompt = ("Imagem para rede social, alta qualidade, sem texto sobreposto, "
+                   "estilo profissional: " + prompt)
+
+    import image_service
 
     def _gen():
-        import os as _os
-        import json as _j
-        import urllib.request as _u
-        import urllib.error as _ue
-        key = _os.environ.get("OPENROUTER_API_KEY", "")
-        model = _os.environ.get("OPENROUTER_IMAGE_MODEL", "google/gemini-2.5-flash-image")
-        payload = _j.dumps({
-            "model": model,
-            "messages": [{"role": "user", "content": "Gere uma imagem para rede social, alta qualidade: " + prompt}],
-            "modalities": ["image", "text"],
-            "max_tokens": 4096,
-        }).encode()
-        req = _u.Request("https://openrouter.ai/api/v1/chat/completions", data=payload,
-                         headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
         try:
-            return ("ok", _u.urlopen(req, timeout=120).read(), model)
-        except _ue.HTTPError as e:
-            return ("http", (e.code, e.read().decode("utf-8", "replace")[:200]), model)
+            raw, provider = image_service.generate_image(full_prompt)
+            return ("ok", raw, provider)
         except Exception as e:
-            return ("err", str(e), model)
+            return ("err", str(e), None)
 
-    status, payload, model = await run_in_threadpool(_gen)
-    if status == "http":
-        code, detail = payload
-        if code == 402:
-            raise HTTPException(status_code=402, detail="Geração de imagem precisa de créditos no OpenRouter (modelo pago). Adicione crédito e tente de novo.")
-        raise HTTPException(status_code=502, detail=f"OpenRouter HTTP {code}")
+    status, payload, provider = await run_in_threadpool(_gen)
     if status != "ok":
-        raise HTTPException(status_code=502, detail="Falha na geração: " + str(payload))
+        raise HTTPException(status_code=502, detail="Falha na geração: " + str(payload)[:300])
     try:
-        j = json.loads(payload)
-        msg = j["choices"][0]["message"]
-        imgs = msg.get("images") or []
-        if not imgs:
-            raise HTTPException(status_code=502, detail="O modelo não retornou imagem.")
-        data_url = imgs[0]["image_url"]["url"]
-        import base64
         import io as _io
-        raw = base64.b64decode(data_url.split(",", 1)[1])
         from PIL import Image, ImageOps
-        img = Image.open(_io.BytesIO(raw)).convert("RGB")
+        img = Image.open(_io.BytesIO(payload)).convert("RGB")
         size = _content_size(ci.network, ci.tipo)
         img = ImageOps.fit(img, size, method=Image.LANCZOS)
         ts = int(datetime.now().timestamp())
         fname = f"content_{content_id}_{ts}.jpg"
         img.save(_CONTENT_MEDIA_DIR / fname, "JPEG", quality=88)
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Falha ao processar imagem: {type(e).__name__}")
     ci.media_url = f"/content-media/{fname}"
     ci.updated_at = datetime.now(timezone.utc)
+    db.add(m.AuditLog(event_type="CONTENT_IMAGE_GENERATED", details=json.dumps(
+        {"content_id": content_id, "provider": provider, "size": f"{size[0]}x{size[1]}"}, ensure_ascii=False)))
     db.commit()
-    return {"ok": True, "media_url": ci.media_url, "size": f"{size[0]}x{size[1]}", "model": model}
+    return {"ok": True, "media_url": ci.media_url, "size": f"{size[0]}x{size[1]}", "model": provider}
 
 
 @app.post("/api/content/{content_id}/schedule")

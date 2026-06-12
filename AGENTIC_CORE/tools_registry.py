@@ -31,8 +31,14 @@ ROLE_TOOLS = {
     "SECURITY":      ["buscar_no_repo", "ler_arquivo", "listar_pasta", "consultar_banco", "status_sistema"],
     "DATA_ENGINEER": ["consultar_banco", "status_sistema", "listar_pasta", "ler_arquivo"],
     "DOCS":          ["listar_pasta", "ler_arquivo", "buscar_no_repo", "escrever_arquivo"],
-    "DESIGNER":      ["listar_pasta", "ler_arquivo", "escrever_arquivo"],
+    "DESIGNER":      ["listar_pasta", "ler_arquivo", "escrever_arquivo", "gerar_imagem"],
     "COMMUNICATION": ["status_sistema", "enviar_telegram", "enviar_email", "enviar_whatsapp"],
+    "SOCIAL_MEDIA":  ["gerar_imagem", "postar_instagram", "enviar_telegram", "status_sistema", "consultar_banco"],
+    "SUPPORT":       ["status_sistema", "consultar_banco", "ler_arquivo", "buscar_no_repo", "enviar_telegram", "enviar_email"],
+    "FINANCE":       ["consultar_banco", "status_sistema", "ler_arquivo"],
+    "STRATEGY":      ["status_sistema", "consultar_banco", "buscar_no_repo", "ler_arquivo", "escrever_arquivo"],
+    "MARKET_INTEL":  ["status_sistema", "consultar_banco", "buscar_no_repo", "ler_arquivo", "escrever_arquivo"],
+    # CEO e ORCHESTRATOR ficam fora da lista de propósito: recebem TODAS as ferramentas.
 }
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -98,6 +104,10 @@ class ToolRegistry:
             "Envia e-mail pelo SMTP da Fábrica. ActionInput JSON: {\"to\":\"...\",\"assunto\":\"...\",\"corpo\":\"...\"}.")
         self.register("enviar_whatsapp", self._enviar_whatsapp,
             "Envia WhatsApp (Cloud API da Fábrica). ActionInput JSON: {\"to\":\"55119...\",\"texto\":\"...\"}.")
+        self.register("gerar_imagem", self._gerar_imagem,
+            "Gera imagem por IA (cadeia Gemini→OpenAI→OpenRouter) para posts/redes sociais. "
+            "ActionInput JSON: {\"prompt\":\"descrição da imagem\"} ou texto direto. "
+            "Retorna a URL local (/content-media/...) para usar em postagens.")
 
     def register(self, name, func, description):
         self.tools[name] = {"func": func, "description": description}
@@ -374,3 +384,31 @@ class ToolRegistry:
             return f"WhatsApp HTTP {e.code}: {detail[:120]}"
         except Exception as e:
             return f"WhatsApp erro: {type(e).__name__}"
+
+    def _gerar_imagem(self, arg=""):
+        """Gera imagem real via image_service (Gemini→OpenAI→OpenRouter) e salva
+        em 18_EXPORTS/content_media. Retorna a URL local para usar em postagens."""
+        try:
+            data = json.loads(arg) if (arg or "").strip().startswith("{") else {"prompt": arg}
+        except Exception:
+            data = {"prompt": arg}
+        prompt = (data.get("prompt") or "").strip()
+        if not prompt:
+            return "ActionInput JSON: {\"prompt\":\"descrição da imagem\"}"
+        import sys as _sys
+        from pathlib import Path as _P
+        root = _P(__file__).resolve().parents[1]
+        if str(root) not in _sys.path:
+            _sys.path.insert(0, str(root))
+        import image_service
+        try:
+            raw, provider = image_service.generate_image(
+                "Imagem para rede social, alta qualidade, sem texto sobreposto: " + prompt)
+        except Exception as e:
+            return f"geração falhou: {e}"
+        media_dir = root / "18_EXPORTS" / "content_media"
+        media_dir.mkdir(parents=True, exist_ok=True)
+        import time as _t
+        fname = f"agent_{int(_t.time())}.png"
+        (media_dir / fname).write_bytes(raw)
+        return f"imagem gerada via {provider}: /content-media/{fname} ({len(raw)} bytes)"

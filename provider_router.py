@@ -103,8 +103,10 @@ PREFERRED_ORDER = ["claude_sub", "gemini_sub", "codex_sub",
 GROUP_ORDERS = {
     # Assinaturas (CLI/script oficial) primeiro; depois APIs como rede de segurança;
     # por fim o local. Zero Ghost: erros de CLI nunca viram "resposta".
-    "conversation": ["claude_sub", "gemini_sub", "codex_sub",
-                     "openrouter", "openai", "gemini", "deepseek", "claude", "ollama"],
+    # CONVERSA: codex por ÚLTIMO entre os úteis — `codex exec` é um agente de CÓDIGO
+    # e responde "envie a tarefa/arquivos" a pedidos conversacionais (pesquisa, texto).
+    "conversation": ["claude_sub", "gemini_sub",
+                     "openrouter", "openai", "gemini", "deepseek", "codex_sub", "claude", "ollama"],
     "engineering": ["claude_sub", "gemini_sub", "codex_sub",
                     "openrouter", "openai", "deepseek", "gemini", "claude", "ollama"],
     "low_cost": ["gemini_sub", "codex_sub", "claude_sub",
@@ -279,7 +281,12 @@ def _codex_cli(cfg, prompt, system, max_tokens):
     """ChatGPT/Codex via assinatura, com o mesmo DISPOSITIVO DE CAMINHO CERTO
     do gemini: memoriza a variante que funciona nesta máquina (CLI ou script)
     e vai direto nela; se falhar, esquece e redescobre."""
-    full = (system + "\n\n" + prompt) if system else prompt
+    # Moldura anti-enrolação: `codex exec` é um agente de código e tende a
+    # responder "envie a tarefa/arquivos". Instrui a responder DIRETO.
+    frame = ("INSTRUÇÃO: responda DIRETAMENTE ao pedido abaixo, em português, com o "
+             "conteúdo completo da resposta. NÃO peça arquivos, NÃO peça 'a tarefa', "
+             "NÃO descreva o que faria — ENTREGUE o resultado agora.\n\n")
+    full = frame + ((system + "\n\n" + prompt) if system else prompt)
     errors = []
 
     def _try_cli():
