@@ -11,6 +11,7 @@ Decisão da Diretoria:
 - Sem dados mockados nos endpoints — apenas dados reais do banco.
 """
 import os
+import re
 import json
 import sys
 import logging
@@ -216,7 +217,13 @@ def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
         "isso é considerado falha. Se faltar um dado essencial, entregue a melhor versão "
         "possível e pergunte só o que for indispensável no fim. Se o pedido for de outra "
         "especialidade, responda mesmo assim com o melhor do seu conhecimento e sugira a "
-        "equipe ideal (ex.: Inteligência de Mercado para pesquisas de nicho)."
+        "equipe ideal (ex.: Inteligência de Mercado para pesquisas de nicho). "
+        "MODO AÇÃO (ferramentas reais): se — e somente se — o pedido exigir dados/ações REAIS "
+        "do sistema (consultar o banco/status da Fábrica, ler arquivos do projeto, gerar "
+        "imagem, enviar Telegram/e-mail/WhatsApp, postar no Instagram), responda APENAS com "
+        "uma linha no formato: [AGIR: descrição objetiva e completa da tarefa]. O núcleo "
+        "agêntico executará com ferramentas e o resultado real voltará ao usuário. Para "
+        "conversa, opinião, texto e conhecimento geral, NÃO use [AGIR] — responda direto."
     )
     try:
         from AGENTIC_CORE import agent_profiles, agent_memory
@@ -288,6 +295,32 @@ def chat_message(req: ChatRequest, db: Session = Depends(get_db)):
     agent_text = result.get("response")
     model_used = result.get("model")
     fallback_used = len(result.get("fallback_trail", [])) > 1
+
+    # AGENTE HÍBRIDO: o modelo pediu ação real ([AGIR: ...]) → executa o núcleo
+    # agêntico (ReAct + ferramentas) e a resposta passa a ser o RESULTADO real.
+    acted = False
+    _m_agir = re.search(r"\[AGIR:\s*(.+?)\]", agent_text or "", flags=re.S)
+    if _m_agir:
+        objective = _m_agir.group(1).strip()[:600]
+        try:
+            # Handler é sync (FastAPI já o roda em threadpool) → chamada direta.
+            from AGENTIC_CORE.base_agent import BaseAgent as _BA
+            key = (req.agent_key or "ORCHESTRATOR").strip().upper().replace(" ", "_")
+            ag = _BA(name=key, role="Especialista Autônomo da Forja",
+                     goal=objective, profile_key=key)
+            act_res = ag.execute_mission(objective)
+            final = (act_res.get("final_answer") or "").strip()
+            if final:
+                agent_text = final
+                acted = True
+                provider_used = "agentic_core"
+            else:
+                agent_text = (f"Tentei executar com ferramentas mas não houve conclusão "
+                              f"(status: {act_res.get('status')}). Pode detalhar o pedido?")
+        except Exception as _e:
+            agent_text = f"Falha ao executar a ação real: {type(_e).__name__}. Tente novamente."
+        db.add(m.AuditLog(event_type="CHAT_AUTO_ACT", details=json.dumps(
+            {"session_key": session_id, "objective": objective[:160], "ok": acted}, ensure_ascii=False)))
 
     agent_msg = m.ChatMessage(
         session_key=session_id,
