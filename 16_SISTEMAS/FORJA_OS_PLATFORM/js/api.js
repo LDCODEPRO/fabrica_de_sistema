@@ -405,6 +405,11 @@
     return postJSON('/api/knowledge', { category: category, titulo: titulo, conteudo: conteudo });
   }
 
+  // POST /api/chat/message — usado por telas que acionam um agente (ex.: Inteligência)
+  async function chatMessage(message, agentKey, provider) {
+    return postJSON('/api/chat/message', { message: message, agent_key: agentKey || 'chat', provider: provider || 'auto' });
+  }
+
   // GET/POST /api/config/keys — cofre de chaves (status e gravação)
   async function getConfigKeys() { return getJSON('/api/config/keys'); }
   async function setConfigKey(key, value) {
@@ -442,7 +447,7 @@
   window.ForjaAPI = {
     getJSON, hydrate, postJSON,
     runMission, getEvidences, getRuntimeStatus, refreshMissions,
-    createMission, getKnowledge, addKnowledge, getConfigKeys, setConfigKey, healthCheckServices,
+    createMission, getKnowledge, addKnowledge, chatMessage, getConfigKeys, setConfigKey, healthCheckServices,
     testProvider, refreshProviders, reconnectProvider,
     getChatSession, listFiles, actAgent, getAgentBrain, runTests,
     getFinance, addFinance, deleteFinance,

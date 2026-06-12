@@ -991,13 +991,14 @@ def panel_features():
         {"screen": "Home Executiva", "component": "Abrir FORJA", "endpoint": None, "status": "OK", "action": "navegação local"},
         {"screen": "Home Executiva", "component": "Ver auditoria", "endpoint": "/api/audit", "status": "OK", "action": "navegação e dados reais"},
         {"screen": "FORJA / Chat", "component": "Enviar mensagem", "endpoint": "/api/chat/message", "status": "OK", "action": "Communication Agent"},
-        {"screen": "Equipe Inteligente", "component": "Ativar equipe", "endpoint": None, "status": "SEM FUNÇÃO", "action": "desabilitar"},
+        {"screen": "Equipe Inteligente", "component": "Abrir equipe (chat/act)", "endpoint": "/api/chat/message", "status": "OK", "action": "16 equipes com perfil de elite"},
         {"screen": "Missões", "component": "Executar missão", "endpoint": "/api/missions/{id}/run", "status": "OK", "action": "runtime real"},
         {"screen": "Providers / LLMs", "component": "Health check", "endpoint": "/api/providers/health-check", "status": "OK", "action": "health real"},
-        {"screen": "Providers / LLMs", "component": "Configurar no cofre", "endpoint": None, "status": "PARCIAL", "action": "navegação para configurações"},
-        {"screen": "Ferramentas", "component": "Adicionar", "endpoint": None, "status": "SEM BACKEND", "action": "desabilitar"},
-        {"screen": "Integrações", "component": "Nova integração", "endpoint": None, "status": "SEM BACKEND", "action": "desabilitar"},
-        {"screen": "Conhecimento", "component": "Adicionar", "endpoint": None, "status": "SEM BACKEND", "action": "desabilitar"},
+        {"screen": "Providers / LLMs", "component": "Configurar no cofre", "endpoint": "/api/config/keys", "status": "OK", "action": "grava chave no .env"},
+        {"screen": "Ferramentas", "component": "Conectar", "endpoint": "/api/agency/connections", "status": "OK", "action": "salva conector real"},
+        {"screen": "Integrações", "component": "Conectar", "endpoint": "/api/agency/connections", "status": "OK", "action": "salva conexão real"},
+        {"screen": "Conhecimento", "component": "Adicionar", "endpoint": "/api/knowledge", "status": "OK", "action": "grava nota .md real"},
+        {"screen": "Inteligência", "component": "Varrer mercado", "endpoint": "/api/chat/message", "status": "OK", "action": "agente MARKET_INTEL gera relatório"},
     ]
     return {"items": items, "source": "manual_audit_v006"}
 

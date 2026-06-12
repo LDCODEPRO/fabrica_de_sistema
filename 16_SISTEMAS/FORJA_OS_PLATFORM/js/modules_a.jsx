@@ -503,24 +503,50 @@ function MissoesCenter({ setView }) {
   );
 }
 
-/* ---------- INTELIGÊNCIA ---------- */
+/* ---------- INTELIGÊNCIA (real: aciona o agente MARKET_INTEL) ---------- */
 function InteligenciaCenter({ setView }) {
   const areas = [
     ['Concorrentes','compass'],['Tendências','chart'],['Benchmark','activity'],['SEO','search'],
     ['Oportunidades','zap'],['Análise visual','eye'],['Pesquisa de mercado','book'],['Relatórios estratégicos','doc'],
   ];
+  const apiOn = !!(window.ForjaAPI && window.ForjaAPI.chatMessage);
+  const [busy, setBusy] = useState(false);
+  const [relatorio, setRelatorio] = useState('');
+  const [nicho, setNicho] = useState('');
+
+  const varrer = async () => {
+    const n = (nicho || '').trim() || window.prompt('Qual nicho/mercado deseja analisar?');
+    if (!n || !n.trim()) return;
+    setNicho(n); setBusy(true); setRelatorio('');
+    try {
+      const r = await window.ForjaAPI.chatMessage(
+        'Faça uma análise de inteligência de mercado do nicho "' + n + '": panorama, '
+        + 'concorrentes, tendências, oportunidades e ameaças. Separe FATO (com indício) '
+        + 'de HIPÓTESE a validar.', 'inteligencia');
+      setRelatorio((r && (r.message || r.response)) || 'Sem resposta do agente.');
+    } catch (e) { setRelatorio('Falha ao varrer o mercado: ' + (e.message || e)); }
+    finally { setBusy(false); }
+  };
+
   return (
     <div className="center">
-      <PageHead icon="compass" crumb="Operação" title="Inteligência" status="NIMPL"
-        sub="Inteligência de mercado · apenas fontes públicas e autorizadas · sem dados fictícios">
-        <button className="btn" onClick={()=>avisoEmDev('Inteligência')}><Icon name="refresh" size={13}/> Varrer mercado</button>
+      <PageHead icon="compass" crumb="Operação" title="Inteligência" status={relatorio ? 'IMPL' : 'DEV'}
+        sub="Inteligência de mercado · agente MARKET_INTEL · separa fato de hipótese">
+        <input className="input" placeholder="nicho (ex.: aves exóticas)" value={nicho}
+          onChange={e=>setNicho(e.target.value)} style={{maxWidth:200,marginRight:8}} />
+        <button className="btn primary" onClick={varrer} disabled={busy || !apiOn}>
+          <Icon name="refresh" size={13}/> {busy ? 'Analisando…' : 'Varrer mercado'}</button>
       </PageHead>
       <div className="center-body">
-        <EmptyState icon="compass" title="Inteligência ainda não implementada" status="NIMPL"
-          sub="As análises serão geradas a partir de fontes públicas autorizadas quando o módulo for ativado." />
+        {relatorio ? (
+          <div className="card" style={{padding:'16px 18px',whiteSpace:'pre-wrap',lineHeight:1.55,fontSize:13.5}}>{relatorio}</div>
+        ) : (
+          <EmptyState icon="compass" title={busy ? 'Analisando o mercado…' : 'Pronto para varrer o mercado'} status={busy?'DEV':'IMPL'}
+            sub={busy ? 'O agente de Inteligência de Mercado está pesquisando.' : 'Informe um nicho acima e clique em "Varrer mercado" para gerar o relatório real.'} />
+        )}
         <div className="grid-3" style={{marginTop:18}}>
           {areas.map(([a,ic])=>(
-            <div className="panel" key={a} style={{opacity:.7}}><div className="panel-body" style={{display:'flex',alignItems:'center',gap:10}}><Icon name={ic} size={14} style={{color:'var(--text-3)'}}/><span style={{fontSize:12.5}}>{a}</span><span style={{marginLeft:'auto'}}><StatusPill status="NIMPL" size="sm"/></span></div></div>
+            <div className="panel" key={a}><div className="panel-body" style={{display:'flex',alignItems:'center',gap:10}}><Icon name={ic} size={14} style={{color:'var(--accent-bright)'}}/><span style={{fontSize:12.5}}>{a}</span><span style={{marginLeft:'auto'}}><StatusPill status="IMPL" size="sm"/></span></div></div>
           ))}
         </div>
       </div>
